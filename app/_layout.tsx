@@ -1,6 +1,43 @@
+import { Slot, useRouter, useSegments } from "expo-router";
+import { useEffect } from "react";
+import { AuthProvider, useAuth } from "../services/AuthContext";
 import "../global.css";
-import { Stack } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
 
-export default function Layout() {
-  return <Stack />;
+function InitialLayout() {
+  const { user, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+
+    if (!user && !inAuthGroup) {
+      // Redirect to the login page if not signed in
+      router.replace("/login");
+    } else if (user && inAuthGroup) {
+      // Redirect to the tabs page if signed in
+      router.replace("/(tabs)");
+    }
+  }, [user, loading, segments]);
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-blue-600">
+        <ActivityIndicator size="large" color="#ffffff" />
+      </View>
+    );
+  }
+
+  return <Slot />;
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <InitialLayout />
+    </AuthProvider>
+  );
 }
