@@ -73,7 +73,24 @@ A modern, feature-rich budget tracking application built with React Native and E
    - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
    - Enable Email/Password authentication
    - Copy your Firebase configuration
-   - Update `services/firebaseConfig.ts` with your credentials
+   
+   **Environment Variables Setup:**
+   - Copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Update `.env` with your Firebase credentials:
+     ```bash
+     EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
+     EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id_here
+     EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+     EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
+     EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id_here
+     EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+     ```
+   
+   > **Note**: The `.env` file is gitignored and will not be committed. Never commit sensitive credentials to version control.
 
 4. **Start the development server**
    ```bash
@@ -110,6 +127,8 @@ budget-app/
 ├── hooks/                   # Custom React hooks
 ├── constants/               # App constants
 ├── assets/                  # Images, fonts, etc.
+├── .env                     # Environment variables (gitignored)
+├── .env.example             # Environment template
 ├── global.css              # Global Tailwind styles
 ├── tailwind.config.js      # Tailwind configuration
 ├── metro.config.js         # Metro bundler config (NativeWind)
@@ -129,17 +148,22 @@ budget-app/
 
 ### Firebase Setup
 
-Update `services/firebaseConfig.ts`:
+Firebase credentials are managed through environment variables. See the **Configure Firebase** section in the Installation guide above for setup instructions.
+
+The configuration in `services/firebaseConfig.ts` automatically reads from environment variables:
 ```typescript
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 ```
+
+> **Security**: Never commit your `.env` file. Use `.env.example` as a template for team members.
 
 ## 🚀 Available Scripts
 
