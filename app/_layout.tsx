@@ -1,8 +1,9 @@
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { AuthProvider, useAuth } from "../services/AuthContext";
+import { ActivityIndicator, View } from "react-native";
+import GlassLayout from "../components/GlassLayout";
 import "../global.css";
-import { View, ActivityIndicator } from "react-native";
+import { AuthProvider, useAuth } from "../services/AuthContext";
 
 function InitialLayout() {
   const { user, loading } = useAuth();
@@ -31,7 +32,11 @@ function InitialLayout() {
     );
   }
 
-  return <Slot />;
+  return (
+    <GlassLayout>
+      <Slot />
+    </GlassLayout>
+  );
 }
 
 export default function RootLayout() {
