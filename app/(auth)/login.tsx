@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
-import { Link, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
+import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { auth } from '../../services/firebaseConfig';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -45,7 +45,7 @@ export default function LoginScreen() {
                             <FontAwesome name="google-wallet" size={48} color="#3b82f6" />
                         </View>
                         <Text className="text-4xl font-bold text-white mb-2 tracking-tight">Fanga Budget</Text>
-                        <Text className="text-slate-400 text-base">Master your M-PESA finances</Text>
+                        <Text className="text-slate-400 text-base">Take Charge of your finances</Text>
                     </View>
 
                     {/* Login Card */}
@@ -59,7 +59,7 @@ export default function LoginScreen() {
                             <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
                                 <FontAwesome name="envelope" size={18} color="#94a3b8" />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base"
+                                    className="flex-1 ml-3 text-white text-base outline-none"
                                     placeholder="you@example.com"
                                     value={email}
                                     onChangeText={setEmail}
@@ -76,7 +76,7 @@ export default function LoginScreen() {
                             <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5">
                                 <FontAwesome name="lock" size={20} color="#94a3b8" />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base"
+                                    className="flex-1 ml-3 text-white text-base outline-none"
                                     placeholder="Enter your password"
                                     value={password}
                                     onChangeText={setPassword}
