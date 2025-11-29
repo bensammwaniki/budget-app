@@ -1,18 +1,109 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useAuth } from '../../services/AuthContext';
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import CategorizationModal from '../../components/CategorizationModal';
+import { SAMPLE_SMS_MESSAGES } from '../../data/sampleTransactions';
+import { useAuth } from '../../services/AuthContext';
+import { getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveRecipientCategory, saveTransaction } from '../../services/database';
+import { SpendingSummary, Transaction } from '../../types/transaction';
+import { parseMpesaSms } from '../../utils/smsParser';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const firstName = user?.displayName?.split(' ')[0] || 'User';
 
-  return (
-    <ScrollView className="flex-1 bg-[#020617]">
-      <StatusBar style="light" />
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [spending, setSpending] = useState<SpendingSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-      {/* Header with Gradient-like background */}
+  // Categorization State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentUncategorized, setCurrentUncategorized] = useState<Transaction | null>(null);
+
+  useEffect(() => {
+    initializeData();
+  }, []);
+
+  const initializeData = async () => {
+    try {
+      await initDatabase();
+      await processSampleMessages();
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error initializing data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processSampleMessages = async () => {
+    for (const sms of SAMPLE_SMS_MESSAGES) {
+      const transaction = parseMpesaSms(sms);
+      if (transaction) {
+        // Check if we have a saved category for this recipient
+        const savedCategoryId = await getRecipientCategory(transaction.recipientId);
+        if (savedCategoryId) {
+          transaction.categoryId = savedCategoryId;
+        }
+        await saveTransaction(transaction);
+      }
+    }
+  };
+
+  const loadDashboardData = async () => {
+    const txs = await getTransactions();
+    const summary = await getSpendingSummary();
+    setTransactions(txs);
+    setSpending(summary);
+
+    // Check for uncategorized transactions
+    const uncategorized = txs.find(t => !t.categoryId && t.type === 'SENT');
+    if (uncategorized) {
+      setCurrentUncategorized(uncategorized);
+      setModalVisible(true);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await processSampleMessages(); // Re-process to simulate new messages or updates
+    await loadDashboardData();
+    setRefreshing(false);
+  };
+
+  const handleCategorySelect = async (categoryId: number) => {
+    if (currentUncategorized) {
+      await saveRecipientCategory(currentUncategorized.recipientId, categoryId);
+      setModalVisible(false);
+      setCurrentUncategorized(null);
+      await loadDashboardData(); // Reload to reflect changes
+    }
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-[#020617] items-center justify-center">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-[#020617]"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" />}
+    >
+      <StatusBar style="light" />
+      <CategorizationModal
+        visible={modalVisible}
+        transaction={currentUncategorized}
+        onCategorySelect={handleCategorySelect}
+        onClose={() => setModalVisible(false)}
+      />
+
+      {/* Header */}
       <View className="px-6 pt-16 pb-8 bg-[#0f172a] rounded-b-[32px] border-b border-slate-800 shadow-lg shadow-black/50">
         <View className="flex-row justify-between items-center mb-8">
           <View>
@@ -26,51 +117,37 @@ export default function HomeScreen() {
         </View>
 
         {/* Balance Card */}
-        <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/40">
+        <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/40 overflow-hidden relative">
+          {/* Background decoration */}
+          <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
+          <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
+
           <View className="flex-row justify-between items-start mb-2">
             <Text className="text-blue-100 font-medium">Total Balance</Text>
             <FontAwesome name="eye" size={16} color="#bfdbfe" />
           </View>
-          <Text className="text-white text-4xl font-bold mb-6">KES 42,500</Text>
+          <Text className="text-white text-4xl font-bold mb-6">
+            KES {spending?.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+          </Text>
 
-          <View className="flex-row justify-between">
-            <View className="bg-blue-500/30 px-4 py-2 rounded-xl flex-row items-center">
-              <View className="w-6 h-6 bg-green-400/20 rounded-full items-center justify-center mr-2">
-                <FontAwesome name="arrow-down" size={10} color="#4ade80" />
-              </View>
-              <Text className="text-white font-semibold">+ 12,000</Text>
+          <View className="flex-row justify-between gap-3">
+            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
+              <Text className="text-blue-100 text-xs mb-1">Today</Text>
+              <Text className="text-white font-bold">KES {spending?.dailyTotal.toLocaleString()}</Text>
             </View>
-            <View className="bg-blue-500/30 px-4 py-2 rounded-xl flex-row items-center">
-              <View className="w-6 h-6 bg-red-400/20 rounded-full items-center justify-center mr-2">
-                <FontAwesome name="arrow-up" size={10} color="#f87171" />
-              </View>
-              <Text className="text-white font-semibold">- 8,450</Text>
+            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
+              <Text className="text-blue-100 text-xs mb-1">This Week</Text>
+              <Text className="text-white font-bold">KES {spending?.weeklyTotal.toLocaleString()}</Text>
+            </View>
+            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
+              <Text className="text-blue-100 text-xs mb-1">This Month</Text>
+              <Text className="text-white font-bold">KES {spending?.monthlyTotal.toLocaleString()}</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Quick Actions */}
-      <View className="px-6 mt-8">
-        <Text className="text-white text-lg font-bold mb-4">Quick Actions</Text>
-        <View className="flex-row justify-between">
-          {[
-            { icon: 'send', label: 'Send', color: '#3b82f6' },
-            { icon: 'money', label: 'Pay Bill', color: '#8b5cf6' },
-            { icon: 'bank', label: 'Withdraw', color: '#f59e0b' },
-            { icon: 'credit-card', label: 'Fuliza', color: '#ef4444' },
-          ].map((action, index) => (
-            <TouchableOpacity key={index} className="items-center">
-              <View
-                className="w-16 h-16 rounded-2xl items-center justify-center mb-2 shadow-lg bg-[#1e293b] border border-slate-700"
-              >
-                <FontAwesome name={action.icon as any} size={24} color={action.color} />
-              </View>
-              <Text className="text-slate-400 text-xs font-medium">{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+
 
       {/* Recent Transactions */}
       <View className="px-6 mt-8 mb-8">
@@ -81,29 +158,33 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Transactions List */}
         <View className="gap-4">
-          {/* Placeholder Transaction Item */}
-          <View className="flex-row items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-800 shadow-sm">
-            <View className="w-12 h-12 rounded-full bg-[#0f172a] items-center justify-center mr-4 border border-slate-700">
-              <FontAwesome name="shopping-cart" size={18} color="#94a3b8" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-white font-semibold text-base">Naivas Supermarket</Text>
-              <Text className="text-slate-500 text-xs mt-0.5">Today, 2:30 PM</Text>
-            </View>
-            <Text className="text-white font-bold">- KES 4,200</Text>
-          </View>
+          {transactions.map((tx) => (
+            <TouchableOpacity key={tx.id} className="flex-row items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-800 shadow-sm">
+              <View className="w-12 h-12 rounded-full bg-[#0f172a] items-center justify-center mr-4 border border-slate-700">
+                <FontAwesome
+                  name={tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'}
+                  size={18}
+                  color={tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8'}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
+                <Text className="text-slate-500 text-xs mt-0.5">
+                  {tx.date.toLocaleDateString()} • {tx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+              <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-400' : 'text-white'}`}>
+                {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
+              </Text>
+            </TouchableOpacity>
+          ))}
 
-          <View className="bg-[#1e293b] rounded-2xl p-8 items-center border border-slate-800 border-dashed">
-            <View className="w-16 h-16 bg-[#0f172a] rounded-full items-center justify-center mb-4 border border-slate-700">
-              <FontAwesome name="list-alt" size={24} color="#64748b" />
+          {transactions.length === 0 && (
+            <View className="bg-[#1e293b] rounded-2xl p-8 items-center border border-slate-800 border-dashed">
+              <Text className="text-slate-500">No transactions found</Text>
             </View>
-            <Text className="text-slate-300 font-semibold text-base mb-2">No more transactions</Text>
-            <Text className="text-slate-500 text-sm text-center">
-              Sync your messages to see more history
-            </Text>
-          </View>
+          )}
         </View>
       </View>
     </ScrollView>

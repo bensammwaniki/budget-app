@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth } from '../../services/firebaseConfig';
@@ -10,6 +10,7 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async () => {
@@ -25,6 +26,24 @@ export default function LoginScreen() {
             Alert.alert('Login Failed', error.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        setGoogleLoading(true);
+        try {
+            const provider = new GoogleAuthProvider();
+            await signInWithPopup(auth, provider);
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            Alert.alert(
+                'Google Sign-In Not Available',
+                'Google Sign-In requires a custom development build or web platform. ' +
+                'This feature is not fully supported in Expo Go. ' +
+                'Please use email/password to sign in.'
+            );
+        } finally {
+            setGoogleLoading(false);
         }
     };
 
@@ -125,16 +144,20 @@ export default function LoginScreen() {
                             <View className="flex-1 h-px bg-slate-800" />
                         </View>
 
-                        <View className="flex-row justify-between gap-4">
-                            <TouchableOpacity className="flex-1 bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center">
-                                <FontAwesome name="google" size={20} color="#fff" />
-                                <Text className="ml-2 font-semibold text-slate-200">Google</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity className="flex-1 bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center">
-                                <FontAwesome name="phone" size={20} color="#fff" />
-                                <Text className="ml-2 font-semibold text-slate-200">Phone</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                            className="w-full bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center"
+                            onPress={handleGoogleSignIn}
+                            disabled={googleLoading}
+                        >
+                            {googleLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <FontAwesome name="google" size={20} color="#fff" />
+                                    <Text className="ml-2 font-semibold text-slate-200">Sign in with Google</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>
