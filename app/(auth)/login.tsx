@@ -1,8 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import React, { useState } from 'react';
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth } from '../../services/firebaseConfig';
 
@@ -12,6 +13,13 @@ export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    useEffect(() => {
+        // Configure Google Sign-In
+        GoogleSignin.configure({
+            webClientId: '638697871062-vful4b4acggaa510o2so0gtod6i1il64.apps.googleusercontent.com',
+        });
+    }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -32,16 +40,31 @@ export default function LoginScreen() {
     const handleGoogleSignIn = async () => {
         setGoogleLoading(true);
         try {
-            const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
+            // Check if device supports Google Play Services
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+            // Sign in with Google
+            const userInfo = await GoogleSignin.signIn();
+
+            // Create Firebase credential with the Google ID token
+            const googleCredential = GoogleAuthProvider.credential(userInfo.data?.idToken);
+
+            // Sign in to Firebase with the credential
+            await signInWithCredential(auth, googleCredential);
             router.replace('/(tabs)');
         } catch (error: any) {
-            Alert.alert(
-                'Google Sign-In Not Available',
-                'Google Sign-In requires a custom development build or web platform. ' +
-                'This feature is not fully supported in Expo Go. ' +
-                'Please use email/password to sign in.'
-            );
+            if (error.code === 'sign_in_cancelled') {
+                // User cancelled the sign-in flow
+                console.log('User cancelled Google Sign-In');
+            } else if (error.code === 'in_progress') {
+                // Sign-in already in progress
+                console.log('Google Sign-In already in progress');
+            } else if (error.code === 'play_services_not_available') {
+                Alert.alert('Error', 'Google Play Services not available on this device');
+            } else {
+                console.error('Google Sign-In error:', error);
+                Alert.alert('Google Sign-In Failed', error.message || 'An error occurred during sign-in');
+            }
         } finally {
             setGoogleLoading(false);
         }

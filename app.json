@@ -22,6 +22,7 @@
       "permissions": [
         "READ_SMS"
       ],
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
