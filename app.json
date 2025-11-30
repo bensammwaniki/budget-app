@@ -12,13 +12,14 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.yourcompany.budgetapp",
+      "package": "com.bensammwaniki.budgetapp",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
+      "permissions": [
+        "READ_SMS"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -44,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "108d52d2-3deb-4d86-a451-af3ef922d5c1"
+      }
     }
   }
 }

@@ -8,6 +8,9 @@ export interface Transaction {
     balance: number;
     transactionCost: number;
     categoryId?: number;
+    categoryName?: string;
+    categoryIcon?: string;
+    categoryColor?: string;
     rawSms: string;
 }
 
@@ -32,4 +35,7 @@ export interface SpendingSummary {
     weeklyTotal: number;
     monthlyTotal: number;
     transactionCount: number;
+    totalSpent: number;
+    monthlyTransactionCost: number;
+    totalIncome: number;
 }

@@ -4,15 +4,16 @@ import { Category, SpendingSummary, Transaction } from '../types/transaction';
 let db: SQLite.SQLiteDatabase;
 
 export const initDatabase = async () => {
-    if (db) return;
-
     try {
-        db = await SQLite.openDatabaseAsync('budget.db');
+        if (!db) {
+            db = await SQLite.openDatabaseAsync('budget.db');
+        }
 
-        // Create tables one by one to avoid native crashes with large strings
-        await db.execAsync('PRAGMA journal_mode = WAL;');
+        // Drop and recreate categories table to force refresh (for development)
+        await db.runAsync(`DROP TABLE IF EXISTS categories;`);
 
-        await db.execAsync(`
+        // Create tables one by one using runAsync which is safer for single statements
+        await db.runAsync(`
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -23,7 +24,7 @@ export const initDatabase = async () => {
       );
     `);
 
-        await db.execAsync(`
+        await db.runAsync(`
       CREATE TABLE IF NOT EXISTS recipients (
         id TEXT PRIMARY KEY,
         categoryId INTEGER,
@@ -32,7 +33,7 @@ export const initDatabase = async () => {
       );
     `);
 
-        await db.execAsync(`
+        await db.runAsync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         amount REAL NOT NULL,
@@ -85,7 +86,7 @@ const seedCategories = async () => {
         // SAVINGS/INCOME
         { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e' },
         { name: 'Business', type: 'INCOME', icon: 'briefcase', color: '#3b82f6' },
-        { name: 'Savings', type: 'EXPENSE', icon: 'piggy-bank', color: '#14b8a6' },
+        { name: 'Savings', type: 'EXPENSE', icon: 'bank', color: '#14b8a6' },
         // OTHER
         { name: 'Other', type: 'EXPENSE', icon: 'question', color: '#94a3b8' },
     ];
@@ -95,6 +96,19 @@ const seedCategories = async () => {
             'INSERT INTO categories (name, type, icon, color, isCustom) VALUES (?, ?, ?, ?, 0)',
             [cat.name, cat.type, cat.icon, cat.color]
         );
+    }
+};
+
+export const clearDatabase = async () => {
+    if (!db) return;
+
+    try {
+        // Drop all tables
+        await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
+        await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
+        await db.runAsync(`DROP TABLE IF EXISTS categories;`);
+    } catch (error) {
+        console.error("Error clearing database:", error);
     }
 };
 
@@ -119,6 +133,13 @@ export const saveRecipientCategory = async (recipientId: string, categoryId: num
     );
 };
 
+export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
+    await db.runAsync(
+        'UPDATE transactions SET categoryId = ? WHERE id = ?',
+        [categoryId, transactionId]
+    );
+};
+
 export const saveTransaction = async (transaction: Transaction) => {
     await db.runAsync(
         `INSERT OR REPLACE INTO transactions 
@@ -140,7 +161,17 @@ export const saveTransaction = async (transaction: Transaction) => {
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    const result = await db.getAllAsync<any>('SELECT * FROM transactions ORDER BY date DESC');
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const result = await db.getAllAsync<any>(`
+        SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor 
+        FROM transactions t 
+        LEFT JOIN categories c ON t.categoryId = c.id 
+        WHERE t.date >= ?
+        ORDER BY t.date DESC
+    `, [startOfMonth]);
+
     return result.map(row => ({
         ...row,
         date: new Date(row.date)
@@ -176,11 +207,27 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         "SELECT count(*) as count FROM transactions"
     );
 
+    const totalSpentResult = await db.getAllAsync<{ total: number }>(
+        "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT'"
+    );
+
+    const monthlyCostResult = await db.getAllAsync<{ total: number }>(
+        "SELECT SUM(transactionCost) as total FROM transactions WHERE date >= ?",
+        [startOfMonth]
+    );
+
+    const totalIncomeResult = await db.getAllAsync<{ total: number }>(
+        "SELECT SUM(amount) as total FROM transactions WHERE type = 'RECEIVED'"
+    );
+
     return {
         currentBalance: balanceResult[0]?.balance || 0,
         dailyTotal: daily[0]?.total || 0,
         weeklyTotal: weekly[0]?.total || 0,
         monthlyTotal: monthly[0]?.total || 0,
-        transactionCount: countResult[0]?.count || 0
+        transactionCount: countResult[0]?.count || 0,
+        totalSpent: totalSpentResult[0]?.total || 0,
+        monthlyTransactionCost: monthlyCostResult[0]?.total || 0,
+        totalIncome: totalIncomeResult[0]?.total || 0
     };
 };

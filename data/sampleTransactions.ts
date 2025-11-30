@@ -1,5 +1,5 @@
 export const SAMPLE_SMS_MESSAGES = [
-    "TKTFVBL1ZS Confirmed. Ksh1,510.00 paid to DAD RONGAI. on 29/11/25 at 7:25 PM.New M-PESA balance is Ksh1,228.94. Transaction cost, Ksh0.00. Amount you can transact within the day is 497,490.00.",
+    "TKTFVBL1ZS Confirmed. Ksh1,510.00 paid to DAD RONGAI. on 28/11/25 at 7:25 PM.New M-PESA balance is Ksh1,228.94. Transaction cost, Ksh0.00. Amount you can transact within the day is 497,490.00.",
     "TKSFVBGF9G Confirmed. Ksh900.00 sent to DTB Account for account 333667 on 28/11/25 at 3:06 PM New M-PESA balance is Ksh318.94. Transaction cost, Ksh10.00.",
     "RKXABCD123 Confirmed. You have received Ksh5,000.00 from JOHN DOE on 27/11/25 at 10:00 AM. New M-PESA balance is Ksh6,218.94.",
     "QWE123456 Confirmed. Ksh250.00 paid to NAIVAS SUPERMARKET. on 29/11/25 at 1:00 PM.New M-PESA balance is Ksh2,738.94. Transaction cost, Ksh0.00.",
@@ -13,5 +13,7 @@ export const SAMPLE_SMS_MESSAGES = [
     "Mnb123987 Confirmed. Ksh800.00 paid to TOTAL ENERGIES. on 23/11/25 at 6:00 PM.New M-PESA balance is Ksh7,050.00. Transaction cost, Ksh0.00.",
     "Lkj456654 Confirmed. Ksh2,000.00 sent to EQUITY BANK for account 123456789 on 22/11/25 at 10:00 AM New M-PESA balance is Ksh5,050.00. Transaction cost, Ksh15.00.",
     "Poi987321 Confirmed. You have received Ksh10,000.00 from SALARY ACCOUNT on 30/10/25 at 8:00 AM. New M-PESA balance is Ksh15,050.00.",
-    "Uyt654123 Confirmed. Ksh500.00 paid to NETFLIX. on 20/11/25 at 10:00 AM.New M-PESA balance is Ksh4,550.00. Transaction cost, Ksh0.00."
+    "Uyt654123 Confirmed. Ksh500.00 paid to NETFLIX. on 20/11/25 at 10:00 AM.New M-PESA balance is Ksh4,550.00. Transaction cost, Ksh0.00.",
+    "TKSFVBFE7G Confirmed. Ksh70.00 sent to ARNOLD  OCHIENG 0113706003 on 01/12/25 at 8:20 AM. New M-PESA balance is Ksh1,585.94. Transaction cost, Ksh0.00.  Amount you can transact within the day is 499,930.00. Earn interest daily on Ziidi MMF,Dial *334#",
+    "TKOFVB3RH3 Confirmed. Ksh80.00 sent to IAN  KARANJA on 30/11/25 at 6:26 PM. New M-PESA balance is Ksh5,792.94. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,850.00. Sign up for Lipa Na M-PESA Till online https://m-pesaforbusiness.co.ke",
 ];
