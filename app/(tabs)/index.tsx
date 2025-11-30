@@ -1,17 +1,18 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
-import { SAMPLE_SMS_MESSAGES } from '../../data/sampleTransactions';
 import { useAuth } from '../../services/AuthContext';
 import { getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
-import { readMpesaSMS, requestSMSPermission } from '../../services/smsService';
+import { readMpesaSMS } from '../../services/smsService';
 import { SpendingSummary, Transaction } from '../../types/transaction';
 import { parseMpesaSms } from '../../utils/smsParser';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { colorScheme } = useColorScheme();
   const firstName = user?.displayName?.split(' ')[0] || 'User';
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -34,7 +35,7 @@ export default function HomeScreen() {
   const initializeData = async () => {
     try {
       await initDatabase();
-      await processSampleMessages();
+      await syncSmsTransactions();
       await loadDashboardData();
     } catch (error) {
       console.error('Error initializing data:', error);
@@ -43,21 +44,18 @@ export default function HomeScreen() {
     }
   };
 
-  const processSampleMessages = async () => {
-    // Try to read real SMS first (Android only)
-    let messages = SAMPLE_SMS_MESSAGES;
+  const syncSmsTransactions = async () => {
+    let messages: string[] = [];
 
     if (Platform.OS === 'android') {
       try {
         const realSMS = await readMpesaSMS();
         if (realSMS.length > 0) {
-          console.log(`Using ${realSMS.length} real M-PESA messages`);
+          console.log(`Found ${realSMS.length} M-PESA messages from device.`);
           messages = realSMS;
-        } else {
-          console.log('No real SMS found, using sample messages');
         }
       } catch (error) {
-        console.log('Failed to read SMS, using sample messages:', error);
+        console.log('Failed to read SMS:', error);
       }
     }
 
@@ -100,7 +98,7 @@ export default function HomeScreen() {
 
       // Reinitialize everything fresh
       await initDatabase();
-      await processSampleMessages();
+      await syncSmsTransactions();
       await loadDashboardData();
     } catch (error) {
       console.error('Error during refresh:', error);
@@ -152,7 +150,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#020617] items-center justify-center">
+      <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
         <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
@@ -160,10 +158,10 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#020617]"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" />}
+      className="flex-1 bg-gray-50 dark:bg-[#020617]"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />}
     >
-      <StatusBar style="light" />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <CategorizationModal
         visible={modalVisible}
         transaction={activeTransaction}
@@ -172,31 +170,16 @@ export default function HomeScreen() {
       />
 
       {/* Header */}
-      <View className="px-6 pt-16 pb-8 bg-[#0f172a] rounded-b-[32px] border-b border-slate-800 shadow-lg shadow-black/50">
+      <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg shadow-black/5">
         <View className="flex-row justify-between items-center mb-8">
           <View>
-            <Text className="text-slate-400 text-sm font-medium">Welcome back,</Text>
-            <Text className="text-white text-3xl font-bold mt-1">{firstName}! 👋</Text>
+            <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium">Welcome back,</Text>
+            <Text className="text-slate-900 dark:text-white text-3xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
-          {Platform.OS === 'android' && (
-            <TouchableOpacity
-              className="bg-blue-600 px-4 py-2 rounded-full"
-              onPress={async () => {
-                const granted = await requestSMSPermission();
-                if (granted) {
-                  Alert.alert('Success', 'SMS permission granted! Pull down to refresh and load your M-PESA messages.');
-                } else {
-                  Alert.alert('Permission Denied', 'SMS permission is required to read M-PESA messages.');
-                }
-              }}
-            >
-              <Text className="text-white text-xs font-bold">Enable SMS</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Balance Card */}
-        <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/40 overflow-hidden relative">
+        <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
           {/* Background decoration */}
           <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
           <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
@@ -242,17 +225,17 @@ export default function HomeScreen() {
       {/* Recent Transactions */}
       <View className="px-6 mt-8 mb-8">
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-white text-lg font-bold">Recent Spendings</Text>
+          <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Spendings</Text>
         </View>
 
         <View className="gap-4">
           {transactions.map((tx) => (
             <TouchableOpacity
               key={tx.id}
-              className="flex-row items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-800 shadow-sm active:bg-slate-800"
+              className="flex-row items-center bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm active:bg-gray-50 dark:active:bg-slate-800"
               onPress={() => handleTransactionPress(tx)}
             >
-              <View className="w-12 h-12 rounded-full bg-[#0f172a] items-center justify-center mr-4 border border-slate-700">
+              <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
                 <FontAwesome
                   name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
                   size={18}
@@ -260,7 +243,7 @@ export default function HomeScreen() {
                 />
               </View>
               <View className="flex-1">
-                <Text className="text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
+                <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
                 <View className="flex-row items-center mt-0.5">
                   {tx.categoryName && (
                     <Text className="text-xs font-medium mr-2" style={{ color: tx.categoryColor }}>
@@ -272,14 +255,14 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </View>
-              <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-400' : 'text-white'}`}>
+              <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
                 {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
               </Text>
             </TouchableOpacity>
           ))}
 
           {transactions.length === 0 && (
-            <View className="bg-[#1e293b] rounded-2xl p-8 items-center border border-slate-800 border-dashed">
+            <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 items-center border border-gray-200 dark:border-slate-800 border-dashed">
               <Text className="text-slate-500">No transactions found</Text>
             </View>
           )}
