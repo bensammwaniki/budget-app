@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Category, SpendingSummary, Transaction } from '../types/transaction';
+import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 
 let db: SQLite.SQLiteDatabase;
 
@@ -53,6 +53,21 @@ export const initDatabase = async () => {
       );
     `);
 
+        await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS fuliza_transactions (
+        id TEXT PRIMARY KEY,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        accessFee REAL,
+        outstandingBalance REAL,
+        dueDate TEXT,
+        linkedTransactionId TEXT,
+        date TEXT NOT NULL,
+        rawSms TEXT,
+        FOREIGN KEY (linkedTransactionId) REFERENCES transactions (id)
+      );
+    `);
+
         // Seed default categories if empty
         const result = await db.getAllAsync<{ count: number }>('SELECT count(*) as count FROM categories');
         if (result[0].count === 0) {
@@ -90,6 +105,8 @@ const seedCategories = async () => {
         { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e' },
         { name: 'Business', type: 'INCOME', icon: 'briefcase', color: '#3b82f6' },
         { name: 'Savings', type: 'EXPENSE', icon: 'bank', color: '#14b8a6' },
+        // FULIZA
+        { name: 'Fuliza Charges', type: 'EXPENSE', icon: 'warning', color: '#f97316' },
         // OTHER
         { name: 'Other', type: 'EXPENSE', icon: 'question', color: '#94a3b8' },
     ];
@@ -142,6 +159,26 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
         [categoryId, transactionId]
     );
 };
+
+export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
+    await db.runAsync(
+        `INSERT OR REPLACE INTO fuliza_transactions 
+        (id, amount, type, accessFee, outstandingBalance, dueDate, linkedTransactionId, date, rawSms) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            fuliza.id,
+            fuliza.amount,
+            fuliza.type,
+            fuliza.accessFee || null,
+            fuliza.outstandingBalance || null,
+            fuliza.dueDate?.toISOString() || null,
+            fuliza.linkedTransactionId || null,
+            fuliza.date.toISOString(),
+            fuliza.rawSms
+        ]
+    );
+};
+
 
 export const saveTransaction = async (transaction: Transaction) => {
     await db.runAsync(
@@ -223,14 +260,28 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'RECEIVED'"
     );
 
+    const fulizaResult = await db.getAllAsync<{ balance: number }>(
+        `SELECT outstandingBalance as balance 
+         FROM fuliza_transactions 
+         WHERE outstandingBalance IS NOT NULL 
+         ORDER BY date DESC 
+         LIMIT 1`
+    );
+
+    // IMPORTANT: If M-PESA balance > 0, Fuliza has been auto-repaid
+    // Only show Fuliza debt if M-PESA balance is 0
+    const currentBalance = balanceResult[0]?.balance || 0;
+    const fulizaOutstanding = currentBalance > 0 ? 0 : (fulizaResult[0]?.balance || 0);
+
     return {
-        currentBalance: balanceResult[0]?.balance || 0,
+        currentBalance: currentBalance,
         dailyTotal: daily[0]?.total || 0,
         weeklyTotal: weekly[0]?.total || 0,
         monthlyTotal: monthly[0]?.total || 0,
         transactionCount: countResult[0]?.count || 0,
         totalSpent: totalSpentResult[0]?.total || 0,
         monthlyTransactionCost: monthlyCostResult[0]?.total || 0,
-        totalIncome: totalIncomeResult[0]?.total || 0
+        totalIncome: totalIncomeResult[0]?.total || 0,
+        fulizaOutstanding: fulizaOutstanding
     };
 };

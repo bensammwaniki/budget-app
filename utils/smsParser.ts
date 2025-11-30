@@ -127,3 +127,57 @@ const parseDate = (dateStr: string, timeStr: string): Date => {
 
     return new Date(fullYear, month - 1, day, hours, minutes);
 };
+
+export const parseFulizaLoan = (smsText: string, timestamp?: number): any | null => {
+    // ULTRA STRICT: Must contain ALL these exact phrases
+    if (!smsText.includes('Fuliza M-PESA amount is Ksh') ||
+        !smsText.includes('Access Fee charged Ksh') ||
+        !smsText.includes('Total Fuliza M-PESA outstanding amount is')) {
+        return null;
+    }
+
+    // Pattern: "KFFVAAH1Z Confirmed. Fuliza M-PESA amount is Ksh 50.00. Access Fee charged Ksh 0.50..."
+    const pattern = /([A-Z0-9]+)\s+Confirmed\.\s+Fuliza M-PESA amount is Ksh\s+([\d,]+\.\d{2})\.\s+Access Fee charged Ksh\s+([\d,]+\.\d{2})\.\s+Total Fuliza M-PESA outstanding amount is Ksh\s+([\d,]+\.\d{2})\s+due on\s+(\d{2}\/\d{2}\/\d{2})/;
+
+    const match = smsText.match(pattern);
+    if (match) {
+        return {
+            id: match[1],
+            amount: parseFloat(match[2].replace(/,/g, '')),
+            type: 'LOAN',
+            accessFee: parseFloat(match[3].replace(/,/g, '')),
+            outstandingBalance: parseFloat(match[4].replace(/,/g, '')),
+            dueDate: parseDate(match[5], '12:00 AM'),
+            date: timestamp ? new Date(timestamp) : new Date(),
+            rawSms: smsText
+        };
+    }
+    return null;
+};
+
+export const parseFulizaRepayment = (smsText: string, timestamp?: number): any | null => {
+    // ULTRA STRICT: Must contain exact phrase for repayment
+    if (!smsText.includes('used to partially pay your outstanding Fuliza M-PESA') &&
+        !smsText.includes('used to fully pay your outstanding Fuliza M-PESA')) {
+        return null;
+    }
+
+    // Pattern: "TKIFVAJ7HG Confirmed. Ksh 1000.00 from your M-PESA has been used to partially pay..."
+    const pattern = /([A-Z0-9]+)\s+Confirmed\.\s+Ksh\s+([\d,]+\.\d{2})\s+from your M-PESA has been used to (partially|fully) pay your outstanding Fuliza M-PESA/;
+
+    const match = smsText.match(pattern);
+    if (match) {
+        // Try to extract remaining balance/limit
+        const limitMatch = smsText.match(/Your available Fuliza M-PESA limit is Ksh\s+([\d,]+\.\d{2})/);
+
+        return {
+            id: match[1],
+            amount: parseFloat(match[2].replace(/,/g, '')),
+            type: 'REPAYMENT',
+            outstandingBalance: limitMatch ? parseFloat(limitMatch[1].replace(/,/g, '')) : undefined,
+            date: timestamp ? new Date(timestamp) : new Date(),
+            rawSms: smsText
+        };
+    }
+    return null;
+};

@@ -44,10 +44,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                 >
                     <View className="p-6 border-b border-gray-200 dark:border-slate-800 flex-row justify-between items-center">
                         <View>
-                            <Text className="text-slate-900 dark:text-white text-xl font-bold text-center mb-2">
-                                {transaction?.categoryId ? 'Edit Category' : 'What was this for?'}
-                            </Text>
-                            <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                            <Text className="text-slate-500 dark:text-slate-300 text-sm mt-1 text-center">
                                 {transaction.recipientName} • KES {transaction.amount.toLocaleString()}
                             </Text>
                         </View>
@@ -58,7 +55,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
 
                     <ScrollView className="flex-1 p-6">
                         <Text className="text-slate-500 dark:text-slate-300 mb-4 font-medium">
-                            {transaction.type === 'RECEIVED' ? 'What type of income?' : 'What was this for?'}
+                            {transaction.type === 'RECEIVED' ? 'What type of income is this?' : 'What type of expense is this?'}
                         </Text>
 
                         <View className="flex-row flex-wrap justify-between gap-y-3">

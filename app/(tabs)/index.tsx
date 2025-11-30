@@ -5,10 +5,11 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
-import { getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
-import { readMpesaSMS } from '../../services/smsService';
+import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
+import { readMpesaSMS, SMSMessage } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
-import { parseMpesaSms } from '../../utils/smsParser';
+import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
+import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../../utils/smsParser';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -45,7 +46,7 @@ export default function HomeScreen() {
   };
 
   const syncSmsTransactions = async () => {
-    let messages: string[] = [];
+    let messages: SMSMessage[] = [];
 
     if (Platform.OS === 'android') {
       try {
@@ -53,14 +54,35 @@ export default function HomeScreen() {
         if (realSMS.length > 0) {
           console.log(`Found ${realSMS.length} M-PESA messages from device.`);
           messages = realSMS;
+        } else {
+          console.log('No M-PESA messages found on device.');
         }
       } catch (error) {
         console.log('Failed to read SMS:', error);
       }
     }
 
-    for (const sms of messages) {
-      const transaction = parseMpesaSms(sms);
+    if (messages.length === 0) {
+      console.log('No SMS messages to process.');
+      return;
+    }
+
+    // Get Fuliza Charges category ID
+    const categories = await getCategories();
+    const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
+    const fulizaCategoryId = fulizaCategory?.id;
+
+    // Map to store monthly access fees: 'YYYY-MM' -> { total: number, date: Date }
+    const monthlyAccessFees = new Map<string, { total: number, date: Date }>();
+    let processedCount = 0;
+    let fulizaCount = 0;
+
+    for (const msg of messages) {
+      const smsText = msg.body;
+      const smsDate = msg.date;
+
+      // Try parsing as regular transaction
+      const transaction = parseMpesaSms(smsText);
       if (transaction) {
         // Check if we have a saved category for this recipient AND type
         const savedCategoryId = await getRecipientCategory(transaction.recipientId, transaction.type);
@@ -68,6 +90,65 @@ export default function HomeScreen() {
           transaction.categoryId = savedCategoryId;
         }
         await saveTransaction(transaction);
+        processedCount++;
+        continue;
+      }
+
+      // Try parsing as Fuliza loan
+      const fulizaLoan = parseFulizaLoan(smsText, smsDate);
+      if (fulizaLoan) {
+        console.log('🔴 FULIZA LOAN DETECTED:', smsText.substring(0, 100));
+        await saveFulizaTransaction(fulizaLoan);
+        fulizaCount++;
+
+        // Accumulate access fees by month
+        if (fulizaLoan.accessFee && fulizaLoan.accessFee > 0) {
+          const date = fulizaLoan.date;
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+          const current = monthlyAccessFees.get(monthKey) || { total: 0, date: date };
+          // Keep the latest date for the transaction timestamp
+          if (date > current.date) {
+            current.date = date;
+          }
+          current.total += fulizaLoan.accessFee;
+          monthlyAccessFees.set(monthKey, current);
+        }
+        continue;
+      }
+
+      // Try parsing as Fuliza repayment
+      const fulizaRepayment = parseFulizaRepayment(smsText, smsDate);
+      if (fulizaRepayment) {
+        console.log('🟡 FULIZA REPAYMENT DETECTED:', smsText.substring(0, 100));
+        await saveFulizaTransaction(fulizaRepayment);
+        fulizaCount++;
+        continue;
+      }
+    }
+
+    console.log(`Processed ${processedCount} regular transactions and ${fulizaCount} Fuliza transactions.`);
+
+    // Create bundled transactions for each month
+    if (fulizaCategoryId) {
+      for (const [monthKey, data] of monthlyAccessFees.entries()) {
+        const [year, month] = monthKey.split('-');
+        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
+
+        const bundledAccessFeeTransaction: Transaction = {
+          id: `FULIZA-FEES-${monthKey}`, // Unique ID per month
+          amount: data.total,
+          type: 'SENT',
+          recipientId: 'FULIZA-ACCESS-FEES',
+          recipientName: `Fuliza Fees (${monthName})`,
+          date: data.date,
+          balance: 0,
+          transactionCost: 0,
+          categoryId: fulizaCategoryId,
+          rawSms: `Bundled Fuliza access fees for ${monthName} ${year}: KES ${data.total.toFixed(2)}`
+        };
+        await saveTransaction(bundledAccessFeeTransaction);
+        console.log(`Created bundled Fuliza fee transaction for ${monthKey}: KES ${data.total.toFixed(2)}`);
       }
     }
   };
@@ -222,6 +303,18 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* Fuliza Debt Warning - Only show if user has outstanding Fuliza */}
+          {spending?.fulizaOutstanding && spending.fulizaOutstanding > 0 && (
+            <View className="bg-orange-500/20 px-3 py-2 rounded-lg mb-6">
+              <Text className="text-orange-200 text-xs font-medium">
+                ⚠️ Fuliza Debt: KES {spending.fulizaOutstanding.toLocaleString()}
+              </Text>
+              <Text className="text-orange-300 text-[10px] mt-0.5">
+                Daily charge: KES {calculateFulizaDailyCharge(spending.fulizaOutstanding)} • Repay soon to minimize fees
+              </Text>
+            </View>
+          )}
+
           <View className="flex-row justify-between gap-3">
             <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
               <Text className="text-blue-100 text-xs mb-1">Today</Text>
@@ -241,44 +334,74 @@ export default function HomeScreen() {
 
 
 
+      {/* Monthly Fuliza Fees - Displayed separately */}
+      {transactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 && (
+        <View className="px-6 mt-8 mb-2">
+          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
+          <View className="gap-4">
+            {transactions
+              .filter(t => t.id.startsWith('FULIZA-FEES-'))
+              .map((tx) => (
+                <View
+                  key={tx.id}
+                  className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm"
+                >
+                  <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
+                    <FontAwesome name="warning" size={20} color="#f97316" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
+                  </View>
+                  <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
+                    - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        </View>
+      )}
+
       {/* Recent Transactions */}
-      <View className="px-6 mt-8 mb-8">
+      <View className="px-6 mt-6 mb-8">
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Spendings</Text>
         </View>
 
         <View className="gap-4">
-          {transactions.map((tx) => (
-            <TouchableOpacity
-              key={tx.id}
-              className="flex-row items-center bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm active:bg-gray-50 dark:active:bg-slate-800"
-              onPress={() => handleTransactionPress(tx)}
-            >
-              <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
-                <FontAwesome
-                  name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
-                  size={18}
-                  color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8')}
-                />
-              </View>
-              <View className="flex-1">
-                <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
-                <View className="flex-row items-center mt-0.5">
-                  {tx.categoryName && (
-                    <Text className="text-xs font-medium mr-2" style={{ color: tx.categoryColor }}>
-                      {tx.categoryName}
-                    </Text>
-                  )}
-                  <Text className="text-slate-500 text-xs">
-                    {tx.date.toLocaleDateString()} • {tx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
+          {transactions
+            .filter(t => !t.id.startsWith('FULIZA-FEES-')) // Filter out Fuliza fees from main list
+            .map((tx) => (
+              <TouchableOpacity
+                key={tx.id}
+                className="flex-row items-center bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm active:bg-gray-50 dark:active:bg-slate-800"
+                onPress={() => handleTransactionPress(tx)}
+              >
+                <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
+                  <FontAwesome
+                    name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
+                    size={18}
+                    color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8')}
+                  />
                 </View>
-              </View>
-              <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
-                {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <View className="flex-1">
+                  <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
+                  <View className="flex-row items-center mt-0.5">
+                    {tx.categoryName && (
+                      <Text className="text-xs font-medium mr-2" style={{ color: tx.categoryColor }}>
+                        {tx.categoryName}
+                      </Text>
+                    )}
+                    <Text className="text-slate-500 text-xs">
+                      {tx.date.toLocaleDateString()} • {tx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+                <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
+                  {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
+                </Text>
+              </TouchableOpacity>
+            ))}
 
           {transactions.length === 0 && (
             <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 items-center border border-gray-200 dark:border-slate-800 border-dashed">

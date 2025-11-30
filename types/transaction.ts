@@ -29,6 +29,18 @@ export interface Recipient {
     lastSeen: Date;
 }
 
+export interface FulizaTransaction {
+    id: string;
+    amount: number;
+    type: 'LOAN' | 'REPAYMENT';
+    accessFee?: number;
+    outstandingBalance?: number;
+    dueDate?: Date;
+    linkedTransactionId?: string;
+    date: Date;
+    rawSms: string;
+}
+
 export interface SpendingSummary {
     currentBalance: number;
     dailyTotal: number;
@@ -38,4 +50,5 @@ export interface SpendingSummary {
     totalSpent: number;
     monthlyTransactionCost: number;
     totalIncome: number;
+    fulizaOutstanding: number;
 }

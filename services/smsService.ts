@@ -41,7 +41,7 @@ export const requestSMSPermission = async (): Promise<boolean> => {
 /**
  * Read M-PESA SMS messages from the phone
  */
-export const readMpesaSMS = async (): Promise<string[]> => {
+export const readMpesaSMS = async (): Promise<SMSMessage[]> => {
     if (Platform.OS !== 'android') {
         console.log('SMS reading only supported on Android');
         return [];
@@ -78,9 +78,8 @@ export const readMpesaSMS = async (): Promise<string[]> => {
                 (count: number, smsList: string) => {
                     try {
                         const messages: SMSMessage[] = JSON.parse(smsList);
-                        const mpesaTexts = messages.map(msg => msg.body);
-                        console.log(`Found ${mpesaTexts.length} M-PESA messages`);
-                        resolve(mpesaTexts);
+                        console.log(`Found ${messages.length} M-PESA messages`);
+                        resolve(messages);
                     } catch (error) {
                         console.error('Error parsing SMS:', error);
                         reject(error);
