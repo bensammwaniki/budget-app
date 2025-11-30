@@ -8,7 +8,7 @@ import { Category, Transaction } from '../types/transaction';
 interface CategorizationModalProps {
     visible: boolean;
     transaction: Transaction | null;
-    onCategorySelect: (categoryId: number) => void;
+    onCategorySelect: (category: Category) => void;
     onClose: () => void;
 }
 
@@ -67,7 +67,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 .map(category => (
                                     <TouchableOpacity
                                         key={category.id}
-                                        onPress={() => onCategorySelect(category.id)}
+                                        onPress={() => onCategorySelect(category)}
                                         className="w-[48%] p-4 rounded-2xl border bg-gray-50 dark:bg-[#1e293b] border-gray-200 dark:border-slate-700 flex-row items-center active:bg-blue-50 dark:active:bg-blue-600/10 active:border-blue-500"
                                     >
                                         <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${category.color}20` }}>

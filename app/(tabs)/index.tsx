@@ -7,7 +7,7 @@ import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
 import { getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
 import { readMpesaSMS } from '../../services/smsService';
-import { SpendingSummary, Transaction } from '../../types/transaction';
+import { Category, SpendingSummary, Transaction } from '../../types/transaction';
 import { parseMpesaSms } from '../../utils/smsParser';
 
 export default function HomeScreen() {
@@ -62,8 +62,8 @@ export default function HomeScreen() {
     for (const sms of messages) {
       const transaction = parseMpesaSms(sms);
       if (transaction) {
-        // Check if we have a saved category for this recipient
-        const savedCategoryId = await getRecipientCategory(transaction.recipientId);
+        // Check if we have a saved category for this recipient AND type
+        const savedCategoryId = await getRecipientCategory(transaction.recipientId, transaction.type);
         if (savedCategoryId) {
           transaction.categoryId = savedCategoryId;
         }
@@ -113,31 +113,50 @@ export default function HomeScreen() {
     setModalVisible(true);
   };
 
-  const handleCategorySelect = async (categoryId: number) => {
+  const handleCategorySelect = async (category: Category) => {
     if (activeTransaction) {
-      // 1. Update the mapping for future transactions
-      await saveRecipientCategory(activeTransaction.recipientId, categoryId);
+      // OPTIMISTIC UPDATE: Update UI immediately
+      const updatedTransactions = transactions.map(t => {
+        if (t.id === activeTransaction.id) {
+          return {
+            ...t,
+            categoryId: category.id,
+            categoryName: category.name,
+            categoryIcon: category.icon,
+            categoryColor: category.color
+          };
+        }
+        return t;
+      });
+      setTransactions(updatedTransactions);
 
-      // 2. Update the specific transaction (important for Edit Mode)
-      // For Queue Mode, saveTransaction already handled the insert, but we need to update if we're "fixing" it.
-      // Actually, saveRecipientCategory updates NULL categories, but if we are editing an EXISTING category, we need explicit update.
-      await updateTransactionCategory(activeTransaction.id, categoryId);
-
+      // Close modal immediately for "instant" feel
       if (selectedTransaction) {
-        // EDIT MODE: Close modal and clear selection
         setModalVisible(false);
         setSelectedTransaction(null);
-        await loadDashboardData();
       } else {
-        // QUEUE MODE: Remove processed item
+        // Queue Mode: Move to next item immediately
         const newQueue = uncategorizedQueue.slice(1);
         setUncategorizedQueue(newQueue);
-
         if (newQueue.length === 0) {
           setModalVisible(false);
-          await loadDashboardData();
         }
-        // If more items, modal stays open with next item
+      }
+
+      // BACKGROUND: Perform DB operations
+      try {
+        // 1. Update the mapping for future transactions
+        await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
+
+        // 2. Update the specific transaction
+        await updateTransactionCategory(activeTransaction.id, category.id);
+
+        // 3. Reload data silently to ensure consistency (especially spending summary)
+        await loadDashboardData();
+      } catch (error) {
+        console.error("Failed to save category:", error);
+        // Revert UI if needed (optional, but good practice)
+        // For now, we assume success as DB is local
       }
     }
   };

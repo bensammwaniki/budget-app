@@ -27,7 +27,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
             id: match[1],
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'SENT',
-            recipientId: match[3].trim(), // Name is the identifier
+            recipientId: match[3].trim().toUpperCase(), // Name is the identifier
             recipientName: match[3].trim(),
             date: parseDate(match[4], match[5]),
             balance: parseFloat(match[6].replace(/,/g, '')),
@@ -46,7 +46,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
             id: match[1],
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'SENT',
-            recipientId: match[4].trim(), // Account Number is the identifier
+            recipientId: match[4].trim().toUpperCase(), // Account Number is the identifier
             recipientName: `${match[3].trim()} - ${match[4].trim()}`,
             date: parseDate(match[5], match[6]),
             balance: balanceMatch ? parseFloat(balanceMatch[1].replace(/,/g, '')) : 0,
@@ -64,7 +64,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
             id: match[1],
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'SENT',
-            recipientId: match[3].trim(),
+            recipientId: match[3].trim().toUpperCase(),
             recipientName: match[3].trim(),
             date: parseDate(match[4], match[5]),
             balance: balanceMatch ? parseFloat(balanceMatch[1].replace(/,/g, '')) : 0,
@@ -82,7 +82,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
             id: match[1],
             amount: parseFloat(match[4].replace(/,/g, '')),
             type: 'SENT',
-            recipientId: match[5].trim(),
+            recipientId: match[5].trim().toUpperCase(),
             recipientName: match[5].trim(),
             date: parseDate(match[2], match[3]),
             balance: balanceMatch ? parseFloat(balanceMatch[1].replace(/,/g, '')) : 0,
@@ -99,7 +99,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
             id: match[1],
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'RECEIVED',
-            recipientId: match[3].trim(),
+            recipientId: match[3].trim().toUpperCase(),
             recipientName: match[3].trim(),
             date: parseDate(match[4], match[5]),
             balance: balanceMatch ? parseFloat(balanceMatch[1].replace(/,/g, '')) : 0,

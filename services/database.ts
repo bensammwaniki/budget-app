@@ -9,8 +9,9 @@ export const initDatabase = async () => {
             db = await SQLite.openDatabaseAsync('budget.db');
         }
 
-        // Drop and recreate categories table to force refresh (for development)
+        // Drop tables to ensure schema update (Development only)
         await db.runAsync(`DROP TABLE IF EXISTS categories;`);
+        await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
 
         // Create tables one by one using runAsync which is safer for single statements
         await db.runAsync(`
@@ -26,9 +27,11 @@ export const initDatabase = async () => {
 
         await db.runAsync(`
       CREATE TABLE IF NOT EXISTS recipients (
-        id TEXT PRIMARY KEY,
+        id TEXT,
+        type TEXT,
         categoryId INTEGER,
         lastSeen TEXT,
+        PRIMARY KEY (id, type),
         FOREIGN KEY (categoryId) REFERENCES categories (id)
       );
     `);
@@ -45,7 +48,7 @@ export const initDatabase = async () => {
         transactionCost REAL,
         categoryId INTEGER,
         rawSms TEXT,
-        FOREIGN KEY (recipientId) REFERENCES recipients (id),
+        FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type),
         FOREIGN KEY (categoryId) REFERENCES categories (id)
       );
     `);
@@ -116,20 +119,20 @@ export const getCategories = async (): Promise<Category[]> => {
     return await db.getAllAsync<Category>('SELECT * FROM categories ORDER BY name');
 };
 
-export const getRecipientCategory = async (recipientId: string): Promise<number | null> => {
-    const result = await db.getAllAsync<{ categoryId: number }>('SELECT categoryId FROM recipients WHERE id = ?', [recipientId]);
+export const getRecipientCategory = async (recipientId: string, type: string): Promise<number | null> => {
+    const result = await db.getAllAsync<{ categoryId: number }>('SELECT categoryId FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
     return result.length > 0 ? result[0].categoryId : null;
 };
 
-export const saveRecipientCategory = async (recipientId: string, categoryId: number) => {
+export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
     await db.runAsync(
-        'INSERT OR REPLACE INTO recipients (id, categoryId, lastSeen) VALUES (?, ?, ?)',
-        [recipientId, categoryId, new Date().toISOString()]
+        'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
+        [recipientId, type, categoryId, new Date().toISOString()]
     );
-    // Update existing transactions for this recipient
+    // Update existing transactions for this recipient and type
     await db.runAsync(
-        'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND categoryId IS NULL',
-        [categoryId, recipientId]
+        'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
+        [categoryId, recipientId, type]
     );
 };
 
