@@ -304,13 +304,13 @@ export default function HomeScreen() {
           </View>
 
           {/* Fuliza Debt Warning - Only show if user has outstanding Fuliza */}
-          {spending?.fulizaOutstanding && spending.fulizaOutstanding > 0 && (
+          {spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0 && (
             <View className="bg-orange-500/20 px-3 py-2 rounded-lg mb-6">
               <Text className="text-orange-200 text-xs font-medium">
                 ⚠️ Fuliza Debt: KES {spending.fulizaOutstanding.toLocaleString()}
               </Text>
               <Text className="text-orange-300 text-[10px] mt-0.5">
-                Daily charge: KES {calculateFulizaDailyCharge(spending.fulizaOutstanding)} • Repay soon to minimize fees
+                Daily charge: KES {calculateFulizaDailyCharge(spending.fulizaOutstanding).toFixed(2)} • Repay soon to minimize fees
               </Text>
             </View>
           )}
@@ -318,15 +318,15 @@ export default function HomeScreen() {
           <View className="flex-row justify-between gap-3">
             <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
               <Text className="text-blue-100 text-xs mb-1">Today</Text>
-              <Text className="text-white font-bold">KES {spending?.dailyTotal.toLocaleString()}</Text>
+              <Text className="text-white font-bold">KES {spending?.dailyTotal?.toLocaleString() || '0'}</Text>
             </View>
             <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
               <Text className="text-blue-100 text-xs mb-1">This Week</Text>
-              <Text className="text-white font-bold">KES {spending?.weeklyTotal.toLocaleString()}</Text>
+              <Text className="text-white font-bold">KES {spending?.weeklyTotal?.toLocaleString() || '0'}</Text>
             </View>
             <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
               <Text className="text-blue-100 text-xs mb-1">This Month</Text>
-              <Text className="text-white font-bold">KES {spending?.monthlyTotal.toLocaleString()}</Text>
+              <Text className="text-white font-bold">KES {spending?.monthlyTotal?.toLocaleString() || '0'}</Text>
             </View>
           </View>
         </View>

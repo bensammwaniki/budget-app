@@ -21,6 +21,7 @@ export interface Category {
     icon: string;
     color: string;
     isCustom?: boolean;
+    description?: string;
 }
 
 export interface Recipient {

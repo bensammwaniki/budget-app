@@ -21,7 +21,8 @@ export const initDatabase = async () => {
         type TEXT NOT NULL,
         icon TEXT NOT NULL,
         color TEXT NOT NULL,
-        isCustom INTEGER DEFAULT 0
+        isCustom INTEGER DEFAULT 0,
+        description TEXT
       );
     `);
 
@@ -39,32 +40,39 @@ export const initDatabase = async () => {
         await db.runAsync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL,
-        recipientId TEXT NOT NULL,
-        recipientName TEXT NOT NULL,
-        date TEXT NOT NULL,
+        amount REAL,
+        type TEXT,
+        recipientId TEXT,
+        recipientName TEXT,
+        date TEXT,
         balance REAL,
         transactionCost REAL,
         categoryId INTEGER,
         rawSms TEXT,
-        FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type),
-        FOREIGN KEY (categoryId) REFERENCES categories (id)
+        FOREIGN KEY (categoryId) REFERENCES categories (id),
+        FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type)
       );
     `);
 
         await db.runAsync(`
       CREATE TABLE IF NOT EXISTS fuliza_transactions (
         id TEXT PRIMARY KEY,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL,
+        amount REAL,
+        type TEXT, -- 'LOAN' or 'REPAYMENT'
         accessFee REAL,
         outstandingBalance REAL,
         dueDate TEXT,
         linkedTransactionId TEXT,
-        date TEXT NOT NULL,
+        date TEXT,
         rawSms TEXT,
         FOREIGN KEY (linkedTransactionId) REFERENCES transactions (id)
+      );
+    `);
+
+        await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
       );
     `);
 
@@ -81,40 +89,25 @@ export const initDatabase = async () => {
 };
 
 const seedCategories = async () => {
-    const categories = [
-        // HOME
-        { name: 'Rent/Mortgage', type: 'EXPENSE', icon: 'home', color: '#ef4444' },
-        { name: 'Water', type: 'EXPENSE', icon: 'tint', color: '#3b82f6' },
-        { name: 'Electricity', type: 'EXPENSE', icon: 'bolt', color: '#eab308' },
-        { name: 'Internet', type: 'EXPENSE', icon: 'wifi', color: '#8b5cf6' },
-        { name: 'Maintenance', type: 'EXPENSE', icon: 'wrench', color: '#64748b' },
-        { name: 'Family Help', type: 'EXPENSE', icon: 'users', color: '#ec4899' },
-        // TRANSPORTATION
-        { name: 'Transport', type: 'EXPENSE', icon: 'bus', color: '#f97316' },
-        { name: 'Fuel', type: 'EXPENSE', icon: 'car', color: '#f59e0b' },
-        // DAILY LIVING
-        { name: 'Groceries', type: 'EXPENSE', icon: 'shopping-basket', color: '#10b981' },
-        { name: 'Dining Out', type: 'EXPENSE', icon: 'cutlery', color: '#f43f5e' },
-        { name: 'Clothing', type: 'EXPENSE', icon: 'shopping-bag', color: '#ec4899' },
-        { name: 'Personal Care', type: 'EXPENSE', icon: 'user', color: '#d946ef' },
-        // HEALTH
-        { name: 'Medical', type: 'EXPENSE', icon: 'medkit', color: '#ef4444' },
-        // VACATION
-        { name: 'Vacation', type: 'EXPENSE', icon: 'plane', color: '#0ea5e9' },
-        // SAVINGS/INCOME
-        { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e' },
-        { name: 'Business', type: 'INCOME', icon: 'briefcase', color: '#3b82f6' },
-        { name: 'Savings', type: 'EXPENSE', icon: 'bank', color: '#14b8a6' },
-        // FULIZA
-        { name: 'Fuliza Charges', type: 'EXPENSE', icon: 'warning', color: '#f97316' },
-        // OTHER
-        { name: 'Other', type: 'EXPENSE', icon: 'question', color: '#94a3b8' },
+    const categories: Omit<Category, 'id'>[] = [
+        { name: 'Food & Dining', type: 'EXPENSE', icon: 'cutlery', color: '#ef4444', description: 'Groceries, restaurants, and snacks' },
+        { name: 'Transport', type: 'EXPENSE', icon: 'bus', color: '#f59e0b', description: 'Commute, fuel, and travel' },
+        { name: 'Shopping', type: 'EXPENSE', icon: 'shopping-bag', color: '#ec4899', description: 'Clothes, gadgets, and personal items' },
+        { name: 'Entertainment', type: 'EXPENSE', icon: 'film', color: '#8b5cf6', description: 'Movies, games, and events' },
+        { name: 'Bills & Utilities', type: 'EXPENSE', icon: 'bolt', color: '#3b82f6', description: 'Electricity, water, and internet' },
+        { name: 'Health', type: 'EXPENSE', icon: 'heartbeat', color: '#10b981', description: 'Medical and fitness' },
+        { name: 'Education', type: 'EXPENSE', icon: 'graduation-cap', color: '#6366f1', description: 'Tuition, books, and courses' },
+        { name: 'Personal Care', type: 'EXPENSE', icon: 'smile-o', color: '#f472b6', description: 'Grooming and wellness' },
+        { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e', description: 'Monthly salary' },
+        { name: 'Business', type: 'INCOME', icon: 'briefcase', color: '#0ea5e9', description: 'Business revenue' },
+        { name: 'Gifts', type: 'INCOME', icon: 'gift', color: '#d946ef', description: 'Gifts received' },
+        { name: 'Fuliza Charges', type: 'EXPENSE', icon: 'warning', color: '#f97316', description: 'Fuliza access fees and interest' }
     ];
 
     for (const cat of categories) {
         await db.runAsync(
-            'INSERT INTO categories (name, type, icon, color, isCustom) VALUES (?, ?, ?, ?, 0)',
-            [cat.name, cat.type, cat.icon, cat.color]
+            'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
+            [cat.name, cat.type, cat.icon, cat.color, 0, cat.description || '']
         );
     }
 };
@@ -133,7 +126,34 @@ export const clearDatabase = async () => {
 };
 
 export const getCategories = async (): Promise<Category[]> => {
-    return await db.getAllAsync<Category>('SELECT * FROM categories ORDER BY name');
+    return await db.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
+};
+
+export const addCategory = async (category: Omit<Category, 'id'>) => {
+    const result = await db.runAsync(
+        'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [category.name, category.type, category.icon, category.color, 1, category.description || '']
+    );
+    return result.lastInsertRowId;
+};
+
+export const deleteCategory = async (id: number) => {
+    await db.runAsync('DELETE FROM categories WHERE id = ?', [id]);
+};
+
+export const saveUserSettings = async (key: string, value: string) => {
+    await db.runAsync(
+        'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
+        [key, value]
+    );
+};
+
+export const getUserSettings = async (key: string): Promise<string | null> => {
+    const result = await db.getFirstAsync<{ value: string }>(
+        'SELECT value FROM user_settings WHERE key = ?',
+        [key]
+    );
+    return result?.value || null;
 };
 
 export const getRecipientCategory = async (recipientId: string, type: string): Promise<number | null> => {
