@@ -10,22 +10,23 @@ export default function AnalyticsScreen() {
   const [totalExpense, setTotalExpense] = useState(0);
   const [categoryData, setCategoryData] = useState<{ category: string; amount: number; percentage: number; color: string }[]>([]);
 
-  const loadData = useCallback(() => {
-    const allTransactions = getTransactions();
+  const loadData = useCallback(async () => {
+    const allTransactions = await getTransactions();
 
     // Filter expenses
-    const expenses = allTransactions.filter(t => !['RECEIVE', 'DEPOSIT'].includes(t.type));
+    const expenses = allTransactions.filter(t => !['RECEIVE', 'DEPOSIT', 'RECEIVED'].includes(t.type));
     const total = expenses.reduce((sum, t) => sum + t.amount, 0);
     setTotalExpense(total);
 
-    // Group by category (using recipient as proxy for category for now since we don't have real categorization logic yet)
-    // In a real app, we would use the 'category' field which we would populate via AI or rules.
-    // For this MVP, let's group by Transaction Type or Recipient Name simplified.
-    // Let's use Transaction Type for a cleaner look for now, or just mock categories if empty.
-
+    // Group by category
     const grouped: Record<string, number> = {};
     expenses.forEach(t => {
-      const cat = t.category !== 'Uncategorized' ? t.category : (t.type === 'PAYBILL' ? 'Bills' : t.type === 'BUYGOODS' ? 'Shopping' : 'Transfers');
+      // Use categoryName if available, else map from type or recipient
+      let cat = t.categoryName || 'Uncategorized';
+      if (cat === 'Uncategorized' || !cat) {
+        // Fallback logic if category is missing
+        cat = (t.type === 'PAYBILL' ? 'Bills' : t.type === 'BUYGOODS' ? 'Shopping' : 'Transfers');
+      }
       grouped[cat] = (grouped[cat] || 0) + t.amount;
     });
 

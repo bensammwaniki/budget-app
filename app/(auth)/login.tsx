@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
-import { Link, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { auth } from '../../services/firebaseConfig';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    useEffect(() => {
+        // Configure Google Sign-In
+        GoogleSignin.configure({
+            webClientId: '638697871062-vful4b4acggaa510o2so0gtod6i1il64.apps.googleusercontent.com',
+        });
+    }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -25,6 +34,39 @@ export default function LoginScreen() {
             Alert.alert('Login Failed', error.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        setGoogleLoading(true);
+        try {
+            // Check if device supports Google Play Services
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+            // Sign in with Google
+            const userInfo = await GoogleSignin.signIn();
+
+            // Create Firebase credential with the Google ID token
+            const googleCredential = GoogleAuthProvider.credential(userInfo.data?.idToken);
+
+            // Sign in to Firebase with the credential
+            await signInWithCredential(auth, googleCredential);
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            if (error.code === 'sign_in_cancelled') {
+                // User cancelled the sign-in flow
+                console.log('User cancelled Google Sign-In');
+            } else if (error.code === 'in_progress') {
+                // Sign-in already in progress
+                console.log('Google Sign-In already in progress');
+            } else if (error.code === 'play_services_not_available') {
+                Alert.alert('Error', 'Google Play Services not available on this device');
+            } else {
+                console.error('Google Sign-In error:', error);
+                Alert.alert('Google Sign-In Failed', error.message || 'An error occurred during sign-in');
+            }
+        } finally {
+            setGoogleLoading(false);
         }
     };
 
@@ -45,7 +87,7 @@ export default function LoginScreen() {
                             <FontAwesome name="google-wallet" size={48} color="#3b82f6" />
                         </View>
                         <Text className="text-4xl font-bold text-white mb-2 tracking-tight">Fanga Budget</Text>
-                        <Text className="text-slate-400 text-base">Master your M-PESA finances</Text>
+                        <Text className="text-slate-400 text-base">Take Charge of your finances</Text>
                     </View>
 
                     {/* Login Card */}
@@ -59,7 +101,7 @@ export default function LoginScreen() {
                             <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
                                 <FontAwesome name="envelope" size={18} color="#94a3b8" />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base"
+                                    className="flex-1 ml-3 text-white text-base outline-none"
                                     placeholder="you@example.com"
                                     value={email}
                                     onChangeText={setEmail}
@@ -76,7 +118,7 @@ export default function LoginScreen() {
                             <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5">
                                 <FontAwesome name="lock" size={20} color="#94a3b8" />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base"
+                                    className="flex-1 ml-3 text-white text-base outline-none"
                                     placeholder="Enter your password"
                                     value={password}
                                     onChangeText={setPassword}
@@ -125,16 +167,20 @@ export default function LoginScreen() {
                             <View className="flex-1 h-px bg-slate-800" />
                         </View>
 
-                        <View className="flex-row justify-between gap-4">
-                            <TouchableOpacity className="flex-1 bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center">
-                                <FontAwesome name="google" size={20} color="#fff" />
-                                <Text className="ml-2 font-semibold text-slate-200">Google</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity className="flex-1 bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center">
-                                <FontAwesome name="phone" size={20} color="#fff" />
-                                <Text className="ml-2 font-semibold text-slate-200">Phone</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                            className="w-full bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center"
+                            onPress={handleGoogleSignIn}
+                            disabled={googleLoading}
+                        >
+                            {googleLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <FontAwesome name="google" size={20} color="#fff" />
+                                    <Text className="ml-2 font-semibold text-slate-200">Sign in with Google</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>

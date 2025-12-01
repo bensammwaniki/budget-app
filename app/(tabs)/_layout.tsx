@@ -1,19 +1,24 @@
-import { Tabs } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
-import { View } from 'react-native';
+import { Tabs } from 'expo-router';
+import { useColorScheme } from 'nativewind';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const { colorScheme } = useColorScheme();
+  const insets = useSafeAreaInsets();
+  const isDark = colorScheme === 'dark';
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#3b82f6', // Blue 500
-        tabBarInactiveTintColor: '#64748b', // Slate 500
+        tabBarInactiveTintColor: isDark ? '#64748b' : '#94a3b8', // Slate 500 / Slate 400
         tabBarStyle: {
-          backgroundColor: '#0f172a', // Slate 900
+          backgroundColor: isDark ? '#0f172a' : '#ffffff', // Slate 900 / White
           borderTopWidth: 1,
-          borderTopColor: '#1e293b', // Slate 800
-          height: 60,
-          paddingBottom: 8,
+          borderTopColor: isDark ? '#1e293b' : '#e2e8f0', // Slate 800 / Slate 200
+          height: 60 + (insets.bottom > 0 ? insets.bottom : 10), // Dynamic height
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10, // Dynamic padding
           paddingTop: 8,
         },
         tabBarLabelStyle: {
