@@ -1,15 +1,60 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useAuth } from '../../services/AuthContext';
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from 'expo-router';
+import { getBalance, getTransactions, Transaction, initDatabase } from '../../services/database';
+import { syncMessages } from '../../services/smsService';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const firstName = user?.displayName?.split(' ')[0] || 'User';
 
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(() => {
+    const currentBalance = getBalance();
+    const recentTransactions = getTransactions().slice(0, 5); // Get top 5
+    setBalance(currentBalance);
+    setTransactions(recentTransactions);
+  }, []);
+
+  // Initial load and on focus
+  useFocusEffect(
+    useCallback(() => {
+      initDatabase();
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const result = await syncMessages();
+    if (result.success) {
+      loadData();
+      if (result.count && result.count > 0) {
+        Alert.alert('Success', `Synced ${result.count} new transactions`);
+      }
+    } else {
+      Alert.alert('Error', 'Failed to sync messages');
+    }
+    setRefreshing(false);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
+  };
+
   return (
-    <ScrollView className="flex-1 bg-[#020617]">
+    <ScrollView
+      className="flex-1 bg-[#020617]"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />
+      }
+    >
       <StatusBar style="light" />
 
       {/* Header with Gradient-like background */}
@@ -19,9 +64,11 @@ export default function HomeScreen() {
             <Text className="text-slate-400 text-sm font-medium">Welcome back,</Text>
             <Text className="text-white text-3xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
-          <TouchableOpacity className="w-12 h-12 bg-[#1e293b] rounded-full items-center justify-center border border-slate-700">
-            <FontAwesome name="bell" size={20} color="#94a3b8" />
-            <View className="absolute top-3 right-3.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#1e293b]" />
+          <TouchableOpacity
+            onPress={onRefresh}
+            className="w-12 h-12 bg-[#1e293b] rounded-full items-center justify-center border border-slate-700"
+          >
+            <FontAwesome name="refresh" size={20} color="#3b82f6" />
           </TouchableOpacity>
         </View>
 
@@ -31,20 +78,20 @@ export default function HomeScreen() {
             <Text className="text-blue-100 font-medium">Total Balance</Text>
             <FontAwesome name="eye" size={16} color="#bfdbfe" />
           </View>
-          <Text className="text-white text-4xl font-bold mb-6">KES 42,500</Text>
+          <Text className="text-white text-4xl font-bold mb-6">{formatCurrency(balance)}</Text>
 
           <View className="flex-row justify-between">
             <View className="bg-blue-500/30 px-4 py-2 rounded-xl flex-row items-center">
               <View className="w-6 h-6 bg-green-400/20 rounded-full items-center justify-center mr-2">
                 <FontAwesome name="arrow-down" size={10} color="#4ade80" />
               </View>
-              <Text className="text-white font-semibold">+ 12,000</Text>
+              <Text className="text-white font-semibold">Income</Text>
             </View>
             <View className="bg-blue-500/30 px-4 py-2 rounded-xl flex-row items-center">
               <View className="w-6 h-6 bg-red-400/20 rounded-full items-center justify-center mr-2">
                 <FontAwesome name="arrow-up" size={10} color="#f87171" />
               </View>
-              <Text className="text-white font-semibold">- 8,450</Text>
+              <Text className="text-white font-semibold">Expense</Text>
             </View>
           </View>
         </View>
@@ -55,12 +102,12 @@ export default function HomeScreen() {
         <Text className="text-white text-lg font-bold mb-4">Quick Actions</Text>
         <View className="flex-row justify-between">
           {[
-            { icon: 'send', label: 'Send', color: '#3b82f6' },
-            { icon: 'money', label: 'Pay Bill', color: '#8b5cf6' },
-            { icon: 'bank', label: 'Withdraw', color: '#f59e0b' },
-            { icon: 'credit-card', label: 'Fuliza', color: '#ef4444' },
+            { icon: 'refresh', label: 'Sync SMS', color: '#3b82f6', action: onRefresh },
+            { icon: 'money', label: 'Pay Bill', color: '#8b5cf6', action: () => { } },
+            { icon: 'bank', label: 'Withdraw', color: '#f59e0b', action: () => { } },
+            { icon: 'credit-card', label: 'Fuliza', color: '#ef4444', action: () => { } },
           ].map((action, index) => (
-            <TouchableOpacity key={index} className="items-center">
+            <TouchableOpacity key={index} className="items-center" onPress={action.action}>
               <View
                 className="w-16 h-16 rounded-2xl items-center justify-center mb-2 shadow-lg bg-[#1e293b] border border-slate-700"
               >
@@ -83,27 +130,36 @@ export default function HomeScreen() {
 
         {/* Transactions List */}
         <View className="gap-4">
-          {/* Placeholder Transaction Item */}
-          <View className="flex-row items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-800 shadow-sm">
-            <View className="w-12 h-12 rounded-full bg-[#0f172a] items-center justify-center mr-4 border border-slate-700">
-              <FontAwesome name="shopping-cart" size={18} color="#94a3b8" />
+          {transactions.length > 0 ? (
+            transactions.map((t) => (
+              <View key={t.id} className="flex-row items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-800 shadow-sm">
+                <View className="w-12 h-12 rounded-full bg-[#0f172a] items-center justify-center mr-4 border border-slate-700">
+                  <FontAwesome
+                    name={['RECEIVE', 'DEPOSIT'].includes(t.type) ? 'arrow-down' : 'arrow-up'}
+                    size={18}
+                    color={['RECEIVE', 'DEPOSIT'].includes(t.type) ? '#4ade80' : '#f87171'}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-white font-semibold text-base" numberOfLines={1}>{t.recipient}</Text>
+                  <Text className="text-slate-500 text-xs mt-0.5">{new Date(t.date).toLocaleDateString()} • {t.type}</Text>
+                </View>
+                <Text className={`font-bold ${['RECEIVE', 'DEPOSIT'].includes(t.type) ? 'text-green-400' : 'text-white'}`}>
+                  {['RECEIVE', 'DEPOSIT'].includes(t.type) ? '+' : '-'} {formatCurrency(t.amount)}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <View className="bg-[#1e293b] rounded-2xl p-8 items-center border border-slate-800 border-dashed">
+              <View className="w-16 h-16 bg-[#0f172a] rounded-full items-center justify-center mb-4 border border-slate-700">
+                <FontAwesome name="list-alt" size={24} color="#64748b" />
+              </View>
+              <Text className="text-slate-300 font-semibold text-base mb-2">No transactions yet</Text>
+              <Text className="text-slate-500 text-sm text-center">
+                Tap "Sync SMS" to load your M-PESA history
+              </Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-white font-semibold text-base">Naivas Supermarket</Text>
-              <Text className="text-slate-500 text-xs mt-0.5">Today, 2:30 PM</Text>
-            </View>
-            <Text className="text-white font-bold">- KES 4,200</Text>
-          </View>
-
-          <View className="bg-[#1e293b] rounded-2xl p-8 items-center border border-slate-800 border-dashed">
-            <View className="w-16 h-16 bg-[#0f172a] rounded-full items-center justify-center mb-4 border border-slate-700">
-              <FontAwesome name="list-alt" size={24} color="#64748b" />
-            </View>
-            <Text className="text-slate-300 font-semibold text-base mb-2">No more transactions</Text>
-            <Text className="text-slate-500 text-sm text-center">
-              Sync your messages to see more history
-            </Text>
-          </View>
+          )}
         </View>
       </View>
     </ScrollView>
