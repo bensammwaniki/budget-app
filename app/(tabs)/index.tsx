@@ -413,10 +413,10 @@ export default function HomeScreen() {
 
 
 
-      {/* Monthly Fuliza Fees - Displayed separately */}
-      {filteredTransactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 && (
-        <View className="px-6 mt-8 mb-2">
-          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
+      {/* Monthly Fuliza Fees - Always displayed */}
+      <View className="px-6 mt-8 mb-2">
+        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
+        {filteredTransactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 ? (
           <View className="gap-4">
             {filteredTransactions
               .filter(t => t.id.startsWith('FULIZA-FEES-'))
@@ -438,8 +438,14 @@ export default function HomeScreen() {
                 </View>
               ))}
           </View>
-        </View>
-      )}
+        ) : (
+          <View className="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-gray-200 dark:border-slate-700 border-dashed">
+            <Text className="text-slate-500 dark:text-slate-400 text-center text-sm">
+              No Fuliza fees for this period
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* Recent Transactions */}
       <View className="px-6 mt-6 mb-8">

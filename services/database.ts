@@ -9,13 +9,9 @@ export const initDatabase = async () => {
             db = await SQLite.openDatabaseAsync('budget.db');
         }
 
-        // Drop ALL tables to ensure clean migration (Development)
-        await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
-        await db.runAsync(`DROP TABLE IF EXISTS fuliza_transactions;`);
-        await db.runAsync(`DROP TABLE IF EXISTS processed_sms;`);
+        // Drop tables to ensure schema update (Development only)
         await db.runAsync(`DROP TABLE IF EXISTS categories;`);
         await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
-        await db.runAsync(`DROP TABLE IF EXISTS user_settings;`);
 
         // Create tables one by one using runAsync which is safer for single statements
         await db.runAsync(`
@@ -316,26 +312,16 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
 
 // SMS Processing Optimization
 export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
-    try {
-        const result = await db.getFirstAsync<{ sms_id: string }>(
-            'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
-            [smsId]
-        );
-        return result !== null;
-    } catch (error) {
-        // If table doesn't exist yet, treat as not processed
-        return false;
-    }
+    const result = await db.getFirstAsync<{ sms_id: string }>(
+        'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
+        [smsId]
+    );
+    return result !== null;
 };
 
 export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
-    try {
-        await db.runAsync(
-            'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
-            [smsId, new Date().toISOString()]
-        );
-    } catch (error) {
-        // Silently fail if table doesn't exist yet
-        // This can happen during migration - table will be created on next app restart
-    }
+    await db.runAsync(
+        'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
+        [smsId, new Date().toISOString()]
+    );
 };
