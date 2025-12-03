@@ -2,10 +2,10 @@ import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState, useMemo } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
-import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, isMessageProcessed, markMessageAsProcessed, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
+import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, isMessageProcessed, markMessageAsProcessed, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory, updateTransactionDate } from '../../services/database';
 import { readMpesaSMS, SMSMessage } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
@@ -23,6 +23,8 @@ export default function HomeScreen() {
   const [spending, setSpending] = useState<SpendingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [periodLoading, setPeriodLoading] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(50);
 
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
@@ -297,6 +299,19 @@ export default function HomeScreen() {
     }
   };
 
+  const handleDateChange = async (newDate: Date) => {
+    if (activeTransaction) {
+      try {
+        await updateTransactionDate(activeTransaction.id, newDate);
+        setModalVisible(false);
+        setSelectedTransaction(null);
+        await loadDashboardData(); // Refresh to reflect date change
+      } catch (error) {
+        console.error("Failed to update date:", error);
+      }
+    }
+  };
+
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedTransaction(null);
@@ -321,6 +336,7 @@ export default function HomeScreen() {
         visible={modalVisible}
         transaction={activeTransaction}
         onCategorySelect={handleCategorySelect}
+        onDateChange={handleDateChange}
         onClose={handleCloseModal}
       />
 
@@ -386,25 +402,53 @@ export default function HomeScreen() {
         <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-xl border border-gray-200 dark:border-slate-700 mt-6">
           <TouchableOpacity
             className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'THIS_MONTH' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('THIS_MONTH')}
+            onPress={() => {
+              setPeriodLoading(true);
+              setDisplayLimit(50);
+              setTimeout(() => {
+                setSelectedPeriod('THIS_MONTH');
+                setPeriodLoading(false);
+              }, 0);
+            }}
           >
             <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'THIS_MONTH' ? 'text-white' : 'text-slate-400'}`}>This Month</Text>
           </TouchableOpacity>
           <TouchableOpacity
             className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'LAST_MONTH' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('LAST_MONTH')}
+            onPress={() => {
+              setPeriodLoading(true);
+              setDisplayLimit(50);
+              setTimeout(() => {
+                setSelectedPeriod('LAST_MONTH');
+                setPeriodLoading(false);
+              }, 0);
+            }}
           >
             <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'LAST_MONTH' ? 'text-white' : 'text-slate-400'}`}>Last Month</Text>
           </TouchableOpacity>
           <TouchableOpacity
             className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'LAST_3_MONTHS' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('LAST_3_MONTHS')}
+            onPress={() => {
+              setPeriodLoading(true);
+              setDisplayLimit(50);
+              setTimeout(() => {
+                setSelectedPeriod('LAST_3_MONTHS');
+                setPeriodLoading(false);
+              }, 0);
+            }}
           >
             <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'LAST_3_MONTHS' ? 'text-white' : 'text-slate-400'}`}>Last 3M</Text>
           </TouchableOpacity>
           <TouchableOpacity
             className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'ALL_TIME' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('ALL_TIME')}
+            onPress={() => {
+              setPeriodLoading(true);
+              setDisplayLimit(50);
+              setTimeout(() => {
+                setSelectedPeriod('ALL_TIME');
+                setPeriodLoading(false);
+              }, 0);
+            }}
           >
             <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'ALL_TIME' ? 'text-white' : 'text-slate-400'}`}>All Time</Text>
           </TouchableOpacity>
@@ -456,12 +500,21 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        <View className="gap-4">
-          {filteredTransactions
-            .filter(t => !t.id.startsWith('FULIZA-FEES-')) // Filter out Fuliza fees from main list
-            .map((tx) => (
+        {periodLoading ? (
+          <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 items-center border border-gray-200 dark:border-slate-800">
+            <ActivityIndicator size="small" color="#3b82f6" />
+            <Text className="text-slate-500 dark:text-slate-400 text-sm mt-2">Loading...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTransactions
+              .filter(t => !t.id.startsWith('FULIZA-FEES-'))
+              .slice(0, displayLimit)}
+            keyExtractor={(item) => item.id}
+            scrollEnabled={false} // Let parent ScrollView handle scrolling
+            contentContainerStyle={{ gap: 16 }}
+            renderItem={({ item: tx }) => (
               <TouchableOpacity
-                key={tx.id}
                 className="flex-row items-center bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm active:bg-gray-50 dark:active:bg-slate-800"
                 onPress={() => handleTransactionPress(tx)}
               >
@@ -489,14 +542,24 @@ export default function HomeScreen() {
                   {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
                 </Text>
               </TouchableOpacity>
-            ))}
-
-          {transactions.length === 0 && (
-            <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 items-center border border-gray-200 dark:border-slate-800 border-dashed">
-              <Text className="text-slate-500">No transactions found</Text>
-            </View>
-          )}
-        </View>
+            )}
+            ListEmptyComponent={
+              <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 items-center border border-gray-200 dark:border-slate-800 border-dashed">
+                <Text className="text-slate-500">No transactions found</Text>
+              </View>
+            }
+            ListFooterComponent={
+              displayLimit < filteredTransactions.filter(t => !t.id.startsWith('FULIZA-FEES-')).length ? (
+                <TouchableOpacity
+                  className="py-4 items-center"
+                  onPress={() => setDisplayLimit(prev => prev + 50)}
+                >
+                  <Text className="text-blue-600 font-semibold">Load More</Text>
+                </TouchableOpacity>
+              ) : null
+            }
+          />
+        )}
       </View>
     </ScrollView>
   );

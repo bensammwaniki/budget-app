@@ -188,6 +188,13 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
     );
 };
 
+export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
+    await db.runAsync(
+        'UPDATE transactions SET date = ? WHERE id = ?',
+        [newDate.toISOString(), transactionId]
+    );
+};
+
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
     await db.runAsync(
         `INSERT OR REPLACE INTO fuliza_transactions 
