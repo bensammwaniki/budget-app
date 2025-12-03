@@ -12,31 +12,43 @@ export interface SMSMessage {
     type: number;
 }
 
+// Helper to format date as DD/MM/YY for mock messages
+const getMockDateStr = (date: Date) => {
+    const d = date.getDate().toString().padStart(2, '0');
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const y = date.getFullYear().toString().slice(-2);
+    return `${d}/${m}/${y}`;
+};
+
+const NOW = new Date();
+const YESTERDAY = new Date(Date.now() - 86400000);
+const TWO_DAYS_AGO = new Date(Date.now() - 86400000 * 2);
+
 // Mock Data for Expo Go testing
 const MOCK_MESSAGES = [
     {
         _id: '1',
         address: 'MPESA',
-        body: 'SDC12345 Confirmed. Ksh1,200.00 paid to JOHN DOE. on 1/1/25 at 10:00 AM. New M-PESA balance is Ksh500.00. Transaction cost, Ksh15.00.',
-        date: Date.now() - 86400000 * 1, // 1 day ago
+        body: `SDC12345 Confirmed. Ksh1,200.00 paid to JOHN DOE. on ${getMockDateStr(YESTERDAY)} at 10:00 AM. New M-PESA balance is Ksh500.00. Transaction cost, Ksh15.00.`,
+        date: YESTERDAY.getTime(),
     },
     {
         _id: '2',
         address: 'MPESA',
-        body: 'SDC12346 Confirmed. You have received Ksh5,000.00 from JANE DOE on 2/1/25 at 2:00 PM. New M-PESA balance is Ksh5,500.00.',
-        date: Date.now() - 86400000 * 0.5, // 12 hours ago
+        body: `SDC12346 Confirmed. You have received Ksh5,000.00 from JANE DOE on ${getMockDateStr(NOW)} at 2:00 PM. New M-PESA balance is Ksh5,500.00.`,
+        date: NOW.getTime(),
     },
     {
         _id: '3',
         address: 'MPESA',
-        body: 'SDC12347 Confirmed. Ksh500.00 paid to Naivas Supermarket. on 2/1/25 at 5:00 PM. New M-PESA balance is Ksh5,000.00. Transaction cost, Ksh5.00.',
-        date: Date.now() - 1000 * 60 * 30, // 30 mins ago
+        body: `SDC12347 Confirmed. Ksh500.00 paid to Naivas Supermarket. on ${getMockDateStr(TWO_DAYS_AGO)} at 5:00 PM. New M-PESA balance is Ksh5,000.00. Transaction cost, Ksh5.00.`,
+        date: TWO_DAYS_AGO.getTime(),
     },
     {
         _id: '4',
         address: 'MPESA',
-        body: 'SDC12348 Confirmed.on 3/1/25 at 9:00 AMWithdraw Ksh2,000.00 from 123456 - AGENT NAME New M-PESA balance is Ksh3,000.00.',
-        date: Date.now(), // Just now
+        body: `SDC12348 Confirmed.on ${getMockDateStr(NOW)} at 9:00 AMWithdraw Ksh2,000.00 from 123456 - AGENT NAME New M-PESA balance is Ksh3,000.00.`,
+        date: NOW.getTime(),
     }
 ];
 
@@ -45,7 +57,6 @@ const MOCK_MESSAGES = [
  */
 export const requestSMSPermission = async (): Promise<boolean> => {
     if (Platform.OS !== 'android') {
-        console.log('SMS reading only supported on Android');
         return false;
     }
 
@@ -74,7 +85,6 @@ export const requestSMSPermission = async (): Promise<boolean> => {
 export const readMpesaSMS = async (): Promise<SMSMessage[]> => {
     // If not Android, return mock data immediately (for iOS/Web dev)
     if (Platform.OS !== 'android') {
-        console.log('Not Android, returning mock data');
         return MOCK_MESSAGES as any;
     }
 
@@ -87,7 +97,6 @@ export const readMpesaSMS = async (): Promise<SMSMessage[]> => {
         if (!hasPermission) {
             const granted = await requestSMSPermission();
             if (!granted) {
-                console.log('SMS permission denied, returning mock data for demo');
                 return MOCK_MESSAGES as any;
             }
         }
@@ -97,23 +106,20 @@ export const readMpesaSMS = async (): Promise<SMSMessage[]> => {
                 box: 'inbox', // 'inbox', 'sent', 'draft', 'outbox', 'failed', 'queued'
                 address: 'MPESA', // Filter for M-PESA sender
                 indexFrom: 0,
-                maxCount: 100, // Get last 100 M-PESA messages
+                maxCount: 5000,
+                minDate: Date.now() - (365 * 24 * 60 * 60 * 1000), // Limit to last 1 year
             };
 
             SmsAndroid.list(
                 JSON.stringify(filter),
                 (fail: any) => {
                     console.error('Failed to read SMS:', fail);
-                    // Fallback to mock if reading fails (e.g. Expo Go)
-                    console.log('Falling back to mock data');
                     resolve(MOCK_MESSAGES as any);
                 },
                 (count: number, smsList: string) => {
                     try {
                         const messages: SMSMessage[] = JSON.parse(smsList);
-                        console.log(`Found ${messages.length} M-PESA messages`);
                         if (messages.length === 0) {
-                            console.log('No messages found, using mock data');
                             resolve(MOCK_MESSAGES as any);
                         } else {
                             resolve(messages);
@@ -138,7 +144,6 @@ export const syncMessages = async () => {
 
     try {
         const messages = await readMpesaSMS();
-        console.log(`Syncing ${messages.length} messages...`);
 
         let newTransactionsCount = 0;
 

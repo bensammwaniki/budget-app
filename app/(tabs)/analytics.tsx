@@ -3,18 +3,43 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
-import { getTransactions, Transaction } from '../../services/database';
+import { getTransactions } from '../../services/database';
+import { Transaction } from '../../types/transaction';
+
+type Period = 'THIS_MONTH' | 'LAST_MONTH';
 
 export default function AnalyticsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>('THIS_MONTH');
   const [totalExpense, setTotalExpense] = useState(0);
   const [categoryData, setCategoryData] = useState<{ category: string; amount: number; percentage: number; color: string }[]>([]);
 
   const loadData = useCallback(async () => {
     const allTransactions = await getTransactions();
 
-    // Filter expenses
-    const expenses = allTransactions.filter(t => !['RECEIVE', 'DEPOSIT', 'RECEIVED'].includes(t.type));
+    // Filter transactions by selected period
+    const now = new Date();
+    const filteredTransactions = allTransactions.filter(t => {
+      // Ensure we have a valid date object
+      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
+
+      // Skip invalid dates
+      if (isNaN(txDate.getTime())) {
+        console.warn('Invalid date for transaction:', t.id, t.date);
+        return false;
+      }
+
+      if (selectedPeriod === 'THIS_MONTH') {
+        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+      } else if (selectedPeriod === 'LAST_MONTH') {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+        return txDate.getMonth() === lastMonth.getMonth() && txDate.getFullYear() === lastMonth.getFullYear();
+      }
+      return true;
+    });
+
+    // Filter expenses from the filtered transactions
+    const expenses = filteredTransactions.filter(t => !['RECEIVE', 'DEPOSIT', 'RECEIVED'].includes(t.type));
     const total = expenses.reduce((sum, t) => sum + t.amount, 0);
     setTotalExpense(total);
 
@@ -24,8 +49,8 @@ export default function AnalyticsScreen() {
       // Use categoryName if available, else map from type or recipient
       let cat = t.categoryName || 'Uncategorized';
       if (cat === 'Uncategorized' || !cat) {
-        // Fallback logic if category is missing
-        cat = (t.type === 'PAYBILL' ? 'Bills' : t.type === 'BUYGOODS' ? 'Shopping' : 'Transfers');
+        // Fallback logic if category is missing - categorize SENT as Transfers
+        cat = t.type === 'SENT' ? 'Transfers' : 'Other';
       }
       grouped[cat] = (grouped[cat] || 0) + t.amount;
     });
@@ -39,7 +64,7 @@ export default function AnalyticsScreen() {
 
     setCategoryData(data);
     setTransactions(allTransactions);
-  }, []);
+  }, [selectedPeriod]);
 
   useFocusEffect(
     useCallback(() => {
@@ -60,13 +85,19 @@ export default function AnalyticsScreen() {
         <Text className="text-slate-400 text-sm font-medium mb-1">Total Spending</Text>
         <Text className="text-white text-4xl font-bold mb-4">{formatCurrency(totalExpense)}</Text>
 
-        {/* Month Selector (Mock) */}
+        {/* Month Selector */}
         <View className="flex-row bg-[#1e293b] p-1 rounded-xl self-start border border-slate-700">
-          <TouchableOpacity className="bg-blue-600 px-4 py-2 rounded-lg">
-            <Text className="text-white font-semibold text-xs">This Month</Text>
+          <TouchableOpacity
+            className={`px-4 py-2 rounded-lg ${selectedPeriod === 'THIS_MONTH' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('THIS_MONTH')}
+          >
+            <Text className={`font-semibold text-xs ${selectedPeriod === 'THIS_MONTH' ? 'text-white' : 'text-slate-400'}`}>This Month</Text>
           </TouchableOpacity>
-          <TouchableOpacity className="px-4 py-2 rounded-lg">
-            <Text className="text-slate-400 font-semibold text-xs">Last Month</Text>
+          <TouchableOpacity
+            className={`px-4 py-2 rounded-lg ${selectedPeriod === 'LAST_MONTH' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('LAST_MONTH')}
+          >
+            <Text className={`font-semibold text-xs ${selectedPeriod === 'LAST_MONTH' ? 'text-white' : 'text-slate-400'}`}>Last Month</Text>
           </TouchableOpacity>
         </View>
       </View>

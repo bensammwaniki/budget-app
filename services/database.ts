@@ -9,9 +9,13 @@ export const initDatabase = async () => {
             db = await SQLite.openDatabaseAsync('budget.db');
         }
 
-        // Drop tables to ensure schema update (Development only)
+        // Drop ALL tables to ensure clean migration (Development)
+        await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
+        await db.runAsync(`DROP TABLE IF EXISTS fuliza_transactions;`);
+        await db.runAsync(`DROP TABLE IF EXISTS processed_sms;`);
         await db.runAsync(`DROP TABLE IF EXISTS categories;`);
         await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
+        await db.runAsync(`DROP TABLE IF EXISTS user_settings;`);
 
         // Create tables one by one using runAsync which is safer for single statements
         await db.runAsync(`
@@ -76,6 +80,13 @@ export const initDatabase = async () => {
       );
     `);
 
+        await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS processed_sms (
+        sms_id TEXT PRIMARY KEY,
+        processed_at TEXT NOT NULL
+      );
+    `);
+
         // Seed default categories if empty
         const result = await db.getAllAsync<{ count: number }>('SELECT count(*) as count FROM categories');
         if (result[0].count === 0) {
@@ -120,6 +131,7 @@ export const clearDatabase = async () => {
         await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
         await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
         await db.runAsync(`DROP TABLE IF EXISTS categories;`);
+        await db.runAsync(`DROP TABLE IF EXISTS processed_sms;`);
     } catch (error) {
         console.error("Error clearing database:", error);
     }
@@ -221,16 +233,12 @@ export const saveTransaction = async (transaction: Transaction) => {
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
     const result = await db.getAllAsync<any>(`
         SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor 
         FROM transactions t 
         LEFT JOIN categories c ON t.categoryId = c.id 
-        WHERE t.date >= ?
         ORDER BY t.date DESC
-    `, [startOfMonth]);
+    `);
 
     return result.map(row => ({
         ...row,
@@ -304,4 +312,30 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         totalIncome: totalIncomeResult[0]?.total || 0,
         fulizaOutstanding: fulizaOutstanding
     };
+};
+
+// SMS Processing Optimization
+export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
+    try {
+        const result = await db.getFirstAsync<{ sms_id: string }>(
+            'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
+            [smsId]
+        );
+        return result !== null;
+    } catch (error) {
+        // If table doesn't exist yet, treat as not processed
+        return false;
+    }
+};
+
+export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
+    try {
+        await db.runAsync(
+            'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
+            [smsId, new Date().toISOString()]
+        );
+    } catch (error) {
+        // Silently fail if table doesn't exist yet
+        // This can happen during migration - table will be created on next app restart
+    }
 };

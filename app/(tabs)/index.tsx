@@ -1,15 +1,17 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
-import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
+import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, isMessageProcessed, markMessageAsProcessed, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory } from '../../services/database';
 import { readMpesaSMS, SMSMessage } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../../utils/smsParser';
+
+type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST_3_MONTHS' | 'ALL_TIME';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -17,6 +19,7 @@ export default function HomeScreen() {
   const firstName = user?.displayName?.split(' ')[0] || 'User';
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>('THIS_MONTH');
   const [spending, setSpending] = useState<SpendingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,18 +55,14 @@ export default function HomeScreen() {
       try {
         const realSMS = await readMpesaSMS();
         if (realSMS.length > 0) {
-          console.log(`Found ${realSMS.length} M-PESA messages from device.`);
           messages = realSMS;
-        } else {
-          console.log('No M-PESA messages found on device.');
         }
       } catch (error) {
-        console.log('Failed to read SMS:', error);
+        console.error('Failed to read SMS:', error);
       }
     }
 
     if (messages.length === 0) {
-      console.log('No SMS messages to process.');
       return;
     }
 
@@ -72,14 +71,19 @@ export default function HomeScreen() {
     const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
     const fulizaCategoryId = fulizaCategory?.id;
 
-    // Map to store monthly access fees: 'YYYY-MM' -> { total: number, date: Date }
-    const monthlyAccessFees = new Map<string, { total: number, date: Date }>();
+    // Collect all Fuliza events for processing
+    const fulizaEvents: any[] = [];
     let processedCount = 0;
     let fulizaCount = 0;
 
     for (const msg of messages) {
       const smsText = msg.body;
       const smsDate = msg.date;
+
+      // Skip if already processed
+      if (await isMessageProcessed(msg._id)) {
+        continue;
+      }
 
       // Try parsing as regular transaction
       const transaction = parseMpesaSms(smsText);
@@ -90,6 +94,7 @@ export default function HomeScreen() {
           transaction.categoryId = savedCategoryId;
         }
         await saveTransaction(transaction);
+        await markMessageAsProcessed(msg._id);
         processedCount++;
         continue;
       }
@@ -97,58 +102,54 @@ export default function HomeScreen() {
       // Try parsing as Fuliza loan
       const fulizaLoan = parseFulizaLoan(smsText, smsDate);
       if (fulizaLoan) {
-        console.log('🔴 FULIZA LOAN DETECTED:', smsText.substring(0, 100));
         await saveFulizaTransaction(fulizaLoan);
+        fulizaEvents.push(fulizaLoan);
+        await markMessageAsProcessed(msg._id);
         fulizaCount++;
-
-        // Accumulate access fees by month
-        if (fulizaLoan.accessFee && fulizaLoan.accessFee > 0) {
-          const date = fulizaLoan.date;
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-          const current = monthlyAccessFees.get(monthKey) || { total: 0, date: date };
-          // Keep the latest date for the transaction timestamp
-          if (date > current.date) {
-            current.date = date;
-          }
-          current.total += fulizaLoan.accessFee;
-          monthlyAccessFees.set(monthKey, current);
-        }
         continue;
       }
 
       // Try parsing as Fuliza repayment
       const fulizaRepayment = parseFulizaRepayment(smsText, smsDate);
       if (fulizaRepayment) {
-        console.log('🟡 FULIZA REPAYMENT DETECTED:', smsText.substring(0, 100));
         await saveFulizaTransaction(fulizaRepayment);
+        fulizaEvents.push(fulizaRepayment);
+        await markMessageAsProcessed(msg._id);
         fulizaCount++;
         continue;
       }
+
+      // If we couldn't parse it, still mark as processed to avoid trying again
+      await markMessageAsProcessed(msg._id);
     }
 
-    console.log(`Processed ${processedCount} regular transactions and ${fulizaCount} Fuliza transactions.`);
 
-    // Create bundled transactions for each month
-    if (fulizaCategoryId) {
-      for (const [monthKey, data] of monthlyAccessFees.entries()) {
+    // Calculate comprehensive monthly costs (Access Fees + Daily Maintenance)
+    if (fulizaCategoryId && fulizaEvents.length > 0) {
+      // Import dynamically to avoid circular dependency issues if any
+      const { calculateMonthlyFulizaCosts } = await import('../../utils/fulizaCalculator');
+      const monthlyCosts = calculateMonthlyFulizaCosts(fulizaEvents);
+
+      for (const [monthKey, totalCost] of monthlyCosts.entries()) {
         const [year, month] = monthKey.split('-');
         const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
 
+        // Use the last day of the month as the date for the fee transaction
+        const feeDate = new Date(parseInt(year), parseInt(month), 0);
+
         const bundledAccessFeeTransaction: Transaction = {
           id: `FULIZA-FEES-${monthKey}`, // Unique ID per month
-          amount: data.total,
+          amount: totalCost,
           type: 'SENT',
           recipientId: 'FULIZA-ACCESS-FEES',
           recipientName: `Fuliza Fees (${monthName})`,
-          date: data.date,
+          date: feeDate,
           balance: 0,
           transactionCost: 0,
           categoryId: fulizaCategoryId,
-          rawSms: `Bundled Fuliza access fees for ${monthName} ${year}: KES ${data.total.toFixed(2)}`
+          rawSms: `Bundled Fuliza fees (Access + Daily) for ${monthName} ${year}: KES ${totalCost.toFixed(2)}`
         };
         await saveTransaction(bundledAccessFeeTransaction);
-        console.log(`Created bundled Fuliza fee transaction for ${monthKey}: KES ${data.total.toFixed(2)}`);
       }
     }
   };
@@ -166,6 +167,60 @@ export default function HomeScreen() {
       setModalVisible(true);
     }
   };
+
+  // Filter transactions based on selected period
+  const filteredTransactions = useMemo(() => {
+    const now = new Date();
+
+    return transactions.filter(t => {
+      // Ensure we have a valid date object
+      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
+
+      // Skip invalid dates
+      if (isNaN(txDate.getTime())) {
+        console.warn('Invalid date for transaction:', t.id, t.date);
+        return false;
+      }
+
+      if (selectedPeriod === 'THIS_MONTH') {
+        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+      } else if (selectedPeriod === 'LAST_MONTH') {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+        return txDate.getMonth() === lastMonth.getMonth() && txDate.getFullYear() === lastMonth.getFullYear();
+      } else if (selectedPeriod === 'LAST_3_MONTHS') {
+        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3);
+        return txDate >= threeMonthsAgo;
+      }
+      // ALL_TIME
+      return true;
+    });
+  }, [transactions, selectedPeriod]);
+
+  // Calculate summary statistics for the selected period
+  const periodSummary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    let cost = 0;
+
+    filteredTransactions.forEach(t => {
+      if (t.type === 'RECEIVED') {
+        income += t.amount;
+      } else {
+        // SENT (includes Fuliza fees, transfers, etc.)
+        expense += t.amount;
+      }
+      cost += t.transactionCost || 0;
+    });
+
+    return {
+      income,
+      expense,
+      cost,
+      net: income - expense
+    };
+  }, [filteredTransactions]);
+
+
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -288,7 +343,7 @@ export default function HomeScreen() {
             <Text className="text-blue-100 font-medium">Total Balance</Text>
             <View className="bg-green-500/20 px-2 py-1 rounded-lg">
               <Text className="text-green-200 text-xs font-medium">
-                Income: KES {spending?.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                Income: KES {periodSummary.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
@@ -298,7 +353,7 @@ export default function HomeScreen() {
           <View className="flex-row items-center mb-6">
             <View className="bg-red-500/20 px-2 py-1 rounded-lg">
               <Text className="text-red-200 text-xs font-medium">
-                Transaction cost: KES {spending?.monthlyTransactionCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                Transaction cost: KES {periodSummary.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
@@ -316,30 +371,54 @@ export default function HomeScreen() {
           )}
 
           <View className="flex-row justify-between gap-3">
-            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
-              <Text className="text-blue-100 text-xs mb-1">Today</Text>
-              <Text className="text-white font-bold">KES {spending?.dailyTotal?.toLocaleString() || '0'}</Text>
+            <View className="flex-1 bg-green-500/30 px-3 py-2 rounded-xl">
+              <Text className="text-green-100 text-xs mb-1">Income</Text>
+              <Text className="text-white font-bold">KES {periodSummary.income.toLocaleString()}</Text>
             </View>
-            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
-              <Text className="text-blue-100 text-xs mb-1">This Week</Text>
-              <Text className="text-white font-bold">KES {spending?.weeklyTotal?.toLocaleString() || '0'}</Text>
-            </View>
-            <View className="flex-1 bg-blue-500/30 px-3 py-2 rounded-xl">
-              <Text className="text-blue-100 text-xs mb-1">This Month</Text>
-              <Text className="text-white font-bold">KES {spending?.monthlyTotal?.toLocaleString() || '0'}</Text>
+            <View className="flex-1 bg-red-500/30 px-3 py-2 rounded-xl">
+              <Text className="text-red-100 text-xs mb-1">Expense</Text>
+              <Text className="text-white font-bold">KES {periodSummary.expense.toLocaleString()}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Period Selector */}
+        <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-xl border border-gray-200 dark:border-slate-700 mt-6">
+          <TouchableOpacity
+            className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'THIS_MONTH' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('THIS_MONTH')}
+          >
+            <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'THIS_MONTH' ? 'text-white' : 'text-slate-400'}`}>This Month</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'LAST_MONTH' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('LAST_MONTH')}
+          >
+            <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'LAST_MONTH' ? 'text-white' : 'text-slate-400'}`}>Last Month</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'LAST_3_MONTHS' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('LAST_3_MONTHS')}
+          >
+            <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'LAST_3_MONTHS' ? 'text-white' : 'text-slate-400'}`}>Last 3M</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === 'ALL_TIME' ? 'bg-blue-600' : ''}`}
+            onPress={() => setSelectedPeriod('ALL_TIME')}
+          >
+            <Text className={`font-semibold text-xs text-center ${selectedPeriod === 'ALL_TIME' ? 'text-white' : 'text-slate-400'}`}>All Time</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
 
 
       {/* Monthly Fuliza Fees - Displayed separately */}
-      {transactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 && (
+      {filteredTransactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 && (
         <View className="px-6 mt-8 mb-2">
           <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
           <View className="gap-4">
-            {transactions
+            {filteredTransactions
               .filter(t => t.id.startsWith('FULIZA-FEES-'))
               .map((tx) => (
                 <View
@@ -366,10 +445,13 @@ export default function HomeScreen() {
       <View className="px-6 mt-6 mb-8">
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Spendings</Text>
+          <Text className="text-slate-500 dark:text-slate-400 text-xs">
+            {selectedPeriod === 'THIS_MONTH' ? 'This Month' : selectedPeriod === 'LAST_MONTH' ? 'Last Month' : selectedPeriod === 'LAST_3_MONTHS' ? 'Last 3 Months' : 'All Time'}
+          </Text>
         </View>
 
         <View className="gap-4">
-          {transactions
+          {filteredTransactions
             .filter(t => !t.id.startsWith('FULIZA-FEES-')) // Filter out Fuliza fees from main list
             .map((tx) => (
               <TouchableOpacity
