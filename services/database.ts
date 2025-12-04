@@ -237,7 +237,7 @@ export const saveTransaction = async (transaction: Transaction) => {
 
 export const getTransactions = async (): Promise<Transaction[]> => {
     const result = await db.getAllAsync<any>(`
-        SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor 
+        SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
         FROM transactions t 
         LEFT JOIN categories c ON t.categoryId = c.id 
         ORDER BY t.date DESC

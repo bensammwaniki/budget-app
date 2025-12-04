@@ -11,6 +11,7 @@ export interface Transaction {
     categoryName?: string;
     categoryIcon?: string;
     categoryColor?: string;
+    categoryDescription?: string;
     rawSms: string;
 }
 
