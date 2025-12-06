@@ -1,101 +1,130 @@
 import * as SQLite from 'expo-sqlite';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 
-let db: SQLite.SQLiteDatabase;
+let db: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<void> | null = null;
 
 export const initDatabase = async () => {
-    try {
-        if (!db) {
-            db = await SQLite.openDatabaseAsync('budget.db');
-        }
-
-        // Drop tables to ensure schema update (Development only)
-        await db.runAsync(`DROP TABLE IF EXISTS categories;`);
-        await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
-
-        // Create tables one by one using runAsync which is safer for single statements
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        icon TEXT NOT NULL,
-        color TEXT NOT NULL,
-        isCustom INTEGER DEFAULT 0,
-        description TEXT
-      );
-    `);
-
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS recipients (
-        id TEXT,
-        type TEXT,
-        categoryId INTEGER,
-        lastSeen TEXT,
-        PRIMARY KEY (id, type),
-        FOREIGN KEY (categoryId) REFERENCES categories (id)
-      );
-    `);
-
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS transactions (
-        id TEXT PRIMARY KEY,
-        amount REAL,
-        type TEXT,
-        recipientId TEXT,
-        recipientName TEXT,
-        date TEXT,
-        balance REAL,
-        transactionCost REAL,
-        categoryId INTEGER,
-        rawSms TEXT,
-        FOREIGN KEY (categoryId) REFERENCES categories (id),
-        FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type)
-      );
-    `);
-
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS fuliza_transactions (
-        id TEXT PRIMARY KEY,
-        amount REAL,
-        type TEXT, -- 'LOAN' or 'REPAYMENT'
-        accessFee REAL,
-        outstandingBalance REAL,
-        dueDate TEXT,
-        linkedTransactionId TEXT,
-        date TEXT,
-        rawSms TEXT,
-        FOREIGN KEY (linkedTransactionId) REFERENCES transactions (id)
-      );
-    `);
-
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS user_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-    `);
-
-        await db.runAsync(`
-      CREATE TABLE IF NOT EXISTS processed_sms (
-        sms_id TEXT PRIMARY KEY,
-        processed_at TEXT NOT NULL
-      );
-    `);
-
-        // Seed default categories if empty
-        const result = await db.getAllAsync<{ count: number }>('SELECT count(*) as count FROM categories');
-        if (result[0].count === 0) {
-            await seedCategories();
-        }
-    } catch (error) {
-        console.error("Database initialization error:", error);
-        // Don't throw, just log. This prevents the app from crashing entirely if DB fails,
-        // though functionality will be limited.
+    // If already initializing, wait for it
+    if (initPromise) {
+        return initPromise;
     }
+
+    // If already initialized, return
+    if (db) {
+        return Promise.resolve();
+    }
+
+    // Create the initialization promise
+    initPromise = (async () => {
+        try {
+            console.log('🔧 Initializing database...');
+            db = await SQLite.openDatabaseAsync('budget.db');
+
+            // Check if we need to migrate by trying to query a table
+            let needsMigration = false;
+            try {
+                await db.getFirstAsync('SELECT * FROM recipients LIMIT 1');
+            } catch (error: any) {
+                if (error.message?.includes('no such table')) {
+                    needsMigration = true;
+                    console.log('🔄 Database migration needed - tables will be recreated');
+                }
+            }
+
+            // If migration needed, drop all tables
+            if (needsMigration) {
+                await db.execAsync(`
+                    DROP TABLE IF EXISTS transactions;
+                    DROP TABLE IF EXISTS recipients;
+                    DROP TABLE IF EXISTS categories;
+                    DROP TABLE IF EXISTS fuliza_transactions;
+                    DROP TABLE IF EXISTS user_settings;
+                    DROP TABLE IF EXISTS processed_sms;
+                `);
+            }
+
+            // Create tables
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    icon TEXT NOT NULL,
+                    color TEXT NOT NULL,
+                    isCustom INTEGER DEFAULT 0,
+                    description TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS recipients (
+                    id TEXT,
+                    type TEXT,
+                    categoryId INTEGER,
+                    lastSeen TEXT,
+                    PRIMARY KEY (id, type),
+                    FOREIGN KEY (categoryId) REFERENCES categories (id)
+                );
+
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id TEXT PRIMARY KEY,
+                    amount REAL,
+                    type TEXT,
+                    recipientId TEXT,
+                    recipientName TEXT,
+                    date TEXT,
+                    balance REAL,
+                    transactionCost REAL,
+                    categoryId INTEGER,
+                    rawSms TEXT,
+                    FOREIGN KEY (categoryId) REFERENCES categories (id),
+                    FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type)
+                );
+
+                CREATE TABLE IF NOT EXISTS fuliza_transactions (
+                    id TEXT PRIMARY KEY,
+                    amount REAL,
+                    type TEXT,
+                    accessFee REAL,
+                    outstandingBalance REAL,
+                    dueDate TEXT,
+                    linkedTransactionId TEXT,
+                    date TEXT,
+                    rawSms TEXT,
+                    FOREIGN KEY (linkedTransactionId) REFERENCES transactions (id)
+                );
+
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS processed_sms (
+                    sms_id TEXT PRIMARY KEY,
+                    processed_at TEXT NOT NULL
+                );
+            `);
+
+            // Seed default categories if empty
+            const result = await db.getFirstAsync<{ count: number }>('SELECT count(*) as count FROM categories');
+            if (result && result.count === 0) {
+                await seedCategories();
+            }
+
+            console.log('✅ Database initialized successfully');
+        } catch (error) {
+            console.error("❌ Database initialization error:", error);
+            db = null;
+            initPromise = null;
+            throw error; // Propagate error so callers know initialization failed
+        }
+    })();
+
+    return initPromise;
 };
 
 const seedCategories = async () => {
+    if (!db) return;
+
     const categories: Omit<Category, 'id'>[] = [
         { name: 'Food & Dining', type: 'EXPENSE', icon: 'cutlery', color: '#ef4444', description: 'Groceries, restaurants, and snacks' },
         { name: 'Transport', type: 'EXPENSE', icon: 'bus', color: '#f59e0b', description: 'Commute, fuel, and travel' },
@@ -111,34 +140,49 @@ const seedCategories = async () => {
         { name: 'Fuliza Charges', type: 'EXPENSE', icon: 'warning', color: '#f97316', description: 'Fuliza access fees and interest' }
     ];
 
-    for (const cat of categories) {
-        await db.runAsync(
-            'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
-            [cat.name, cat.type, cat.icon, cat.color, 0, cat.description || '']
-        );
-    }
+    // Use a single transaction for all inserts to avoid locks
+    await db.withTransactionAsync(async () => {
+        for (const cat of categories) {
+            await db!.runAsync(
+                'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
+                [cat.name, cat.type, cat.icon, cat.color, 0, cat.description || '']
+            );
+        }
+    });
 };
 
 export const clearDatabase = async () => {
     if (!db) return;
 
-    try {
-        // Drop all tables
-        await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
-        await db.runAsync(`DROP TABLE IF EXISTS recipients;`);
-        await db.runAsync(`DROP TABLE IF EXISTS categories;`);
-        await db.runAsync(`DROP TABLE IF EXISTS processed_sms;`);
-    } catch (error) {
-        console.error("Error clearing database:", error);
+    await db.execAsync(`
+        DROP TABLE IF EXISTS transactions;
+        DROP TABLE IF EXISTS recipients;
+        DROP TABLE IF EXISTS categories;
+        DROP TABLE IF EXISTS fuliza_transactions;
+        DROP TABLE IF EXISTS user_settings;
+        DROP TABLE IF EXISTS processed_sms;
+    `);
+
+    // Reset initialization state
+    db = null;
+    initPromise = null;
+};
+
+const ensureDb = () => {
+    if (!db) {
+        throw new Error('Database not initialized. Please call initDatabase() first.');
     }
+    return db;
 };
 
 export const getCategories = async (): Promise<Category[]> => {
-    return await db.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
+    const database = ensureDb();
+    return await database.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
 };
 
 export const addCategory = async (category: Omit<Category, 'id'>) => {
-    const result = await db.runAsync(
+    const database = ensureDb();
+    const result = await database.runAsync(
         'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
         [category.name, category.type, category.icon, category.color, 1, category.description || '']
     );
@@ -146,10 +190,15 @@ export const addCategory = async (category: Omit<Category, 'id'>) => {
 };
 
 export const deleteCategory = async (id: number) => {
-    await db.runAsync('DELETE FROM categories WHERE id = ?', [id]);
+    const database = ensureDb();
+    await database.runAsync('DELETE FROM categories WHERE id = ?', [id]);
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
+    if (!db) {
+        console.warn('Database not initialized yet, cannot save user settings');
+        return;
+    }
     await db.runAsync(
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
         [key, value]
@@ -157,6 +206,10 @@ export const saveUserSettings = async (key: string, value: string) => {
 };
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
+    if (!db) {
+        console.warn('Database not initialized yet, returning null for user settings');
+        return null;
+    }
     const result = await db.getFirstAsync<{ value: string }>(
         'SELECT value FROM user_settings WHERE key = ?',
         [key]
@@ -165,38 +218,42 @@ export const getUserSettings = async (key: string): Promise<string | null> => {
 };
 
 export const getRecipientCategory = async (recipientId: string, type: string): Promise<number | null> => {
-    const result = await db.getAllAsync<{ categoryId: number }>('SELECT categoryId FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
+    const database = ensureDb();
+    const result = await database.getAllAsync<{ categoryId: number }>('SELECT categoryId FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
     return result.length > 0 ? result[0].categoryId : null;
 };
 
 export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
         [recipientId, type, categoryId, new Date().toISOString()]
     );
-    // Update existing transactions for this recipient and type
-    await db.runAsync(
+    await database.runAsync(
         'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
         [categoryId, recipientId, type]
     );
 };
 
 export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         'UPDATE transactions SET categoryId = ? WHERE id = ?',
         [categoryId, transactionId]
     );
 };
 
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         'UPDATE transactions SET date = ? WHERE id = ?',
         [newDate.toISOString(), transactionId]
     );
 };
 
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         `INSERT OR REPLACE INTO fuliza_transactions 
         (id, amount, type, accessFee, outstandingBalance, dueDate, linkedTransactionId, date, rawSms) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -214,9 +271,9 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
     );
 };
 
-
 export const saveTransaction = async (transaction: Transaction) => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         `INSERT OR REPLACE INTO transactions 
     (id, amount, type, recipientId, recipientName, date, balance, transactionCost, categoryId, rawSms) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -236,7 +293,8 @@ export const saveTransaction = async (transaction: Transaction) => {
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    const result = await db.getAllAsync<any>(`
+    const database = ensureDb();
+    const result = await database.getAllAsync<any>(`
         SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
         FROM transactions t 
         LEFT JOIN categories c ON t.categoryId = c.id 
@@ -250,48 +308,49 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 };
 
 export const getSpendingSummary = async (): Promise<SpendingSummary> => {
+    const database = ensureDb();
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const daily = await db.getAllAsync<{ total: number }>(
+    const daily = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
         [startOfDay]
     );
 
-    const weekly = await db.getAllAsync<{ total: number }>(
+    const weekly = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
         [startOfWeek]
     );
 
-    const monthly = await db.getAllAsync<{ total: number }>(
+    const monthly = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
         [startOfMonth]
     );
 
-    const balanceResult = await db.getAllAsync<{ balance: number }>(
+    const balanceResult = await database.getAllAsync<{ balance: number }>(
         "SELECT balance FROM transactions ORDER BY date DESC LIMIT 1"
     );
 
-    const countResult = await db.getAllAsync<{ count: number }>(
+    const countResult = await database.getAllAsync<{ count: number }>(
         "SELECT count(*) as count FROM transactions"
     );
 
-    const totalSpentResult = await db.getAllAsync<{ total: number }>(
+    const totalSpentResult = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT'"
     );
 
-    const monthlyCostResult = await db.getAllAsync<{ total: number }>(
+    const monthlyCostResult = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(transactionCost) as total FROM transactions WHERE date >= ?",
         [startOfMonth]
     );
 
-    const totalIncomeResult = await db.getAllAsync<{ total: number }>(
+    const totalIncomeResult = await database.getAllAsync<{ total: number }>(
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'RECEIVED'"
     );
 
-    const fulizaResult = await db.getAllAsync<{ balance: number }>(
+    const fulizaResult = await database.getAllAsync<{ balance: number }>(
         `SELECT outstandingBalance as balance 
          FROM fuliza_transactions 
          WHERE outstandingBalance IS NOT NULL 
@@ -299,8 +358,6 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
          LIMIT 1`
     );
 
-    // IMPORTANT: If M-PESA balance > 0, Fuliza has been auto-repaid
-    // Only show Fuliza debt if M-PESA balance is 0
     const currentBalance = balanceResult[0]?.balance || 0;
     const fulizaOutstanding = currentBalance > 0 ? 0 : (fulizaResult[0]?.balance || 0);
 
@@ -317,9 +374,9 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     };
 };
 
-// SMS Processing Optimization
 export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
-    const result = await db.getFirstAsync<{ sms_id: string }>(
+    const database = ensureDb();
+    const result = await database.getFirstAsync<{ sms_id: string }>(
         'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
         [smsId]
     );
@@ -327,7 +384,8 @@ export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
 };
 
 export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
         [smsId, new Date().toISOString()]
     );

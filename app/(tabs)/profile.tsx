@@ -1,5 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
@@ -22,9 +23,12 @@ export default function ProfileScreen() {
     const [editPhone, setEditPhone] = useState('');
     const [editImage, setEditImage] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadCategories();
-    }, []);
+    // Load categories when screen is focused
+    useFocusEffect(
+        React.useCallback(() => {
+            loadCategories();
+        }, [])
+    );
 
     // Initialize edit form when opening modal
     useEffect(() => {
@@ -211,11 +215,11 @@ export default function ProfileScreen() {
                     </View>
 
                     <View className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden p-4">
-                        {categories.filter(c => c.isCustom).length === 0 ? (
+                        {categories.filter(c => !!c.isCustom).length === 0 ? (
                             <Text className="text-slate-500 dark:text-slate-400 text-center py-4">No custom categories yet</Text>
                         ) : (
                             <View className="gap-3">
-                                {categories.filter(c => c.isCustom).map((cat) => (
+                                {categories.filter(c => !!c.isCustom).map((cat) => (
                                     <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-xl border border-gray-100 dark:border-slate-800">
                                         <View className="flex-row items-center flex-1">
                                             <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>

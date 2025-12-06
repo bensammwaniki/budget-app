@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
@@ -203,6 +203,7 @@ export default function HomeScreen() {
     let income = 0;
     let expense = 0;
     let cost = 0;
+    let fulizaBalance = 0;
 
     filteredTransactions.forEach(t => {
       if (t.type === 'RECEIVED') {
@@ -214,13 +215,22 @@ export default function HomeScreen() {
       cost += t.transactionCost || 0;
     });
 
+    // Only show Fuliza if:
+    // 1. We're looking at THIS_MONTH (current month)
+    // 2. The current balance is 0 or negative (meaning Fuliza is active)
+    // For past periods, don't show Fuliza as it's not relevant to historical data
+    if (selectedPeriod === 'THIS_MONTH' && spending?.currentBalance !== undefined && spending.currentBalance <= 0) {
+      fulizaBalance = spending.fulizaOutstanding || 0;
+    }
+
     return {
       income,
       expense,
       cost,
+      fulizaBalance,
       net: income - expense
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, spending, selectedPeriod]);
 
 
 
@@ -395,6 +405,12 @@ export default function HomeScreen() {
               <Text className="text-red-100 text-xs mb-1">Expense</Text>
               <Text className="text-white font-bold">KES {periodSummary.expense.toLocaleString()}</Text>
             </View>
+            {periodSummary.fulizaBalance > 0 && (
+              <View className="flex-1 bg-orange-500/30 px-3 py-2 rounded-xl">
+                <Text className="text-orange-100 text-xs mb-1">Fuliza</Text>
+                <Text className="text-white font-bold">KES {periodSummary.fulizaBalance.toLocaleString()}</Text>
+              </View>
+            )}
           </View>
         </View>
 

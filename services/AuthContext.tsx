@@ -1,6 +1,6 @@
 import { signOut as firebaseSignOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getUserSettings, initDatabase, saveUserSettings } from './database';
+import { getUserSettings, saveUserSettings } from './database';
 import { auth } from './firebaseConfig';
 
 interface AuthContextType {
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(currentUser);
             if (currentUser) {
                 try {
-                    await initDatabase();
+                    // Database is initialized by HomeScreen, just load settings here
                     const storedPhone = await getUserSettings('phoneNumber');
                     setPhoneNumber(storedPhone);
                 } catch (error) {
