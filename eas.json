@@ -6,16 +6,13 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "prebuildCommand": "bash scripts/eas-build-pre-install.sh"
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "prebuildCommand": "bash scripts/eas-build-pre-install.sh"
+      "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "prebuildCommand": "bash scripts/eas-build-pre-install.sh"
+      "autoIncrement": true
     }
   },
   "submit": {
