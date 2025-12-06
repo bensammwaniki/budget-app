@@ -35,8 +35,9 @@ yarn-error.*
 .env*.local
 
 # Firebase/Google credentials
-google-services.json
-GoogleService-Info.plist
+# Temporarily commented to allow EAS builds - DO NOT commit real credentials
+# google-services.json
+# GoogleService-Info.plist
 
 # typescript
 *.tsbuildinfo
