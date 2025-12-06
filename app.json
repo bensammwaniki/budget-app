@@ -43,7 +43,10 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-build-properties",
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
