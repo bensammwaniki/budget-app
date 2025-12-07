@@ -55,14 +55,15 @@ export const calculateMonthlyFulizaCosts = (messages: any[]): Map<string, number
             // We charge for each day the balance was outstanding
             // Note: This is an estimation. Real billing runs at midnight.
             // For simplicity, we apply the rate of the *previous* balance for the duration.
-            if (diffDays > 0) {
-                const dailyRate = calculateFulizaDailyCharge(currentBalance);
-                const totalDailyCharges = dailyRate * diffDays;
+            const dailyRate = calculateFulizaDailyCharge(currentBalance);
 
-                // Attribute these charges to the month of the *current* event (or split them? simpler to attribute to current)
-                // Better: Attribute to the month where the days actually occurred.
-                // For MVP simplicity: Attribute to the month of the 'end' date (current event)
-                addCost(currentDate, totalDailyCharges);
+            // Attribute daily charges to the correct month for each day
+            let dayCursor = new Date(lastDate);
+            dayCursor.setDate(dayCursor.getDate() + 1); // Start form next day
+
+            for (let i = 0; i < diffDays; i++) {
+                addCost(new Date(dayCursor), dailyRate);
+                dayCursor.setDate(dayCursor.getDate() + 1);
             }
         }
 
@@ -80,12 +81,12 @@ export const calculateMonthlyFulizaCosts = (messages: any[]): Map<string, number
                 addCost(currentDate, event.accessFee);
             }
         } else if (event.type === 'REPAYMENT') {
-            if (event.outstandingBalance !== undefined) {
-                // If SMS gives us the new limit/balance, infer the outstanding
-                // But repayment SMS usually says "Your available limit is X". 
-                // If we don't have explicit outstanding, we subtract amount.
+            // For repayments, we need to reduce the outstanding balance
+            if (event.outstandingBalance !== undefined && event.outstandingBalance !== null) {
+                // If SMS explicitly tells us the remaining outstanding balance, use it
                 currentBalance = event.outstandingBalance;
             } else {
+                // Otherwise subtract the repayment amount from current balance
                 currentBalance = Math.max(0, currentBalance - event.amount);
             }
         }

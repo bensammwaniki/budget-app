@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
@@ -139,7 +140,12 @@ export default function CreateAutomationRuleScreen() {
                 style={{ paddingTop: insets.top > 0 ? insets.top : 20 }}
             >
                 <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-                    <FontAwesome name="arrow-left" size={20} color={colorScheme === 'dark' ? '#fff' : '#1e293b'} />
+                    <Image
+                        source={require('../../assets/svg/back.svg')}
+                        style={{ width: 24, height: 24 }}
+                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                        contentFit="contain"
+                    />
                 </TouchableOpacity>
                 <Text className="text-slate-900 dark:text-white text-xl font-bold">New Automation Rule</Text>
                 <TouchableOpacity onPress={handleSave} className="bg-blue-600 px-4 py-2 rounded-full">
@@ -147,7 +153,10 @@ export default function CreateAutomationRuleScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView className="flex-1 p-6">
+            <ScrollView
+                className="flex-1 p-6"
+                contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            >
                 {/* Basic Info */}
                 <View className="bg-white dark:bg-[#1e293b] p-4 rounded-2xl mb-6 border border-gray-200 dark:border-slate-700">
                     <Text className="text-slate-900 dark:text-white font-bold mb-4">Rule Details</Text>

@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deleteAutomationRule, getAutomationRules, toggleAutomationRule } from '../../services/database';
 import { AutomationRule } from '../../types/automation';
 
+
+import { Image } from 'expo-image';
+
 export default function AutomationListScreen() {
     const router = useRouter();
     const { colorScheme } = useColorScheme();
@@ -94,13 +97,21 @@ export default function AutomationListScreen() {
                 style={{ paddingTop: insets.top > 0 ? insets.top : 20 }}
             >
                 <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-                    <FontAwesome name="arrow-left" size={20} color={colorScheme === 'dark' ? '#fff' : '#1e293b'} />
+                    <Image
+                        source={require('../../assets/svg/back.svg')}
+                        style={{ width: 24, height: 24 }}
+                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                        contentFit="contain"
+                    />
                 </TouchableOpacity>
                 <Text className="text-slate-900 dark:text-white text-xl font-bold">Automation Rules</Text>
                 <View className="w-8" />
             </View>
 
-            <ScrollView className="flex-1 px-4 pt-4">
+            <ScrollView
+                className="flex-1 px-4 pt-4"
+                contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
+            >
                 {rules.length === 0 ? (
                     <View className="items-center justify-center py-20">
                         <View className="w-20 h-20 bg-blue-100 dark:bg-blue-900/20 rounded-full items-center justify-center mb-6">
@@ -150,18 +161,19 @@ export default function AutomationListScreen() {
                 )}
             </ScrollView>
 
-            {/* FAB */}
-            <View
-                className="absolute right-6"
-                style={{ bottom: (insets.bottom > 0 ? insets.bottom : 20) + 20 }}
+
+            <TouchableOpacity
+                onPress={() => router.push('/automation/create')}
+                className="absolute right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-600/30"
+                style={{ bottom: 24 + insets.bottom }}
             >
-                <TouchableOpacity
-                    onPress={() => router.push('/automation/create')}
-                    className="w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-600/30"
-                >
-                    <FontAwesome name="plus" size={24} color="white" />
-                </TouchableOpacity>
-            </View>
+                <Image
+                    source={require('../../assets/svg/function.svg')}
+                    style={{ width: 24, height: 24 }}
+                    tintColor="white"
+                    contentFit="contain"
+                />
+            </TouchableOpacity>
         </View>
     );
 }

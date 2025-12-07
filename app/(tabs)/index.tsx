@@ -5,7 +5,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
-import { getCategories, getRecipientCategory, getSpendingSummary, getTransactions, initDatabase, isMessageProcessed, markMessageAsProcessed, saveFulizaTransaction, saveRecipientCategory, saveTransaction, updateTransactionCategory, updateTransactionDate } from '../../services/database';
+import {
+  getCategories,
+  getRecipientCategory,
+  getSpendingSummary,
+  getTransactions,
+  initDatabase,
+  isMessageProcessed,
+  markMessageAsProcessed,
+  saveFulizaTransaction,
+  saveRecipientCategory,
+  saveTransaction,
+  updateFulizaFees,
+  updateTransactionCategory,
+  updateTransactionDate
+} from '../../services/database';
 import { readMpesaSMS, SMSMessage } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
@@ -42,6 +56,7 @@ export default function HomeScreen() {
     try {
       await initDatabase();
       await syncSmsTransactions();
+      await updateFulizaFees();
       await loadDashboardData();
     } catch (error) {
       console.error('Error initializing data:', error);
@@ -125,35 +140,15 @@ export default function HomeScreen() {
       await markMessageAsProcessed(msg._id);
     }
 
-
-    // Calculate comprehensive monthly costs (Access Fees + Daily Maintenance)
-    if (fulizaCategoryId && fulizaEvents.length > 0) {
-      // Import dynamically to avoid circular dependency issues if any
-      const { calculateMonthlyFulizaCosts } = await import('../../utils/fulizaCalculator');
-      const monthlyCosts = calculateMonthlyFulizaCosts(fulizaEvents);
-
-      for (const [monthKey, totalCost] of monthlyCosts.entries()) {
-        const [year, month] = monthKey.split('-');
-        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
-
-        // Use the last day of the month as the date for the fee transaction
-        const feeDate = new Date(parseInt(year), parseInt(month), 0);
-
-        const bundledAccessFeeTransaction: Transaction = {
-          id: `FULIZA-FEES-${monthKey}`, // Unique ID per month
-          amount: totalCost,
-          type: 'SENT',
-          recipientId: 'FULIZA-ACCESS-FEES',
-          recipientName: `Fuliza Fees (${monthName})`,
-          date: feeDate,
-          balance: 0,
-          transactionCost: 0,
-          categoryId: fulizaCategoryId,
-          rawSms: `Bundled Fuliza fees (Access + Daily) for ${monthName} ${year}: KES ${totalCost.toFixed(2)}`
-        };
-        await saveTransaction(bundledAccessFeeTransaction);
-      }
+    if (processedCount > 0 || fulizaCount > 0) {
+      console.log(`✅ Processed ${processedCount} transactions and ${fulizaCount} Fuliza events`);
+    } else {
+      console.log('✨ No new messages to process');
     }
+
+
+    // Old logic removed - fees are now updated independently via updateFulizaFees()
+    // This ensures fees are calculated even if no new SMS are received.
   };
 
   const loadDashboardData = async () => {
@@ -234,26 +229,22 @@ export default function HomeScreen() {
 
 
 
-  const handleRefresh = async () => {
+  const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    setModalVisible(false); // Close modal during refresh
+    setModalVisible(false);
     try {
-      // Import clearDatabase dynamically to avoid circular dependency
+      // Import clearDatabase dynamically
       const { clearDatabase } = await import('../../services/database');
-
-      // Clear all database tables
       await clearDatabase();
 
-      // Reinitialize everything fresh
-      await initDatabase();
-      await syncSmsTransactions();
-      await loadDashboardData();
+      // Re-run full initialization
+      await initializeData();
     } catch (error) {
       console.error('Error during refresh:', error);
     } finally {
       setRefreshing(false);
     }
-  };
+  }, []);
 
   const handleTransactionPress = (tx: Transaction) => {
     // Allow categorizing both SENT and RECEIVED transactions
@@ -473,10 +464,10 @@ export default function HomeScreen() {
 
 
 
-      {/* Monthly Fuliza Fees - Always displayed */}
-      <View className="px-6 mt-8 mb-2">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
-        {filteredTransactions.filter(t => t.id.startsWith('FULIZA-FEES-')).length > 0 ? (
+      {/* Monthly Fuliza Fees - Only displayed if there are fees */}
+      {filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-')) && (
+        <View className="px-6 mt-8 mb-2">
+          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
           <View className="gap-4">
             {filteredTransactions
               .filter(t => t.id.startsWith('FULIZA-FEES-'))
@@ -498,14 +489,8 @@ export default function HomeScreen() {
                 </View>
               ))}
           </View>
-        ) : (
-          <View className="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-gray-200 dark:border-slate-700 border-dashed">
-            <Text className="text-slate-500 dark:text-slate-400 text-center text-sm">
-              No Fuliza fees for this period
-            </Text>
-          </View>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Recent Transactions */}
       <View className="px-6 mt-6 mb-8">
@@ -555,7 +540,7 @@ export default function HomeScreen() {
                   </View>
                 </View>
                 <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
-                  {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
+                  {tx.type === 'RECEIVED' ? '+' : '-'} KES {Math.abs(tx.amount).toLocaleString()}
                 </Text>
               </TouchableOpacity>
             )}
@@ -565,7 +550,7 @@ export default function HomeScreen() {
               </View>
             }
             ListFooterComponent={
-              displayLimit < filteredTransactions.filter(t => !t.id.startsWith('FULIZA-FEES-')).length ? (
+              displayLimit < filteredTransactions.length ? (
                 <TouchableOpacity
                   className="py-4 items-center"
                   onPress={() => setDisplayLimit(prev => prev + 50)}

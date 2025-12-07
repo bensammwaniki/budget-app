@@ -126,19 +126,19 @@ export default function AnalyticsScreen() {
                 key={index}
                 onPress={() => setSelectedDate(date)}
                 className={`px-4 py-2 rounded-xl border ${isSelected
-                    ? 'bg-blue-600 border-blue-600'
-                    : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
+                  ? 'bg-blue-600 border-blue-600'
+                  : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
               >
                 <Text className={`font-semibold text-xs ${isSelected
-                    ? 'text-white'
-                    : 'text-slate-600 dark:text-slate-400'
+                  ? 'text-white'
+                  : 'text-slate-600 dark:text-slate-400'
                   }`}>
                   {index === 0 ? 'This Month' : formatMonthShort(date)}
                 </Text>
                 <Text className={`text-[10px] text-center mt-1 ${isSelected
-                    ? 'text-blue-200'
-                    : 'text-slate-400 dark:text-slate-500'
+                  ? 'text-blue-200'
+                  : 'text-slate-400 dark:text-slate-500'
                   }`}>
                   {date.getFullYear()}
                 </Text>
@@ -211,6 +211,34 @@ export default function AnalyticsScreen() {
           </View>
         )}
       </View>
+
+      {/* Monthly Fuliza Fees - Only displayed if there are fees */}
+      {filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-')) && (
+        <View className="px-6 mt-8 mb-2">
+          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
+          <View className="gap-4">
+            {filteredTransactions
+              .filter(t => t.id.startsWith('FULIZA-FEES-'))
+              .map((tx) => (
+                <View
+                  key={tx.id}
+                  className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm"
+                >
+                  <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
+                    <FontAwesome name="warning" size={20} color="#f97316" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
+                  </View>
+                  <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
+                    - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        </View>
+      )}
 
       {/* Quick Stats */}
       <View className="px-6 mt-8 mb-8">

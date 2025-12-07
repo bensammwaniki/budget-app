@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { AutomationRule } from '../types/automation';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 import { evaluateTransaction } from '../utils/automationEngine';
+import { calculateMonthlyFulizaCosts } from '../utils/fulizaCalculator';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
@@ -235,6 +236,66 @@ export const getRecipientCategory = async (recipientId: string, type: string): P
     return result.length > 0 ? result[0].categoryId : null;
 };
 
+export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
+    const database = ensureDb();
+    const result = await database.getAllAsync<any>('SELECT * FROM fuliza_transactions ORDER BY date ASC');
+    return result.map(row => ({
+        ...row,
+        date: new Date(row.date),
+        dueDate: row.dueDate ? new Date(row.dueDate) : undefined
+    }));
+};
+
+export const updateFulizaFees = async () => {
+    try {
+        // 1. Get Fuliza Charges category ID
+        const categories = await getCategories();
+        const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
+
+        if (!fulizaCategory) {
+            return;
+        }
+
+        // 2. Load ALL history
+        const history = await getFulizaTransactions();
+
+        if (history.length === 0) {
+            return;
+        }
+
+        // 3. Calculate fees
+        const monthlyCosts = calculateMonthlyFulizaCosts(history);
+        console.log(`💰 Calculated fees for ${monthlyCosts.size} month(s):`);
+
+        monthlyCosts.forEach((cost, monthKey) => {
+            console.log(`   ${monthKey}: KES ${cost.toFixed(2)}`);
+        });
+
+        // 4. Save fee transactions
+        for (const [monthKey, totalCost] of monthlyCosts.entries()) {
+            const [year, month] = monthKey.split('-');
+            const feeDate = new Date(parseInt(year), parseInt(month), 0);
+
+            const bundledAccessFeeTransaction: Transaction = {
+                id: `FULIZA-FEES-${monthKey}`,
+                amount: totalCost,
+                type: 'SENT',
+                recipientId: 'FULIZA-FEES',
+                recipientName: 'Fuliza Fees', // Hardcoded name instead of using monthName
+                date: feeDate,
+                balance: 0,
+                transactionCost: 0,
+                categoryId: fulizaCategory.id,
+                rawSms: 'Generated Monthly Fee'
+            };
+
+            await saveTransaction(bundledAccessFeeTransaction);
+        }
+    } catch (e) {
+        console.error('❌ Error updating Fuliza fees:', e);
+    }
+};
+
 export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
     if (!recipientId || !type) {
         console.warn('Skipping saveRecipientCategory: Missing recipientId or type');
@@ -281,8 +342,8 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
             fuliza.id,
             fuliza.amount,
             fuliza.type,
-            fuliza.accessFee || null,
-            fuliza.outstandingBalance || null,
+            fuliza.accessFee !== undefined ? fuliza.accessFee : null,
+            fuliza.outstandingBalance !== undefined ? fuliza.outstandingBalance : null,
             fuliza.dueDate?.toISOString() || null,
             fuliza.linkedTransactionId || null,
             fuliza.date.toISOString(),
