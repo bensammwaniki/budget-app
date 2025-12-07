@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
@@ -13,6 +13,8 @@ import { Category } from '../../types/transaction';
 export default function ProfileScreen() {
     const { signOut, user, phoneNumber, updateUserProfile } = useAuth();
     const { colorScheme, toggleColorScheme } = useColorScheme();
+    const router = useRouter();
+    const firstName = user?.displayName?.split(' ')[0] || 'User';
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
@@ -182,7 +184,7 @@ export default function ProfileScreen() {
 
                     {[
                         { icon: 'user', label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
-                        { icon: 'bell', label: 'Notifications', color: '#8b5cf6' },
+                        { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                         { icon: 'shield', label: 'Privacy & Security', color: '#10b981' },
                         { icon: 'question-circle', label: 'Help & Support', color: '#f59e0b' },
                     ].map((item, index) => (

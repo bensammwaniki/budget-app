@@ -1,5 +1,7 @@
 import * as SQLite from 'expo-sqlite';
+import { AutomationRule } from '../types/automation';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
+import { evaluateTransaction } from '../utils/automationEngine';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
@@ -41,6 +43,7 @@ export const initDatabase = async () => {
                     DROP TABLE IF EXISTS fuliza_transactions;
                     DROP TABLE IF EXISTS user_settings;
                     DROP TABLE IF EXISTS processed_sms;
+                    DROP TABLE IF EXISTS automation_rules;
                 `);
             }
 
@@ -101,6 +104,15 @@ export const initDatabase = async () => {
                 CREATE TABLE IF NOT EXISTS processed_sms (
                     sms_id TEXT PRIMARY KEY,
                     processed_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS automation_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    conditions TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    isEnabled INTEGER DEFAULT 1
                 );
             `);
 
@@ -224,22 +236,30 @@ export const getRecipientCategory = async (recipientId: string, type: string): P
 };
 
 export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
+    if (!recipientId || !type) {
+        console.warn('Skipping saveRecipientCategory: Missing recipientId or type');
+        return;
+    }
     const database = ensureDb();
     await database.runAsync(
         'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
-        [recipientId, type, categoryId, new Date().toISOString()]
+        [recipientId, type, categoryId || null, new Date().toISOString()]
     );
     await database.runAsync(
         'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
-        [categoryId, recipientId, type]
+        [categoryId || null, recipientId, type]
     );
 };
 
 export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
+    if (!transactionId) {
+        console.warn('Skipping updateTransactionCategory: Missing transactionId');
+        return;
+    }
     const database = ensureDb();
     await database.runAsync(
         'UPDATE transactions SET categoryId = ? WHERE id = ?',
-        [categoryId, transactionId]
+        [categoryId || null, transactionId]
     );
 };
 
@@ -273,6 +293,22 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
 
 export const saveTransaction = async (transaction: Transaction) => {
     const database = ensureDb();
+
+    // AUTOMATION: If categoryId is missing, try to apply automation rules
+    if (!transaction.categoryId) {
+        try {
+            const rules = await getAutomationRules(); // This might be slightly expensive, consider caching if performance issues arise
+            const matchedRule = evaluateTransaction(transaction, rules);
+
+            if (matchedRule) {
+                console.log(`🤖 Auto-categorizing transaction ${transaction.id} using rule: ${matchedRule.name}`);
+                transaction.categoryId = matchedRule.action.categoryId;
+            }
+        } catch (error) {
+            console.error('Error applying automation rules:', error);
+        }
+    }
+
     await database.runAsync(
         `INSERT OR REPLACE INTO transactions 
     (id, amount, type, recipientId, recipientName, date, balance, transactionCost, categoryId, rawSms) 
@@ -389,4 +425,86 @@ export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
         'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
         [smsId, new Date().toISOString()]
     );
+};
+
+// Automation Rules
+
+export const getAutomationRules = async (): Promise<AutomationRule[]> => {
+    const database = ensureDb();
+    const result = await database.getAllAsync<any>('SELECT * FROM automation_rules ORDER BY id DESC');
+    return result.map(row => ({
+        ...row,
+        conditions: JSON.parse(row.conditions),
+        action: JSON.parse(row.action),
+        isEnabled: row.isEnabled === 1
+    }));
+};
+
+export const addAutomationRule = async (rule: Omit<AutomationRule, 'id'>) => {
+    const database = ensureDb();
+    const result = await database.runAsync(
+        'INSERT INTO automation_rules (name, type, conditions, action, isEnabled) VALUES (?, ?, ?, ?, ?)',
+        [
+            rule.name,
+            rule.type,
+            JSON.stringify(rule.conditions),
+            JSON.stringify(rule.action),
+            rule.isEnabled ? 1 : 0
+        ]
+    );
+    return result.lastInsertRowId;
+};
+
+export const deleteAutomationRule = async (id: number) => {
+    const database = ensureDb();
+    await database.runAsync('DELETE FROM automation_rules WHERE id = ?', [id]);
+};
+
+export const toggleAutomationRule = async (id: number, isEnabled: boolean) => {
+    const database = ensureDb();
+    await database.runAsync(
+        'UPDATE automation_rules SET isEnabled = ? WHERE id = ?',
+        [isEnabled ? 1 : 0, id]
+    );
+};
+
+export const applyRuleToExistingTransactions = async (rule: AutomationRule): Promise<number> => {
+    const database = ensureDb();
+    const allTransactions = await getTransactions();
+    let updatedCount = 0;
+
+    await database.withTransactionAsync(async () => {
+        for (const tx of allTransactions) {
+            // Check if rule applies to this transaction (ignoring the enabled flag within evaluate, using the rule passed)
+            // We reuse evaluateTransaction logic but force check against this specific rule
+            // Note: evaluateTransaction expects an array of rules, so we pass just this one
+            const matchedRule = evaluateTransaction(tx, [rule]);
+
+            if (matchedRule) {
+                // Determine if we should overwrite? 
+                // User said "ensure all transaction falling under rule gets updated". 
+                // We will overwrite even if it has a category, to strictly enforce the new rule.
+
+                // Only update if category is different to avoid unnecessary writes
+                if (tx.categoryId !== rule.action.categoryId) {
+                    await database.runAsync(
+                        'UPDATE transactions SET categoryId = ? WHERE id = ?',
+                        [rule.action.categoryId, tx.id]
+                    );
+
+                    // Also update recipient mapping so future manual entries might default correctly (optional but good consistency)
+                    if (tx.recipientId) {
+                        await database.runAsync(
+                            'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
+                            [tx.recipientId, tx.type, rule.action.categoryId, new Date().toISOString()]
+                        );
+                    }
+
+                    updatedCount++;
+                }
+            }
+        }
+    });
+
+    return updatedCount;
 };

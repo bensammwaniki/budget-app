@@ -10,7 +10,7 @@ type Period = 'THIS_MONTH' | 'LAST_MONTH';
 
 export default function AnalyticsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('THIS_MONTH');
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   const loadData = useCallback(async () => {
     const allTransactions = await getTransactions();
@@ -23,22 +23,29 @@ export default function AnalyticsScreen() {
     }, [loadData])
   );
 
-  // Filter transactions by selected period
+  // Generate last 12 months
+  const months = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      result.push(d);
+    }
+    return result;
+  }, []);
+
+  const isSameMonth = (d1: Date, d2: Date) => {
+    return d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+  };
+
+  // Filter transactions by selected month
   const filteredTransactions = useMemo(() => {
-    const now = new Date();
     return transactions.filter(t => {
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       if (isNaN(txDate.getTime())) return false;
-
-      if (selectedPeriod === 'THIS_MONTH') {
-        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      } else if (selectedPeriod === 'LAST_MONTH') {
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
-        return txDate.getMonth() === lastMonth.getMonth() && txDate.getFullYear() === lastMonth.getFullYear();
-      }
-      return true;
+      return isSameMonth(txDate, selectedDate);
     });
-  }, [transactions, selectedPeriod]);
+  }, [transactions, selectedDate]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -86,36 +93,59 @@ export default function AnalyticsScreen() {
     return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
 
+  const formatMonth = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const formatMonthShort = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'short' });
+  };
+
   return (
     <ScrollView className="flex-1 bg-gray-50 dark:bg-[#020617]">
       <StatusBar style="light" />
 
       {/* Header */}
       <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
-        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Analytics Dashboard</Text>
+        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Total Expense • {formatMonth(selectedDate)}</Text>
         <Text className="text-slate-900 dark:text-white text-4xl font-bold mb-6">
           {formatCurrency(stats.expense)}
         </Text>
 
-        {/* Period Selector */}
-        <View className="flex-row bg-gray-100 dark:bg-[#1e293b] p-1 rounded-xl self-start border border-gray-200 dark:border-slate-700">
-          <TouchableOpacity
-            className={`px-4 py-2 rounded-lg ${selectedPeriod === 'THIS_MONTH' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('THIS_MONTH')}
-          >
-            <Text className={`font-semibold text-xs ${selectedPeriod === 'THIS_MONTH' ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
-              This Month
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`px-4 py-2 rounded-lg ${selectedPeriod === 'LAST_MONTH' ? 'bg-blue-600' : ''}`}
-            onPress={() => setSelectedPeriod('LAST_MONTH')}
-          >
-            <Text className={`font-semibold text-xs ${selectedPeriod === 'LAST_MONTH' ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
-              Last Month
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* New Month Selector */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="flex-row"
+          contentContainerStyle={{ gap: 8 }}
+        >
+          {months.map((date, index) => {
+            const isSelected = isSameMonth(date, selectedDate);
+            return (
+              <TouchableOpacity
+                key={index}
+                onPress={() => setSelectedDate(date)}
+                className={`px-4 py-2 rounded-xl border ${isSelected
+                    ? 'bg-blue-600 border-blue-600'
+                    : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
+                  }`}
+              >
+                <Text className={`font-semibold text-xs ${isSelected
+                    ? 'text-white'
+                    : 'text-slate-600 dark:text-slate-400'
+                  }`}>
+                  {index === 0 ? 'This Month' : formatMonthShort(date)}
+                </Text>
+                <Text className={`text-[10px] text-center mt-1 ${isSelected
+                    ? 'text-blue-200'
+                    : 'text-slate-400 dark:text-slate-500'
+                  }`}>
+                  {date.getFullYear()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Summary Cards */}
