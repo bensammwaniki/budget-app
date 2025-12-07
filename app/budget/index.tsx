@@ -113,9 +113,8 @@ export default function BudgetScreen() {
         <SafeAreaView className="flex-1 bg-gray-50 dark:bg-[#020617]" edges={['top']}>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
-            {/* Header */}
             <View className="px-6 py-4 flex-row items-center justify-between bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800">
-                <TouchableOpacity onPress={() => router.replace('/(tabs)/profile')} className="p-2 -ml-2">
+                <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
                     <Image
                         source={require('../../assets/svg/back.svg')}
                         style={{ width: 24, height: 24 }}
@@ -177,7 +176,7 @@ export default function BudgetScreen() {
                 {/* Allocations & Progress */}
                 <Text className="text-slate-500 dark:text-slate-400 font-bold mb-4 uppercase text-xs tracking-wider">Category Limits & Progress</Text>
 
-                <View className="gap-4 mb-10">
+                <View className="gap-4 mb-20">
                     {categories.map((cat) => {
                         const allocated = parseFloat(allocations[cat.id] || '0');
                         const spent = spending[cat.id] || 0;
