@@ -1,10 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories } from '../../services/database';
@@ -28,7 +29,10 @@ export default function ProfileScreen() {
     // Load categories when screen is focused
     useFocusEffect(
         React.useCallback(() => {
-            loadCategories();
+            const task = InteractionManager.runAfterInteractions(() => {
+                loadCategories();
+            });
+            return () => task.cancel();
         }, [])
     );
 
@@ -185,7 +189,7 @@ export default function ProfileScreen() {
                     {[
                         { icon: 'user', label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                         { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
-                        { icon: 'shield', label: 'Privacy & Security', color: '#10b981' },
+                        { icon: 'calculator', label: 'Personal Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                         { icon: 'question-circle', label: 'Help & Support', color: '#f59e0b' },
                     ].map((item, index) => (
                         <TouchableOpacity
@@ -263,8 +267,13 @@ export default function ProfileScreen() {
                         <View className="bg-white dark:bg-[#1e293b] rounded-t-[32px] p-6 h-[85%]">
                             <View className="flex-row justify-between items-center mb-6">
                                 <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
-                                <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full">
-                                    <FontAwesome name="close" size={20} color="#64748b" />
+                                <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
+                                    <Image
+                                        source={require('../../assets/svg/close.svg')}
+                                        style={{ width: 20, height: 20 }}
+                                        contentFit="contain"
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
+                                    />
                                 </TouchableOpacity>
                             </View>
 

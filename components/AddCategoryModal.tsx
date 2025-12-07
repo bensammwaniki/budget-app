@@ -1,4 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { addCategory } from '../services/database';
@@ -27,6 +29,7 @@ interface AddCategoryModalProps {
 }
 
 export default function AddCategoryModal({ visible, onClose, onCategoryAdded, defaultType = 'EXPENSE' }: AddCategoryModalProps) {
+    const { colorScheme } = useColorScheme();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState<'INCOME' | 'EXPENSE'>(defaultType);
@@ -86,8 +89,13 @@ export default function AddCategoryModal({ visible, onClose, onCategoryAdded, de
                 <View className="bg-white dark:bg-[#1e293b] rounded-t-[32px] p-6 h-[85%]">
                     <View className="flex-row justify-between items-center mb-6">
                         <Text className="text-slate-900 dark:text-white text-xl font-bold">New Category</Text>
-                        <TouchableOpacity onPress={onClose} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full">
-                            <FontAwesome name="close" size={20} color="#64748b" />
+                        <TouchableOpacity onPress={onClose} className="p-2 -mr-2">
+                            <Image
+                                source={require('../assets/svg/close.svg')}
+                                style={{ width: 24, height: 24 }}
+                                contentFit="contain"
+                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            />
                         </TouchableOpacity>
                     </View>
 

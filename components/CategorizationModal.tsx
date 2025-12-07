@@ -1,5 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +18,7 @@ interface CategorizationModalProps {
 }
 
 export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onClose }: CategorizationModalProps) {
+    const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const insets = useSafeAreaInsets();
@@ -66,8 +69,13 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 {transaction.recipientName} • KES {transaction.amount.toLocaleString()}
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={onClose} className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full items-center justify-center">
-                            <FontAwesome name="close" size={16} color="#94a3b8" />
+                        <TouchableOpacity onPress={onClose} className="p-2 -mr-2">
+                            <Image
+                                source={require('../assets/svg/close.svg')}
+                                style={{ width: 24, height: 24 }}
+                                contentFit="contain"
+                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            />
                         </TouchableOpacity>
                     </View>
 

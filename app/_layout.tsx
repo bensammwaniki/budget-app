@@ -1,4 +1,5 @@
 import { Slot, useRouter, useSegments } from "expo-router";
+import { useColorScheme } from "nativewind";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import GlassLayout from "../components/GlassLayout";
@@ -9,6 +10,14 @@ function InitialLayout() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const { colorScheme, setColorScheme } = useColorScheme();
+
+  useEffect(() => {
+    // Default to light mode if not set
+    if (!colorScheme) {
+      setColorScheme('light');
+    }
+  }, []);
 
   useEffect(() => {
     if (loading) return;

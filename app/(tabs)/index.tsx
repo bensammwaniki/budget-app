@@ -233,12 +233,10 @@ export default function HomeScreen() {
     setRefreshing(true);
     setModalVisible(false);
     try {
-      // Import clearDatabase dynamically
-      const { clearDatabase } = await import('../../services/database');
-      await clearDatabase();
-
-      // Re-run full initialization
-      await initializeData();
+      // Just sync new data without clearing DB
+      await syncSmsTransactions();
+      await updateFulizaFees();
+      await loadDashboardData();
     } catch (error) {
       console.error('Error during refresh:', error);
     } finally {

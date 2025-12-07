@@ -115,6 +115,20 @@ export const initDatabase = async () => {
                     action TEXT NOT NULL,
                     isEnabled INTEGER DEFAULT 1
                 );
+
+                CREATE TABLE IF NOT EXISTS monthly_budgets (
+                    month TEXT PRIMARY KEY,
+                    totalIncome REAL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS category_budgets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    month TEXT NOT NULL,
+                    categoryId INTEGER NOT NULL,
+                    budgetAmount REAL DEFAULT 0,
+                    FOREIGN KEY (categoryId) REFERENCES categories (id),
+                    UNIQUE(month, categoryId)
+                );
             `);
 
             // Seed default categories if empty
@@ -426,8 +440,9 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         [startOfMonth]
     );
 
+    // Get latest balance from a REAL transaction (exclude generated fees)
     const balanceResult = await database.getAllAsync<{ balance: number }>(
-        "SELECT balance FROM transactions ORDER BY date DESC LIMIT 1"
+        "SELECT balance FROM transactions WHERE id NOT LIKE 'FULIZA-FEES-%' AND balance > 0 ORDER BY date DESC LIMIT 1"
     );
 
     const countResult = await database.getAllAsync<{ count: number }>(
@@ -568,4 +583,71 @@ export const applyRuleToExistingTransactions = async (rule: AutomationRule): Pro
     });
 
     return updatedCount;
+};
+
+// Budget Management
+
+export const getMonthlyBudget = async (month: string) => {
+    const database = ensureDb();
+
+    // Get total income for the month
+    const budgetResult = await database.getFirstAsync<{ totalIncome: number }>(
+        'SELECT totalIncome FROM monthly_budgets WHERE month = ?',
+        [month]
+    );
+
+    // Get category allocations
+    const allocations = await database.getAllAsync<{ categoryId: number, budgetAmount: number }>(
+        'SELECT categoryId, budgetAmount FROM category_budgets WHERE month = ?',
+        [month]
+    );
+
+    return {
+        totalIncome: budgetResult?.totalIncome || 0,
+        allocations: allocations || []
+    };
+};
+
+export const saveMonthlyBudget = async (month: string, totalIncome: number, allocations: { categoryId: number, budgetAmount: number }[]) => {
+    const database = ensureDb();
+
+    await database.withTransactionAsync(async () => {
+        // Save total income
+        await database.runAsync(
+            'INSERT OR REPLACE INTO monthly_budgets (month, totalIncome) VALUES (?, ?)',
+            [month, totalIncome]
+        );
+
+        // Save allocations
+        for (const allocation of allocations) {
+            await database.runAsync(
+                'INSERT OR REPLACE INTO category_budgets (month, categoryId, budgetAmount) VALUES (?, ?, ?)',
+                [month, allocation.categoryId, allocation.budgetAmount]
+            );
+        }
+    });
+};
+
+export const getCategorySpending = async (month: string): Promise<Record<number, number>> => {
+    const database = ensureDb();
+    const [year, monthNum] = month.split('-');
+
+    // Calculate start and end of month based on the "YYYY-MM" string
+    // Note: JS Date month is 0-indexed, so we subtract 1 from parsed monthNum
+    const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1).toISOString();
+    const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59).toISOString(); // End of the month
+
+    const result = await database.getAllAsync<{ categoryId: number, total: number }>(
+        `SELECT categoryId, SUM(amount) as total 
+         FROM transactions 
+         WHERE date >= ? AND date <= ? AND type = 'SENT' AND categoryId IS NOT NULL
+         GROUP BY categoryId`,
+        [startDate, endDate]
+    );
+
+    const spending: Record<number, number> = {};
+    result.forEach(row => {
+        spending[row.categoryId] = row.total;
+    });
+    return spending;
 };

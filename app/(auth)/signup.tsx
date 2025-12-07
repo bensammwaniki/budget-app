@@ -2,11 +2,14 @@ import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { useColorScheme } from 'nativewind';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../services/firebaseConfig';
 
 export default function SignupScreen() {
+    const { colorScheme } = useColorScheme();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -35,85 +38,85 @@ export default function SignupScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-[#020617]"
+            className="flex-1 bg-gray-50 dark:bg-[#020617]"
         >
-            <StatusBar style="light" />
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <ScrollView
                 contentContainerClassName="flex-grow"
                 className="flex-1"
             >
-                <View className="flex-1 justify-center items-center px-6 py-12">
+                <SafeAreaView className="flex-1 justify-center items-center px-6">
                     {/* Back Button */}
                     <TouchableOpacity
                         onPress={() => router.back()}
-                        className="absolute top-12 left-6 bg-[#1e293b] p-3 rounded-full border border-slate-700"
+                        className="absolute top-12 left-6 bg-white dark:bg-[#1e293b] p-3 rounded-full border border-gray-200 dark:border-slate-700 shadow-sm z-10"
                     >
-                        <FontAwesome name="arrow-left" size={20} color="white" />
+                        <FontAwesome name="arrow-left" size={20} color={colorScheme === 'dark' ? "white" : "#1e293b"} />
                     </TouchableOpacity>
 
                     {/* Logo/Brand Section */}
                     <View className="mb-10 items-center mt-12">
-                        <View className="w-20 h-20 bg-blue-600/20 rounded-full items-center justify-center mb-4 border border-blue-500/30">
+                        <View className="w-20 h-20 bg-blue-100 dark:bg-blue-600/20 rounded-full items-center justify-center mb-4 border border-blue-200 dark:border-blue-500/30">
                             <FontAwesome name="user-plus" size={32} color="#3b82f6" />
                         </View>
-                        <Text className="text-3xl font-bold text-white mb-2">Create Account</Text>
-                        <Text className="text-slate-400 text-base">Join Fanga Budget today</Text>
+                        <Text className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create Account</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-base">Join Fanga Budget today</Text>
                     </View>
 
                     {/* Signup Card */}
-                    <View className="w-full max-w-md bg-[#1e293b] rounded-3xl p-8 border border-slate-700 shadow-xl">
+                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-xl">
 
                         {/* Name Input */}
                         <View className="mb-5">
-                            <Text className="text-sm font-semibold text-slate-300 mb-2 ml-1">Full Name</Text>
-                            <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="user" size={20} color="#94a3b8" />
+                            <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Full Name</Text>
+                            <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
+                                <FontAwesome name="user" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Your full name"
                                     value={name}
                                     onChangeText={setName}
-                                    placeholderTextColor="#64748b"
+                                    placeholderTextColor="#94a3b8"
                                 />
                             </View>
-                            <Text className="text-xs text-slate-500 mt-1.5 ml-1">Used for AI personalization</Text>
+                            <Text className="text-xs text-slate-500 dark:text-slate-500 mt-1.5 ml-1">Used for AI personalization</Text>
                         </View>
 
                         {/* Email Input */}
                         <View className="mb-5">
-                            <Text className="text-sm font-semibold text-slate-300 mb-2 ml-1">Email Address</Text>
-                            <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="envelope" size={18} color="#94a3b8" />
+                            <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Email Address</Text>
+                            <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
+                                <FontAwesome name="envelope" size={18} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="you@example.com"
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
-                                    placeholderTextColor="#64748b"
+                                    placeholderTextColor="#94a3b8"
                                 />
                             </View>
                         </View>
 
                         {/* Password Input */}
                         <View className="mb-8">
-                            <Text className="text-sm font-semibold text-slate-300 mb-2 ml-1">Password</Text>
-                            <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5">
-                                <FontAwesome name="lock" size={20} color="#94a3b8" />
+                            <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Password</Text>
+                            <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5">
+                                <FontAwesome name="lock" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Create a password"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
-                                    placeholderTextColor="#64748b"
+                                    placeholderTextColor="#94a3b8"
                                 />
                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                                     <FontAwesome
                                         name={showPassword ? "eye" : "eye-slash"}
                                         size={18}
-                                        color="#94a3b8"
+                                        color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -121,7 +124,7 @@ export default function SignupScreen() {
 
                         {/* Signup Button */}
                         <TouchableOpacity
-                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-900/50"
+                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50"
                             onPress={handleSignup}
                             disabled={loading}
                         >
@@ -137,7 +140,7 @@ export default function SignupScreen() {
                             By signing up, you agree to our Terms & Privacy Policy
                         </Text>
                     </View>
-                </View>
+                </SafeAreaView>
             </ScrollView>
         </KeyboardAvoidingView>
     );

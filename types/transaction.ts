@@ -54,3 +54,15 @@ export interface SpendingSummary {
     totalIncome: number;
     fulizaOutstanding: number;
 }
+
+export interface MonthlyBudget {
+    month: string; // YYYY-MM
+    totalIncome: number;
+}
+
+export interface CategoryBudget {
+    id: number;
+    month: string; // YYYY-MM
+    categoryId: number;
+    budgetAmount: number;
+}

@@ -1,13 +1,17 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Image as ExpoImage } from 'expo-image';
 import { Link, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../services/firebaseConfig';
 
 export default function LoginScreen() {
+    const { colorScheme } = useColorScheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -73,63 +77,67 @@ export default function LoginScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-[#020617]"
+            className="flex-1 bg-gray-50 dark:bg-[#020617]"
         >
-            <StatusBar style="light" />
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <ScrollView
                 contentContainerClassName="flex-grow justify-center"
                 className="flex-1"
             >
-                <View className="flex-1 justify-center items-center px-6 py-12">
+                <SafeAreaView className="flex-1 justify-center items-center px-6">
                     {/* Logo/Brand Section */}
-                    <View className="mb-12 items-center">
-                        <View className="w-24 h-24 bg-blue-600/20 rounded-full items-center justify-center mb-6 border border-blue-500/30">
-                            <FontAwesome name="google-wallet" size={48} color="#3b82f6" />
+                    <View className="mb-6 items-center">
+                        <View className="w-24 h-24 bg-blue-100 dark:bg-blue-600/20 rounded-full items-center justify-center mb-2 mt-6 border border-blue-200 dark:border-blue-500/30">
+                            <ExpoImage
+                                source={require('../../assets/svg/favicon.svg')}
+                                style={{ width: 48, height: 48 }}
+                                contentFit="contain"
+                            />
                         </View>
-                        <Text className="text-4xl font-bold text-white mb-2 tracking-tight">Fanga Budget</Text>
-                        <Text className="text-slate-400 text-base">Take Charge of your finances</Text>
+                        <Text className="text-4xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">Fanga Budget</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-base">Take Charge of your finances</Text>
                     </View>
 
                     {/* Login Card */}
-                    <View className="w-full max-w-md bg-[#1e293b] rounded-3xl p-8 border border-slate-700 shadow-xl">
-                        <Text className="text-2xl font-bold mb-2 text-white">Welcome Back</Text>
-                        <Text className="text-slate-400 mb-8">Sign in to access your dashboard</Text>
+                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-lg">
+                        <Text className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">Welcome Back</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 mb-8">Sign in to access your dashboard</Text>
 
                         {/* Email Input */}
                         <View className="mb-5">
-                            <Text className="text-sm font-semibold text-slate-300 mb-2 ml-1">Email Address</Text>
-                            <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="envelope" size={18} color="#94a3b8" />
+                            <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Email Address</Text>
+                            <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
+                                <FontAwesome name="envelope" size={18} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="you@example.com"
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
-                                    placeholderTextColor="#64748b"
+                                    placeholderTextColor="#94a3b8"
                                 />
                             </View>
                         </View>
 
                         {/* Password Input */}
                         <View className="mb-8">
-                            <Text className="text-sm font-semibold text-slate-300 mb-2 ml-1">Password</Text>
-                            <View className="flex-row items-center bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3.5">
-                                <FontAwesome name="lock" size={20} color="#94a3b8" />
+                            <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Password</Text>
+                            <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5">
+                                <FontAwesome name="lock" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
                                 <TextInput
-                                    className="flex-1 ml-3 text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Enter your password"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
-                                    placeholderTextColor="#64748b"
+                                    placeholderTextColor="#94a3b8"
                                 />
                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                                     <FontAwesome
                                         name={showPassword ? "eye" : "eye-slash"}
                                         size={18}
-                                        color="#94a3b8"
+                                        color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -137,7 +145,7 @@ export default function LoginScreen() {
 
                         {/* Login Button */}
                         <TouchableOpacity
-                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-900/50"
+                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50"
                             onPress={handleLogin}
                             disabled={loading}
                         >
@@ -150,10 +158,10 @@ export default function LoginScreen() {
 
                         {/* Sign Up Link */}
                         <View className="flex-row justify-center">
-                            <Text className="text-slate-400">Don't have an account? </Text>
+                            <Text className="text-slate-500 dark:text-slate-400">Don't have an account? </Text>
                             <Link href="/signup" asChild>
                                 <TouchableOpacity>
-                                    <Text className="text-blue-400 font-bold">Sign Up</Text>
+                                    <Text className="text-blue-600 dark:text-blue-400 font-bold">Sign Up</Text>
                                 </TouchableOpacity>
                             </Link>
                         </View>
@@ -161,28 +169,28 @@ export default function LoginScreen() {
 
                     {/* Social Login Section */}
                     <View className="mt-10 w-full max-w-md">
-                        <View className="flex-row items-center mb-6">
-                            <View className="flex-1 h-px bg-slate-800" />
-                            <Text className="mx-4 text-slate-500 font-medium">Or continue with</Text>
-                            <View className="flex-1 h-px bg-slate-800" />
+                        <View className="flex-row items-center mb-3">
+                            <View className="flex-1 h-px bg-gray-200 dark:bg-slate-800" />
+                            <Text className="mx-4 text-slate-400 dark:text-slate-500 font-medium">Or continue with</Text>
+                            <View className="flex-1 h-px bg-gray-200 dark:bg-slate-800" />
                         </View>
 
                         <TouchableOpacity
-                            className="w-full bg-[#1e293b] p-4 rounded-xl border border-slate-700 items-center flex-row justify-center"
+                            className="w-full bg-white dark:bg-[#1e293b] mb-6 p-4 rounded-xl border border-gray-200 dark:border-slate-700 items-center flex-row justify-center"
                             onPress={handleGoogleSignIn}
                             disabled={googleLoading}
                         >
                             {googleLoading ? (
-                                <ActivityIndicator color="#fff" />
+                                <ActivityIndicator color={colorScheme === 'dark' ? "#fff" : "#000"} />
                             ) : (
                                 <>
-                                    <FontAwesome name="google" size={20} color="#fff" />
-                                    <Text className="ml-2 font-semibold text-slate-200">Sign in with Google</Text>
+                                    <FontAwesome name="google" size={20} color={colorScheme === 'dark' ? "#fff" : "#000"} />
+                                    <Text className="ml-2 font-semibold text-slate-700 dark:text-slate-200">Sign in with Google</Text>
                                 </>
                             )}
                         </TouchableOpacity>
                     </View>
-                </View>
+                </SafeAreaView>
             </ScrollView>
         </KeyboardAvoidingView>
     );
