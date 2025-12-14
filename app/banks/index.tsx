@@ -72,6 +72,25 @@ export default function MyBanksScreen() {
                     </View>
                 </View>
 
+                {/* Resync Button */}
+                <View className="mb-8">
+                    <TouchableOpacity
+                        className="bg-gray-100 dark:bg-[#1e293b] p-4 rounded-xl flex-row items-center justify-center border border-gray-200 dark:border-slate-700 active:bg-gray-200"
+                        onPress={async () => {
+                            // Import here to avoid circular dependencies if any, or just use general import
+                            const { clearProcessedSms } = require('../../services/database');
+                            await clearProcessedSms();
+                            alert('Transaction cache cleared! Please pull-to-refresh on the Home Screen to re-scan.');
+                        }}
+                    >
+                        <Ionicons name="refresh" size={20} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
+                        <Text className="ml-2 font-semibold text-slate-600 dark:text-slate-400">Resync Transactions</Text>
+                    </TouchableOpacity>
+                    <Text className="text-center text-xs text-slate-400 mt-2 px-4">
+                        If transactions are missing, tap this and then refresh the Home Screen.
+                    </Text>
+                </View>
+
                 {/* Coming Soon Placeholder */}
                 <View className="bg-gray-100 dark:bg-[#1e293b]/50 rounded-2xl p-4 border border-gray-200 dark:border-slate-800 border-dashed">
                     <View className="flex-row items-center justify-center py-4">

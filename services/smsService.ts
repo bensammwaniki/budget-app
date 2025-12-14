@@ -97,8 +97,13 @@ export const syncMessages = async () => {
 
         let newTransactionsCount = 0;
 
+        const sendersFound = new Set<string>();
+
         for (const msg of messages) {
+            sendersFound.add(msg.address);
+
             // 1. Process M-PESA
+
             if (msg.address === 'MPESA') {
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
@@ -132,6 +137,7 @@ export const syncMessages = async () => {
                 }
             }
         }
+        console.log('📱 Unique Senders Found:', Array.from(sendersFound)); // Debug Log
 
         return { success: true, count: newTransactionsCount };
 

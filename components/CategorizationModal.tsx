@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCategories } from '../services/database';
 import { Category, Transaction } from '../types/transaction';
@@ -14,10 +14,11 @@ interface CategorizationModalProps {
     transaction: Transaction | null;
     onCategorySelect: (category: Category) => void;
     onDateChange?: (newDate: Date) => void;
+    onDelete?: (transaction: Transaction) => void;
     onClose: () => void;
 }
 
-export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onClose }: CategorizationModalProps) {
+export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onClose }: CategorizationModalProps) {
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -54,13 +55,28 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
         onCategorySelect(newCategory);
     };
 
+    const handleDeletePress = () => {
+        Alert.alert(
+            "Delete Transaction",
+            "Are you sure you want to delete this transaction? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => onDelete && onDelete(transaction!)
+                }
+            ]
+        );
+    };
+
     if (!transaction) return null;
 
     return (
         <Modal visible={visible} transparent animationType="slide">
             <BlurView intensity={20} className="flex-1 justify-end">
                 <View
-                    className="bg-white dark:bg-[#0f172a] rounded-t-[32px] h-[85%] border-t border-gray-200 dark:border-slate-700 shadow-2xl"
+                    className="bg-white dark:bg-[#0f172a] rounded-t-[32px] h-[90%] border-t border-gray-200 dark:border-slate-700 shadow-2xl"
                     style={{ paddingBottom: insets.bottom }}
                 >
                     <View className="p-6 border-b border-gray-200 dark:border-slate-800 flex-row justify-between items-center">
@@ -150,6 +166,15 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                     </TouchableOpacity>
                                 ))}
                         </View>
+
+                        {/* Delete Button */}
+                        <TouchableOpacity
+                            onPress={handleDeletePress}
+                            className="mt-8 mb-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50"
+                        >
+                            <Text className="text-red-600 dark:text-red-400 font-semibold">Delete Transaction</Text>
+                        </TouchableOpacity>
+
                         <View className="h-10" />
                     </ScrollView>
                 </View>

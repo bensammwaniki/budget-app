@@ -47,30 +47,30 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         };
     }
 
-    // Placeholder for receiptPattern - definition not provided in the instruction.
-    // Assuming it would be defined here if it were part of the instruction.
-    // For now, this block will not be active without a pattern definition.
-    // const receiptPattern = /.../; // Example: "Dear BENSON, You received KES 1,500.00 from 0702173240 - PAULINE WAIRIMU NGUGI. Transaction Ref ID: 2987VCSA2052. M-PESA Ref ID: TLCNB0QWT3"
-    // match = smsText.match(receiptPattern);
-    // if (match) {
-    //     const amount = parseFloat(match[1].replace(/,/g, ''));
-    //     const senderName = match[2].trim();
-    //     const bankRef = match[3];
-    //     const mpesaRef = match[4];
+    // 2. Bank to M-PESA Transfer Confirmation / Receipt (Often sent for self-transfers or incoming)
+    // Pattern: "You have received KES 2,000.00 from BENSON NJOROGE MWANIKI. Transaction Ref ID: 2933OIGG1912. Mpesa Ref ID: TL6FV0BMLA. Bank to Mpesa..."
+    const receiptPattern = /You\s+have\s+received\s+KES\s*([\d,]+\.\d{2})\s+from\s+(.+?)\.\s+Transaction\s+Ref\s+ID:\s+([A-Z0-9]+)\.\s+(?:M-?PESA|Mpesa)\s+Ref\s+ID:\s+([A-Z0-9]+)/i;
 
-    //     return {
-    //         id: bankRef, // SAME ID as the transfer message
-    //         amount: amount,
-    //         type: 'SENT', // Force SENT to maintain it as an expense/transfer record
-    //         recipientId: 'SELF', // Or user name
-    //         recipientName: senderName, // "BENSON..."
-    //         date: new Date(),
-    //         balance: 0,
-    //         transactionCost: 0,
-    //         categoryId: undefined,
-    //         rawSms: smsText
-    //     };
-    // }
+    match = smsText.match(receiptPattern);
+    if (match) {
+        const amount = parseFloat(match[1].replace(/,/g, ''));
+        const senderName = match[2].trim();
+        const bankRef = match[3];
+        const mpesaRef = match[4];
+
+        return {
+            id: bankRef, // SAME ID as the transfer message
+            amount: amount,
+            type: 'SENT', // Force SENT to maintain it as an expense/transfer record
+            recipientId: 'SELF', // Or user name
+            recipientName: senderName, // "BENSON..."
+            date: new Date(),
+            balance: 0,
+            transactionCost: 0,
+            categoryId: undefined,
+            rawSms: smsText
+        };
+    }
 
     match = smsText.match(purchasePattern);
     if (match) {

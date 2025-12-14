@@ -6,22 +6,26 @@ import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, Text
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
 import {
+  deleteTransaction,
   getCategories,
   getRecipientCategory,
   getSpendingSummary,
   getTransactions,
+  getUserSettings,
   initDatabase,
   isMessageProcessed,
   markMessageAsProcessed,
   saveFulizaTransaction,
   saveRecipientCategory,
   saveTransaction,
+  transactionExists,
   updateFulizaFees,
   updateTransactionCategory,
   updateTransactionDate
 } from '../../services/database';
 import { readMpesaSMS, SMSMessage } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
+import { extractMpesaRefFromBankSms, parseBankSms } from '../../utils/bankParser';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../../utils/smsParser';
 
@@ -88,6 +92,9 @@ export default function HomeScreen() {
     const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
     const fulizaCategoryId = fulizaCategory?.id;
 
+    // Check if Bank SMS is enabled
+    const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
+
     // Collect all Fuliza events for processing
     const fulizaEvents: any[] = [];
     let processedCount = 0;
@@ -134,6 +141,48 @@ export default function HomeScreen() {
         await markMessageAsProcessed(msg._id);
         fulizaCount++;
         continue;
+      }
+
+      // Try parsing as Bank SMS (if enabled)
+      if (imBankEnabled && (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK'))) {
+        console.log(`Checking Bank Message: ${msg.body.substring(0, 30)}...`);
+        const parsed = parseBankSms(msg.body, msg.address);
+
+        if (parsed) {
+          // Duplicate Check
+          const mpesaRef = extractMpesaRefFromBankSms(msg.body);
+          if (mpesaRef) {
+            const exists = await transactionExists(mpesaRef);
+            if (exists) {
+              console.log(`Skipping duplicate Bank transaction (Ref ${mpesaRef} exists)`);
+              await markMessageAsProcessed(msg._id);
+              continue;
+            }
+          }
+
+          // Check if bank ref itself exists
+          const bankTxExists = await transactionExists(parsed.id);
+          if (bankTxExists) {
+            // Already saved?
+            await markMessageAsProcessed(msg._id);
+            continue;
+          }
+
+          // Use SMS date
+          parsed.date = new Date(msg.date);
+
+          // Check category
+          const savedCategoryId = await getRecipientCategory(parsed.recipientId, parsed.type);
+          if (savedCategoryId) {
+            parsed.categoryId = savedCategoryId;
+          }
+
+          await saveTransaction(parsed);
+          await markMessageAsProcessed(msg._id);
+          processedCount++;
+          console.log(`✅ Bank Transaction Saved: ${parsed.recipientName} - ${parsed.amount}`);
+          continue;
+        }
       }
 
       // If we couldn't parse it, still mark as processed to avoid trying again
@@ -298,6 +347,27 @@ export default function HomeScreen() {
     }
   };
 
+  const handleDeleteTransaction = async (tx: Transaction) => {
+    try {
+      // 1. Optimistic Update
+      const updatedTransactions = transactions.filter(t => t.id !== tx.id);
+      setTransactions(updatedTransactions);
+      setModalVisible(false);
+      setSelectedTransaction(null);
+
+      // 2. DB Operation
+      await deleteTransaction(tx.id);
+
+      // 3. Refresh data to ensure all totals (like SpendingSummary) are re-calculated from DB
+      await loadDashboardData();
+    } catch (error) {
+      console.error("Failed to delete transaction:", error);
+      alert("Failed to delete transaction.");
+      // Rollback would be nice here, but reloading data handles it
+      await loadDashboardData();
+    }
+  };
+
   const handleDateChange = async (newDate: Date) => {
     if (activeTransaction) {
       try {
@@ -336,6 +406,7 @@ export default function HomeScreen() {
         transaction={activeTransaction}
         onCategorySelect={handleCategorySelect}
         onDateChange={handleDateChange}
+        onDelete={handleDeleteTransaction}
         onClose={handleCloseModal}
       />
 
@@ -522,6 +593,17 @@ export default function HomeScreen() {
                 <View className="flex-1">
                   <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
                   <View className="flex-row items-center mt-0.5">
+                    {/* Source Badge */}
+                    <View className={`px-1.5 py-0.5 rounded mr-2 ${tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase')
+                      ? 'bg-blue-100 dark:bg-blue-900/40'
+                      : 'bg-green-100 dark:bg-green-900/40'}`}>
+                      <Text className={`text-[10px] font-bold ${tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase')
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'}`}>
+                        {tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase') ? 'BANK' : 'M-PESA'}
+                      </Text>
+                    </View>
+
                     {tx.categoryName && (
                       <Text className="text-xs font-medium mr-2" style={{ color: tx.categoryColor }}>
                         {tx.categoryName}

@@ -503,6 +503,12 @@ export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
     );
 };
 
+export const clearProcessedSms = async (): Promise<void> => {
+    const database = ensureDb();
+    await database.runAsync('DELETE FROM processed_sms');
+    console.log('✅ Cleared processed SMS cache');
+};
+
 // Automation Rules
 
 export const getAutomationRules = async (): Promise<AutomationRule[]> => {
@@ -659,4 +665,9 @@ export const transactionExists = async (id: string): Promise<boolean> => {
         [id]
     );
     return result !== null;
+};
+
+export const deleteTransaction = async (id: string) => {
+    const database = ensureDb();
+    await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
 };
