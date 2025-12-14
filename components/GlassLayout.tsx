@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { ReactNode } from "react";
-import { StyleSheet, useColorScheme, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, useColorScheme, View } from "react-native";
 
 interface GlassLayoutProps {
     children: ReactNode;
@@ -49,7 +49,12 @@ export default function GlassLayout({ children, intensity }: GlassLayoutProps) {
             />
 
             {/* Content Layer */}
-            <View style={styles.content}>{children}</View>
+            <KeyboardAvoidingView
+                style={styles.content}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+            >
+                {children}
+            </KeyboardAvoidingView>
         </View>
     );
 }

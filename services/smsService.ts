@@ -93,7 +93,7 @@ export const syncMessages = async () => {
     try {
         const messages = await readMpesaSMS();
         const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
-        console.log(`⚙️ I&M Bank Enabled: ${imBankEnabled}`);
+
 
         let newTransactionsCount = 0;
 
@@ -117,10 +117,10 @@ export const syncMessages = async () => {
         if (imBankEnabled) {
             for (const msg of messages) {
                 if (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK')) {
-                    console.log(`Testing Bank Message: ${msg.body.substring(0, 50)}...`);
+
                     const parsed = parseBankSms(msg.body, msg.address);
                     if (parsed) {
-                        console.log(`Parsed Bank Transaction:`, JSON.stringify(parsed, null, 2));
+
 
                         // DUPLICATE CHECK: 
                         // Verify if this transaction was already captured via M-PESA
@@ -129,7 +129,7 @@ export const syncMessages = async () => {
                             const exists = await transactionExists(mpesaRef);
                             // Also check if we JUST added it in Pass 1? transactionExists checks DB, so yes.
                             if (exists) {
-                                console.log(`Skipping duplicate Bank transaction (M-PESA Ref ${mpesaRef} exists)`);
+
                                 continue;
                             }
                         }
@@ -137,15 +137,11 @@ export const syncMessages = async () => {
                         // Proceed to save (INSERT OR REPLACE handles updates for same Bank Ref ID)
                         parsed.date = new Date(msg.date);
                         await saveTransaction(parsed);
-                        console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
                         newTransactionsCount++;
                     }
                 }
             }
         }
-
-        console.log('📱 Unique Senders Found:', Array.from(sendersFound)); // Debug Log
-
         return { success: true, count: newTransactionsCount };
 
     } catch (error) {
@@ -188,7 +184,7 @@ export const readAllSMS = async (): Promise<SMSMessage[]> => {
                 maxCount: 2000, // Reasonable batch size
                 minDate: Date.now() - (90 * 24 * 60 * 60 * 1000), // Increased to 90 days to catch older testing messages
             };
-            console.log('📱 Reading SMS with filter:', JSON.stringify(filter));
+
 
             SmsAndroid.list(
                 JSON.stringify(filter),
@@ -198,9 +194,9 @@ export const readAllSMS = async (): Promise<SMSMessage[]> => {
                 },
                 (count: number, smsList: string) => {
                     try {
-                        console.log(`📱 Raw SMS count: ${count}`);
+
                         const messages: SMSMessage[] = JSON.parse(smsList);
-                        console.log(`📱 Parsed ${messages.length} messages`);
+
                         resolve(messages);
                     } catch (error) {
                         console.error('Error parsing SMS:', error);
