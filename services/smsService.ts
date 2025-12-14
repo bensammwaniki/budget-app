@@ -93,6 +93,7 @@ export const syncMessages = async () => {
     try {
         const messages = await readMpesaSMS();
         const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
+        console.log(`⚙️ I&M Bank Enabled: ${imBankEnabled}`);
 
         let newTransactionsCount = 0;
 
@@ -110,10 +111,9 @@ export const syncMessages = async () => {
                 console.log(`Testing Bank Message: ${msg.body.substring(0, 50)}...`);
                 const parsed = parseBankSms(msg.body, msg.address);
                 if (parsed) {
-                    console.log(`Parsed Bank Transaction: ID=${parsed.id} Amount=${parsed.amount}`);
+                    console.log(`Parsed Bank Transaction:`, JSON.stringify(parsed, null, 2));
                     // DUPLICATE CHECK: 
-                    // If this is a self-transfer, it might have an M-PESA Ref ID
-                    // If that MPESA Ref ID already exists in our DB, skip this bank transaction
+                    // Verify if this transaction was already captured via M-PESA
                     const mpesaRef = extractMpesaRefFromBankSms(msg.body);
                     if (mpesaRef) {
                         const exists = await transactionExists(mpesaRef);
@@ -123,15 +123,12 @@ export const syncMessages = async () => {
                         }
                     }
 
-                    // Also check if the bank transaction itself exists (idempotency)
-                    const exists = await transactionExists(parsed.id);
-                    if (!exists) {
-                        // Use SMS timestamp for date
-                        parsed.date = new Date(msg.date);
-                        await saveTransaction(parsed);
-                        console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
-                        newTransactionsCount++;
-                    }
+                    // Proceed to save (INSERT OR REPLACE handles updates for same Bank Ref ID)
+                    // Use SMS timestamp for date
+                    parsed.date = new Date(msg.date);
+                    await saveTransaction(parsed);
+                    console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
+                    newTransactionsCount++;
                 }
             }
         }
@@ -176,18 +173,21 @@ export const readAllSMS = async (): Promise<SMSMessage[]> => {
                 box: 'inbox',
                 indexFrom: 0,
                 maxCount: 2000, // Reasonable batch size
-                minDate: Date.now() - (30 * 24 * 60 * 60 * 1000), // Last 30 days for sync speed
+                minDate: Date.now() - (90 * 24 * 60 * 60 * 1000), // Increased to 90 days to catch older testing messages
             };
+            console.log('📱 Reading SMS with filter:', JSON.stringify(filter));
 
             SmsAndroid.list(
                 JSON.stringify(filter),
                 (fail: any) => {
-                    console.error('Failed to read SMS:', fail);
+                    console.error('❌ Failed to read SMS:', fail);
                     resolve([]);
                 },
                 (count: number, smsList: string) => {
                     try {
+                        console.log(`📱 Raw SMS count: ${count}`);
                         const messages: SMSMessage[] = JSON.parse(smsList);
+                        console.log(`📱 Parsed ${messages.length} messages`);
                         resolve(messages);
                     } catch (error) {
                         console.error('Error parsing SMS:', error);

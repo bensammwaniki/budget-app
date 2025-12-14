@@ -1,6 +1,18 @@
-import { Transaction } from '../types/transaction';
+// Embedded Parser for Testing
+interface Transaction {
+    id: string;
+    amount: number;
+    type: 'SENT' | 'RECEIVED';
+    recipientId: string;
+    recipientName: string;
+    date: Date;
+    balance: number;
+    transactionCost: number;
+    categoryId?: number;
+    rawSms: string;
+}
 
-export const parseBankSms = (smsText: string, sender: string): Transaction | null => {
+const parseBankSms = (smsText: string, sender: string): Transaction | null => {
     // Normalize sender for easier matching
     const normalizedSender = sender.toLowerCase();
 
@@ -41,36 +53,8 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             transactionCost: 0,
             categoryId: undefined, // Will be categorized later
             rawSms: smsText,
-            // Custom field to help with deduplication
-            // We put the MPESA Ref in the narration or a special field if we had one.
-            // For now, we rely on the logic in smsService to check this.
         };
     }
-
-    // Placeholder for receiptPattern - definition not provided in the instruction.
-    // Assuming it would be defined here if it were part of the instruction.
-    // For now, this block will not be active without a pattern definition.
-    // const receiptPattern = /.../; // Example: "Dear BENSON, You received KES 1,500.00 from 0702173240 - PAULINE WAIRIMU NGUGI. Transaction Ref ID: 2987VCSA2052. M-PESA Ref ID: TLCNB0QWT3"
-    // match = smsText.match(receiptPattern);
-    // if (match) {
-    //     const amount = parseFloat(match[1].replace(/,/g, ''));
-    //     const senderName = match[2].trim();
-    //     const bankRef = match[3];
-    //     const mpesaRef = match[4];
-
-    //     return {
-    //         id: bankRef, // SAME ID as the transfer message
-    //         amount: amount,
-    //         type: 'SENT', // Force SENT to maintain it as an expense/transfer record
-    //         recipientId: 'SELF', // Or user name
-    //         recipientName: senderName, // "BENSON..."
-    //         date: new Date(),
-    //         balance: 0,
-    //         transactionCost: 0,
-    //         categoryId: undefined,
-    //         rawSms: smsText
-    //     };
-    // }
 
     match = smsText.match(purchasePattern);
     if (match) {
@@ -92,7 +76,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             type: 'SENT',
             recipientId: merchant.toUpperCase(),
             recipientName: merchant,
-            date: new Date(`${normalizedDate}T${timeStr}`),
+            date: new Date(`${dateStr}T${timeStr}`),
             balance: 0,
             transactionCost: 0,
             rawSms: smsText
@@ -102,9 +86,31 @@ const parseImBankSms = (smsText: string): Transaction | null => {
     return null;
 };
 
-// Helper: Check if a transaction text contains an MPESA Ref that we can use for deduplication
-export const extractMpesaRefFromBankSms = (smsText: string): string | null => {
-    const transferPattern = /M-PESA\s+Ref\s+ID:\s+([A-Z0-9]+)/i;
-    const match = smsText.match(transferPattern);
-    return match ? match[1] : null;
-};
+// Test Logic
+const testMessages = [
+    {
+        sender: 'I&M',
+        body: 'Dear BENSON, You made a purchase of KES 700.00 on 2025-11-21 22:10:21 at CASTLE GARDENS using I&M 5477********0012. If you did not effect the transaction...'
+    },
+    {
+        sender: 'I&M',
+        body: 'Dear BENSON, You made a purchase of KES 700 on 2025-11-21 22:10:21 at CASTLE GARDENS using I&M 5477********0012.' // No decimals
+    },
+    {
+        sender: 'I&M',
+        body: 'Dear BENSON, You made a purchase of KES 1,000.50 on 21-11-2025 22:10:21 at SUPERMARKET.' // Different date format
+    }
+];
+
+console.log('--- Starting Parser Test ---');
+
+testMessages.forEach((msg, index) => {
+    console.log(`\nTest Case ${index + 1}:`);
+    console.log(`Body: ${msg.body}`);
+    const result = parseBankSms(msg.body, msg.sender);
+    if (result) {
+        console.log('✅ Parsed Success:', JSON.stringify(result, null, 2));
+    } else {
+        console.log('❌ Parse Failed');
+    }
+});
