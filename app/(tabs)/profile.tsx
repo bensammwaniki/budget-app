@@ -1,11 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { Alert, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories } from '../../services/database';
@@ -20,6 +20,7 @@ export default function ProfileScreen() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [editProfileVisible, setEditProfileVisible] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
 
     // Profile Edit State
     const [editName, setEditName] = useState('');
@@ -85,6 +86,7 @@ export default function ProfileScreen() {
         }
 
         try {
+            setIsUpdating(true);
             await updateUserProfile({
                 displayName: editName.trim(),
                 phoneNumber: editPhone.trim(),
@@ -95,6 +97,8 @@ export default function ProfileScreen() {
         } catch (error) {
             console.error('Error updating profile:', error);
             Alert.alert('Error', 'Failed to update profile');
+        } finally {
+            setIsUpdating(false);
         }
     };
 
@@ -157,7 +161,7 @@ export default function ProfileScreen() {
             <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
                 <View className="w-24 h-24 bg-gray-100 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {user?.photoURL ? (
-                        <Image source={{ uri: user.photoURL }} className="w-full h-full" />
+                        <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     ) : (
                         <Text className="text-4xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
                     )}
@@ -190,7 +194,7 @@ export default function ProfileScreen() {
                         { icon: 'user', label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                         { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                         { icon: 'calculator', label: 'Personal Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
-                        { icon: 'question-circle', label: 'Help & Support', color: '#f59e0b' },
+                        { icon: 'bank', label: 'My Banks', color: '#2563eb', action: () => router.push('/banks') },
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}
@@ -268,7 +272,7 @@ export default function ProfileScreen() {
                             <View className="flex-row justify-between items-center mb-6">
                                 <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
                                 <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
-                                    <Image
+                                    <ExpoImage
                                         source={require('../../assets/svg/close.svg')}
                                         style={{ width: 20, height: 20 }}
                                         contentFit="contain"
@@ -282,7 +286,7 @@ export default function ProfileScreen() {
                                 <View className="items-center mb-8">
                                     <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
                                         {editImage ? (
-                                            <Image source={{ uri: editImage }} className="w-full h-full" />
+                                            <Image source={{ uri: editImage }} className="w-full h-full" style={{ width: '100%', height: '100%' }} />
                                         ) : (
                                             <Text className="text-5xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
                                         )}
@@ -333,9 +337,14 @@ export default function ProfileScreen() {
                                 {/* Save Button */}
                                 <TouchableOpacity
                                     onPress={handleUpdateProfile}
-                                    className="bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30"
+                                    disabled={isUpdating}
+                                    className={`bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30 ${isUpdating ? 'opacity-50' : ''}`}
                                 >
-                                    <Text className="text-white text-center font-bold text-lg">Save Changes</Text>
+                                    {isUpdating ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <Text className="text-white text-center font-bold text-lg">Save Changes</Text>
+                                    )}
                                 </TouchableOpacity>
                             </ScrollView>
                         </View>

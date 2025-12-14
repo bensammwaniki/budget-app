@@ -1,8 +1,9 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 // @ts-ignore
 import SmsAndroid from 'react-native-get-sms-android';
-import { initDatabase, saveTransaction } from './database';
+import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
 import { parseMpesaSms } from '../utils/smsParser';
+import { getUserSettings, initDatabase, saveTransaction, transactionExists } from './database';
 
 export interface SMSMessage {
     _id: string;
@@ -82,60 +83,7 @@ export const requestSMSPermission = async (): Promise<boolean> => {
 /**
  * Read M-PESA SMS messages from the phone
  */
-export const readMpesaSMS = async (): Promise<SMSMessage[]> => {
-    // If not Android, return mock data immediately (for iOS/Web dev)
-    if (Platform.OS !== 'android') {
-        return MOCK_MESSAGES as any;
-    }
-
-    try {
-        // Check permission first
-        const hasPermission = await PermissionsAndroid.check(
-            PermissionsAndroid.PERMISSIONS.READ_SMS
-        );
-
-        if (!hasPermission) {
-            const granted = await requestSMSPermission();
-            if (!granted) {
-                return MOCK_MESSAGES as any;
-            }
-        }
-
-        return new Promise((resolve, reject) => {
-            const filter = {
-                box: 'inbox', // 'inbox', 'sent', 'draft', 'outbox', 'failed', 'queued'
-                address: 'MPESA', // Filter for M-PESA sender
-                indexFrom: 0,
-                maxCount: 5000,
-                minDate: Date.now() - (365 * 24 * 60 * 60 * 1000), // Limit to last 1 year
-            };
-
-            SmsAndroid.list(
-                JSON.stringify(filter),
-                (fail: any) => {
-                    console.error('Failed to read SMS:', fail);
-                    resolve(MOCK_MESSAGES as any);
-                },
-                (count: number, smsList: string) => {
-                    try {
-                        const messages: SMSMessage[] = JSON.parse(smsList);
-                        if (messages.length === 0) {
-                            resolve(MOCK_MESSAGES as any);
-                        } else {
-                            resolve(messages);
-                        }
-                    } catch (error) {
-                        console.error('Error parsing SMS:', error);
-                        resolve(MOCK_MESSAGES as any);
-                    }
-                }
-            );
-        });
-    } catch (error) {
-        console.error('Error reading M-PESA SMS:', error);
-        return MOCK_MESSAGES as any;
-    }
-};
+// Old readMpesaSMS removed, replaced by readAllSMS below
 
 // Kept for backward compatibility if needed, but index.tsx uses readMpesaSMS directly
 export const syncMessages = async () => {
@@ -144,16 +92,46 @@ export const syncMessages = async () => {
 
     try {
         const messages = await readMpesaSMS();
+        const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
 
         let newTransactionsCount = 0;
 
         for (const msg of messages) {
-            // Check if address is MPESA (Mock data has it, real data filter does it)
+            // 1. Process M-PESA
             if (msg.address === 'MPESA') {
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
                     await saveTransaction(parsed);
                     newTransactionsCount++;
+                }
+            }
+            // 2. Process I&M Bank (if enabled)
+            else if (imBankEnabled && (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK'))) {
+                console.log(`Testing Bank Message: ${msg.body.substring(0, 50)}...`);
+                const parsed = parseBankSms(msg.body, msg.address);
+                if (parsed) {
+                    console.log(`Parsed Bank Transaction: ID=${parsed.id} Amount=${parsed.amount}`);
+                    // DUPLICATE CHECK: 
+                    // If this is a self-transfer, it might have an M-PESA Ref ID
+                    // If that MPESA Ref ID already exists in our DB, skip this bank transaction
+                    const mpesaRef = extractMpesaRefFromBankSms(msg.body);
+                    if (mpesaRef) {
+                        const exists = await transactionExists(mpesaRef);
+                        if (exists) {
+                            console.log(`Skipping duplicate Bank transaction (M-PESA Ref ${mpesaRef} exists)`);
+                            continue;
+                        }
+                    }
+
+                    // Also check if the bank transaction itself exists (idempotency)
+                    const exists = await transactionExists(parsed.id);
+                    if (!exists) {
+                        // Use SMS timestamp for date
+                        parsed.date = new Date(msg.date);
+                        await saveTransaction(parsed);
+                        console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
+                        newTransactionsCount++;
+                    }
                 }
             }
         }
@@ -165,3 +143,65 @@ export const syncMessages = async () => {
         return { success: false, error };
     }
 };
+
+/**
+ * Read ALL SMS messages from the phone (filtered by known senders later)
+ * We modify readMpesaSMS to actually read broader set if needed, 
+ * but since filter is JSON, we can't do OR. 
+ * So we will read ALL and filter in JS, OR make multiple calls.
+ * For efficiency, let's keep the filter generic or empty address? 
+ * No, empty address reads EVERYTHING. 
+ * Better strategy: Read with no address filter, but rely on indexFrom/maxCount and date.
+ */
+export const readAllSMS = async (): Promise<SMSMessage[]> => {
+    // If not Android, return mock data
+    if (Platform.OS !== 'android') {
+        return MOCK_MESSAGES as any;
+    }
+
+    try {
+        const hasPermission = await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.READ_SMS
+        );
+
+        if (!hasPermission) {
+            const granted = await requestSMSPermission();
+            if (!granted) {
+                return MOCK_MESSAGES as any;
+            }
+        }
+
+        return new Promise((resolve) => {
+            const filter = {
+                box: 'inbox',
+                indexFrom: 0,
+                maxCount: 2000, // Reasonable batch size
+                minDate: Date.now() - (30 * 24 * 60 * 60 * 1000), // Last 30 days for sync speed
+            };
+
+            SmsAndroid.list(
+                JSON.stringify(filter),
+                (fail: any) => {
+                    console.error('Failed to read SMS:', fail);
+                    resolve([]);
+                },
+                (count: number, smsList: string) => {
+                    try {
+                        const messages: SMSMessage[] = JSON.parse(smsList);
+                        resolve(messages);
+                    } catch (error) {
+                        console.error('Error parsing SMS:', error);
+                        resolve([]);
+                    }
+                }
+            );
+        });
+    } catch (error) {
+        console.error('Error reading SMS:', error);
+        return [];
+    }
+};
+
+// Override readMpesaSMS to use readAllSMS for backward compat, 
+// or update callsites. SyncMessages is the main one used.
+export const readMpesaSMS = readAllSMS;

@@ -651,3 +651,12 @@ export const getCategorySpending = async (month: string): Promise<Record<number,
     });
     return spending;
 };
+
+export const transactionExists = async (id: string): Promise<boolean> => {
+    const database = ensureDb();
+    const result = await database.getFirstAsync<{ id: string }>(
+        'SELECT id FROM transactions WHERE id = ?',
+        [id]
+    );
+    return result !== null;
+};

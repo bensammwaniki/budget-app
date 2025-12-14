@@ -3,12 +3,18 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { PieChart } from "react-native-gifted-charts";
 import { getTransactions } from '../../services/database';
 import { Transaction } from '../../types/transaction';
 
 type Period = 'THIS_MONTH' | 'LAST_MONTH';
 
+import { useColorScheme } from "nativewind";
+
 export default function AnalyticsScreen() {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -88,6 +94,66 @@ export default function AnalyticsScreen() {
       avgTransaction: filteredTransactions.length > 0 ? expense / filteredTransactions.filter(t => t.type === 'SENT').length : 0
     };
   }, [filteredTransactions]);
+
+  const currentYear = new Date().getFullYear();
+
+  const yearlyStats = useMemo(() => {
+    const yearlyTransactions = transactions.filter(t => {
+      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
+      return txDate.getFullYear() === currentYear;
+    });
+
+    const aggregate = (type: 'SENT' | 'RECEIVED') => {
+      const map: Record<string, { amount: number; color: string }> = {};
+
+      yearlyTransactions
+        .filter(t => t.type === type)
+        .forEach(t => {
+          const cat = t.categoryName || (type === 'RECEIVED' ? 'Income' : 'Uncategorized');
+          // For income that might not have a category color, generate one or use default
+          const color = t.categoryColor || (type === 'SENT' ? '#64748b' : '#10b981'); // Default gray for expense, green for income
+
+          if (!map[cat]) {
+            map[cat] = { amount: 0, color };
+          }
+          map[cat].amount += t.amount;
+        });
+
+      return Object.entries(map)
+        .map(([name, data]) => ({
+          value: data.amount,
+          color: data.color,
+          text: name,
+          // Simplify text for small slices or hide it if needed in the UI logic
+        }))
+        .sort((a, b) => b.value - a.value);
+    };
+
+    const expenseData = aggregate('SENT');
+    const incomeData = aggregate('RECEIVED');
+
+    // Process colors to ensure they are distinct if needed, but for now relying on category colors
+
+    return {
+      expense: expenseData,
+      income: incomeData,
+      totalExpense: expenseData.reduce((sum, item) => sum + item.value, 0),
+      totalIncome: incomeData.reduce((sum, item) => sum + item.value, 0)
+    };
+  }, [transactions, currentYear]);
+
+  const renderLegend = (data: any[]) => {
+    return (
+      <View className="flex-row flex-wrap gap-2 mt-4 justify-center">
+        {data.slice(0, 5).map((item, index) => (
+          <View key={index} className="flex-row items-center mr-2">
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color, marginRight: 6 }} />
+            <Text className="text-slate-600 dark:text-slate-400 text-xs">{item.text}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   const formatCurrency = (amount: number) => {
     return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -240,19 +306,65 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      {/* Quick Stats */}
+      {/* Year-to-Date Stats */}
       <View className="px-6 mt-8 mb-8">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Quick Stats</Text>
-        <View className="flex-row gap-3">
-          <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800">
-            <FontAwesome name="bar-chart" size={24} color="#3b82f6" />
-            <Text className="text-slate-600 dark:text-slate-400 text-xs mt-3 mb-1">Avg Transaction</Text>
-            <Text className="text-slate-900 dark:text-white font-bold text-lg">{formatCurrency(stats.avgTransaction)}</Text>
+        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">{currentYear} Summary</Text>
+
+        <View className="flex-col gap-6">
+          {/* Income Chart */}
+          <View className="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 items-center">
+            <Text className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-4 w-full text-left">Yearly Income</Text>
+            {yearlyStats.income.length > 0 ? (
+              <>
+                <PieChart
+                  data={yearlyStats.income}
+                  donut
+                  showText={false}
+                  radius={80}
+                  innerRadius={60}
+                  innerCircleColor={innerCircleColor}
+                  centerLabelComponent={() => {
+                    return (
+                      <View className="items-center justify-center">
+                        <Text className="text-slate-900 dark:text-white text-xs font-bold">Total</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-[10px]">{formatCurrency(yearlyStats.totalIncome)}</Text>
+                      </View>
+                    );
+                  }}
+                />
+                {renderLegend(yearlyStats.income)}
+              </>
+            ) : (
+              <Text className="text-slate-400 dark:text-slate-500 py-8">No income data for {currentYear}</Text>
+            )}
           </View>
-          <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800">
-            <FontAwesome name="hashtag" size={24} color="#8b5cf6" />
-            <Text className="text-slate-600 dark:text-slate-400 text-xs mt-3 mb-1">Total Transactions</Text>
-            <Text className="text-slate-900 dark:text-white font-bold text-lg">{filteredTransactions.length}</Text>
+
+          {/* Expenditure Chart */}
+          <View className="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 items-center">
+            <Text className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-4 w-full text-left">Yearly Expenditure</Text>
+            {yearlyStats.expense.length > 0 ? (
+              <>
+                <PieChart
+                  data={yearlyStats.expense}
+                  donut
+                  showText={false}
+                  radius={80}
+                  innerRadius={60}
+                  innerCircleColor={innerCircleColor}
+                  centerLabelComponent={() => {
+                    return (
+                      <View className="items-center justify-center">
+                        <Text className="text-slate-900 dark:text-white text-xs font-bold">Total</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-[10px]">{formatCurrency(yearlyStats.totalExpense)}</Text>
+                      </View>
+                    );
+                  }}
+                />
+                {renderLegend(yearlyStats.expense)}
+              </>
+            ) : (
+              <Text className="text-slate-400 dark:text-slate-500 py-8">No expense data for {currentYear}</Text>
+            )}
           </View>
         </View>
       </View>

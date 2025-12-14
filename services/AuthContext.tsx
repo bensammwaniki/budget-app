@@ -1,7 +1,8 @@
 import { signOut as firebaseSignOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getUserSettings, saveUserSettings } from './database';
-import { auth } from './firebaseConfig';
+import { auth, storage } from './firebaseConfig';
 
 interface AuthContextType {
     user: User | null;
@@ -57,10 +58,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         try {
             // Update Firebase Profile
+            // Update Firebase Profile
             if (data.displayName !== undefined || data.photoURL !== undefined) {
+                let photoURL = data.photoURL;
+
+                // Should we upload first?
+                if (photoURL && !photoURL.startsWith('http')) {
+                    // It's a local URI, upload it
+                    photoURL = await uploadImageToStorage(photoURL, auth.currentUser.uid);
+                }
+
                 await updateProfile(auth.currentUser, {
                     displayName: data.displayName,
-                    photoURL: data.photoURL
+                    photoURL: photoURL
                 });
                 // Force refresh user object
                 setUser({ ...auth.currentUser });
@@ -73,6 +83,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (error) {
             console.error('Error updating profile:', error);
+            throw error;
+        }
+    };
+
+    const uploadImageToStorage = async (uri: string, userId: string): Promise<string> => {
+        try {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+
+            const filename = `profile_images/${userId}/${Date.now()}.jpg`;
+            const storageRef = ref(storage, filename);
+
+            await uploadBytes(storageRef, blob);
+            return await getDownloadURL(storageRef);
+        } catch (error) {
+            console.error('Error uploading image:', error);
             throw error;
         }
     };

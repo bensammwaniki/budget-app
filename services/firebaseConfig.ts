@@ -28,18 +28,23 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
   );
 }
 
+import { getStorage } from "firebase/storage";
+
 // Initialize Firebase
 let app;
 let auth: import("firebase/auth").Auth;
+let storage: import("firebase/storage").FirebaseStorage;
 
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(ReactNativeAsyncStorage),
   });
+  storage = getStorage(app);
 } else {
   app = getApp();
   auth = getAuth(app);
+  storage = getStorage(app);
 }
 
-export { auth };
+export { auth, storage };

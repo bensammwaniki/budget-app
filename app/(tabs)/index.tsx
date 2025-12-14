@@ -356,9 +356,9 @@ export default function HomeScreen() {
 
           <View className="flex-row justify-between items-start mb-2">
             <Text className="text-blue-100 font-medium">Total Balance</Text>
-            <View className="bg-green-500/20 px-2 py-1 rounded-lg">
-              <Text className="text-green-200 text-xs font-medium">
-                Income: KES {periodSummary.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <View className="bg-red-500/20 px-2 py-1 rounded-lg">
+              <Text className="text-red-200 text-xs font-medium">
+                Transaction cost: KES {periodSummary.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
@@ -366,11 +366,6 @@ export default function HomeScreen() {
             KES {spending?.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
           </Text>
           <View className="flex-row items-center mb-6">
-            <View className="bg-red-500/20 px-2 py-1 rounded-lg">
-              <Text className="text-red-200 text-xs font-medium">
-                Transaction cost: KES {periodSummary.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
-            </View>
           </View>
 
           {/* Fuliza Debt Warning - Only show if user has outstanding Fuliza */}
@@ -519,9 +514,9 @@ export default function HomeScreen() {
               >
                 <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
                   <FontAwesome
-                    name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
+                    name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : (tx.id.startsWith('IM_CARD') || tx.rawSms.toLowerCase().includes('bank') ? 'bank' : 'shopping-cart'))}
                     size={18}
-                    color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8')}
+                    color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : (tx.id.startsWith('IM_CARD') || tx.rawSms.toLowerCase().includes('bank') ? '#3b82f6' : '#94a3b8'))}
                   />
                 </View>
                 <View className="flex-1">
