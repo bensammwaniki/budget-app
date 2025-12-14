@@ -99,11 +99,10 @@ export const syncMessages = async () => {
 
         const sendersFound = new Set<string>();
 
+        // PASS 1: Process M-PESA Messages ONLY
+        // We do this first so that potential duplicates are already in the DB before Bank SMS attempts to check them.
         for (const msg of messages) {
             sendersFound.add(msg.address);
-
-            // 1. Process M-PESA
-
             if (msg.address === 'MPESA') {
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
@@ -111,32 +110,40 @@ export const syncMessages = async () => {
                     newTransactionsCount++;
                 }
             }
-            // 2. Process I&M Bank (if enabled)
-            else if (imBankEnabled && (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK'))) {
-                console.log(`Testing Bank Message: ${msg.body.substring(0, 50)}...`);
-                const parsed = parseBankSms(msg.body, msg.address);
-                if (parsed) {
-                    console.log(`Parsed Bank Transaction:`, JSON.stringify(parsed, null, 2));
-                    // DUPLICATE CHECK: 
-                    // Verify if this transaction was already captured via M-PESA
-                    const mpesaRef = extractMpesaRefFromBankSms(msg.body);
-                    if (mpesaRef) {
-                        const exists = await transactionExists(mpesaRef);
-                        if (exists) {
-                            console.log(`Skipping duplicate Bank transaction (M-PESA Ref ${mpesaRef} exists)`);
-                            continue;
-                        }
-                    }
+        }
 
-                    // Proceed to save (INSERT OR REPLACE handles updates for same Bank Ref ID)
-                    // Use SMS timestamp for date
-                    parsed.date = new Date(msg.date);
-                    await saveTransaction(parsed);
-                    console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
-                    newTransactionsCount++;
+        // PASS 2: Process Bank Messages (if enabled)
+        // Now valid M-PESA transactions are guaranteed to be in the DB.
+        if (imBankEnabled) {
+            for (const msg of messages) {
+                if (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK')) {
+                    console.log(`Testing Bank Message: ${msg.body.substring(0, 50)}...`);
+                    const parsed = parseBankSms(msg.body, msg.address);
+                    if (parsed) {
+                        console.log(`Parsed Bank Transaction:`, JSON.stringify(parsed, null, 2));
+
+                        // DUPLICATE CHECK: 
+                        // Verify if this transaction was already captured via M-PESA
+                        const mpesaRef = extractMpesaRefFromBankSms(msg.body);
+                        if (mpesaRef) {
+                            const exists = await transactionExists(mpesaRef);
+                            // Also check if we JUST added it in Pass 1? transactionExists checks DB, so yes.
+                            if (exists) {
+                                console.log(`Skipping duplicate Bank transaction (M-PESA Ref ${mpesaRef} exists)`);
+                                continue;
+                            }
+                        }
+
+                        // Proceed to save (INSERT OR REPLACE handles updates for same Bank Ref ID)
+                        parsed.date = new Date(msg.date);
+                        await saveTransaction(parsed);
+                        console.log(`✅ Processed Bank Transaction: ${parsed.recipientName} - KES ${parsed.amount}`);
+                        newTransactionsCount++;
+                    }
                 }
             }
         }
+
         console.log('📱 Unique Senders Found:', Array.from(sendersFound)); // Debug Log
 
         return { success: true, count: newTransactionsCount };

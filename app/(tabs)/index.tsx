@@ -2,32 +2,22 @@ import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
 import {
   deleteTransaction,
-  getCategories,
-  getRecipientCategory,
   getSpendingSummary,
   getTransactions,
-  getUserSettings,
   initDatabase,
-  isMessageProcessed,
-  markMessageAsProcessed,
-  saveFulizaTransaction,
   saveRecipientCategory,
-  saveTransaction,
-  transactionExists,
   updateFulizaFees,
   updateTransactionCategory,
   updateTransactionDate
 } from '../../services/database';
-import { readMpesaSMS, SMSMessage } from '../../services/smsService';
+import { syncMessages } from '../../services/smsService';
 import { Category, SpendingSummary, Transaction } from '../../types/transaction';
-import { extractMpesaRefFromBankSms, parseBankSms } from '../../utils/bankParser';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
-import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../../utils/smsParser';
 
 type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST_3_MONTHS' | 'ALL_TIME';
 
@@ -59,7 +49,7 @@ export default function HomeScreen() {
   const initializeData = async () => {
     try {
       await initDatabase();
-      await syncSmsTransactions();
+      await syncMessages();
       await updateFulizaFees();
       await loadDashboardData();
     } catch (error) {
@@ -69,150 +59,33 @@ export default function HomeScreen() {
     }
   };
 
-  const syncSmsTransactions = async () => {
-    let messages: SMSMessage[] = [];
-
-    if (Platform.OS === 'android') {
-      try {
-        const realSMS = await readMpesaSMS();
-        if (realSMS.length > 0) {
-          messages = realSMS;
-        }
-      } catch (error) {
-        console.error('Failed to read SMS:', error);
-      }
-    }
-
-    if (messages.length === 0) {
-      return;
-    }
-
-    // Get Fuliza Charges category ID
-    const categories = await getCategories();
-    const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
-    const fulizaCategoryId = fulizaCategory?.id;
-
-    // Check if Bank SMS is enabled
-    const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
-
-    // Collect all Fuliza events for processing
-    const fulizaEvents: any[] = [];
-    let processedCount = 0;
-    let fulizaCount = 0;
-
-    for (const msg of messages) {
-      const smsText = msg.body;
-      const smsDate = msg.date;
-
-      // Skip if already processed
-      if (await isMessageProcessed(msg._id)) {
-        continue;
-      }
-
-      // Try parsing as regular transaction
-      const transaction = parseMpesaSms(smsText);
-      if (transaction) {
-        // Check if we have a saved category for this recipient AND type
-        const savedCategoryId = await getRecipientCategory(transaction.recipientId, transaction.type);
-        if (savedCategoryId) {
-          transaction.categoryId = savedCategoryId;
-        }
-        await saveTransaction(transaction);
-        await markMessageAsProcessed(msg._id);
-        processedCount++;
-        continue;
-      }
-
-      // Try parsing as Fuliza loan
-      const fulizaLoan = parseFulizaLoan(smsText, smsDate);
-      if (fulizaLoan) {
-        await saveFulizaTransaction(fulizaLoan);
-        fulizaEvents.push(fulizaLoan);
-        await markMessageAsProcessed(msg._id);
-        fulizaCount++;
-        continue;
-      }
-
-      // Try parsing as Fuliza repayment
-      const fulizaRepayment = parseFulizaRepayment(smsText, smsDate);
-      if (fulizaRepayment) {
-        await saveFulizaTransaction(fulizaRepayment);
-        fulizaEvents.push(fulizaRepayment);
-        await markMessageAsProcessed(msg._id);
-        fulizaCount++;
-        continue;
-      }
-
-      // Try parsing as Bank SMS (if enabled)
-      if (imBankEnabled && (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK'))) {
-        console.log(`Checking Bank Message: ${msg.body.substring(0, 30)}...`);
-        const parsed = parseBankSms(msg.body, msg.address);
-
-        if (parsed) {
-          // Duplicate Check
-          const mpesaRef = extractMpesaRefFromBankSms(msg.body);
-          if (mpesaRef) {
-            const exists = await transactionExists(mpesaRef);
-            if (exists) {
-              console.log(`Skipping duplicate Bank transaction (Ref ${mpesaRef} exists)`);
-              await markMessageAsProcessed(msg._id);
-              continue;
-            }
-          }
-
-          // Check if bank ref itself exists
-          const bankTxExists = await transactionExists(parsed.id);
-          if (bankTxExists) {
-            // Already saved?
-            await markMessageAsProcessed(msg._id);
-            continue;
-          }
-
-          // Use SMS date
-          parsed.date = new Date(msg.date);
-
-          // Check category
-          const savedCategoryId = await getRecipientCategory(parsed.recipientId, parsed.type);
-          if (savedCategoryId) {
-            parsed.categoryId = savedCategoryId;
-          }
-
-          await saveTransaction(parsed);
-          await markMessageAsProcessed(msg._id);
-          processedCount++;
-          console.log(`✅ Bank Transaction Saved: ${parsed.recipientName} - ${parsed.amount}`);
-          continue;
-        }
-      }
-
-      // If we couldn't parse it, still mark as processed to avoid trying again
-      await markMessageAsProcessed(msg._id);
-    }
-
-    if (processedCount > 0 || fulizaCount > 0) {
-      console.log(`✅ Processed ${processedCount} transactions and ${fulizaCount} Fuliza events`);
-    } else {
-      console.log('✨ No new messages to process');
-    }
-
-
-    // Old logic removed - fees are now updated independently via updateFulizaFees()
-    // This ensures fees are calculated even if no new SMS are received.
-  };
-
   const loadDashboardData = async () => {
-    const txs = await getTransactions();
-    const summary = await getSpendingSummary();
-    setTransactions(txs);
-    setSpending(summary);
+    try {
+      const allTransactions = await getTransactions();
+      setTransactions(allTransactions);
 
-    // Check for ALL uncategorized transactions (both SENT and RECEIVED)
-    const uncategorized = txs.filter(t => !t.categoryId);
-    if (uncategorized.length > 0) {
-      setUncategorizedQueue(uncategorized);
-      setModalVisible(true);
+      const summary = await getSpendingSummary();
+      setSpending(summary);
+
+      // Check for ALL uncategorized transactions (both SENT and RECEIVED)
+      const uncategorized = allTransactions.filter(t => !t.categoryId);
+      if (uncategorized.length > 0) {
+        setUncategorizedQueue(uncategorized);
+        setModalVisible(true);
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
     }
   };
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await initializeData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   // Filter transactions based on selected period
   const filteredTransactions = useMemo(() => {
@@ -278,20 +151,7 @@ export default function HomeScreen() {
 
 
 
-  const handleRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    setModalVisible(false);
-    try {
-      // Just sync new data without clearing DB
-      await syncSmsTransactions();
-      await updateFulizaFees();
-      await loadDashboardData();
-    } catch (error) {
-      console.error('Error during refresh:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+
 
   const handleTransactionPress = (tx: Transaction) => {
     // Allow categorizing both SENT and RECEIVED transactions
@@ -596,10 +456,12 @@ export default function HomeScreen() {
                     {/* Source Badge */}
                     <View className={`px-1.5 py-0.5 rounded mr-2 ${tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase')
                       ? 'bg-blue-100 dark:bg-blue-900/40'
-                      : 'bg-green-100 dark:bg-green-900/40'}`}>
+                      : 'bg-green-100 dark:bg-green-900/40'
+                      }`}>
                       <Text className={`text-[10px] font-bold ${tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase')
                         ? 'text-blue-700 dark:text-blue-300'
-                        : 'text-green-700 dark:text-green-300'}`}>
+                        : 'text-green-700 dark:text-green-300'
+                        }`}>
                         {tx.id.startsWith('IM_') || tx.rawSms.toLowerCase().includes('bank') || tx.rawSms.toLowerCase().includes('purchase') ? 'BANK' : 'M-PESA'}
                       </Text>
                     </View>

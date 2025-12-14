@@ -104,7 +104,8 @@ const parseImBankSms = (smsText: string): Transaction | null => {
 
 // Helper: Check if a transaction text contains an MPESA Ref that we can use for deduplication
 export const extractMpesaRefFromBankSms = (smsText: string): string | null => {
-    const transferPattern = /M-PESA\s+Ref\s+ID:\s+([A-Z0-9]+)/i;
+    // Matches "M-PESA Ref ID", "MPESA Ref ID", "Mpesa Ref ID" (case insensitive)
+    const transferPattern = /(?:M-?PESA|Mpesa)\s+Ref\s+ID:\s+([A-Z0-9]+)/i;
     const match = smsText.match(transferPattern);
     return match ? match[1] : null;
 };
