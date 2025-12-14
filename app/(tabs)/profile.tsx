@@ -155,7 +155,10 @@ export default function ProfileScreen() {
     };
 
     return (
-        <ScrollView className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <ScrollView
+            className="flex-1 bg-gray-50 dark:bg-[#020617]"
+            contentContainerStyle={{ paddingBottom: 120 }}
+        >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
             <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">

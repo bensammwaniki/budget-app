@@ -258,6 +258,7 @@ export default function HomeScreen() {
   return (
     <ScrollView
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
+      contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />}
     >
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

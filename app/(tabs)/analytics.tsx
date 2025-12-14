@@ -168,7 +168,10 @@ export default function AnalyticsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50 dark:bg-[#020617]">
+    <ScrollView
+      className="flex-1 bg-gray-50 dark:bg-[#020617]"
+      contentContainerStyle={{ paddingBottom: 120 }}
+    >
       <StatusBar style="light" />
 
       {/* Header */}
