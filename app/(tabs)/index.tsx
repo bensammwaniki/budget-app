@@ -454,7 +454,7 @@ export default function HomeScreen() {
             data={filteredTransactions
               .filter(t => !t.id.startsWith('FULIZA-FEES-'))
               .slice(0, displayLimit)}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item: Transaction) => item.id}
             scrollEnabled={false} // Let parent ScrollView handle scrolling
             contentContainerStyle={{ gap: 16 }}
             renderItem={({ item: tx }) => (

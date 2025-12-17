@@ -171,6 +171,10 @@ export const parseFulizaRepayment = (smsText: string, timestamp?: number): any |
     // Pattern: "TKIFVAJ7HG Confirmed. Ksh 1000.00 from your M-PESA has been used to partially pay..."
     const pattern = /([A-Z0-9]+)\s+Confirmed\.\s+Ksh\s+([\d,]+\.\d{2})\s+from your M-PESA has been used to (partially|fully) pay your outstanding Fuliza M-PESA/;
 
+    // Check for M-PESA balance in the message
+    // "M-PESA balance is Ksh611.40."
+    const balancePattern = /M-PESA balance is Ksh\s*([\d,]+\.\d{2})/;
+
     const match = normalizedText.match(pattern);
     if (match) {
         const paymentType = match[3]; // 'partially' or 'fully'
@@ -197,11 +201,19 @@ export const parseFulizaRepayment = (smsText: string, timestamp?: number): any |
         }
         // else: partial payment with no balance info = undefined (will be calculated)
 
+        // EXTRACT ACCOUNT BALANCE
+        let accountBalance: number | undefined = undefined;
+        const balanceMatch = normalizedText.match(balancePattern);
+        if (balanceMatch) {
+            accountBalance = parseFloat(balanceMatch[1].replace(/,/g, ''));
+        }
+
         return {
             id: match[1],
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'REPAYMENT',
             outstandingBalance: outstandingBalance,
+            accountBalance: accountBalance, // New field
             date: timestamp ? new Date(timestamp) : new Date(),
             rawSms: smsText
         };

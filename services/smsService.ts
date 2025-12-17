@@ -124,6 +124,25 @@ export const syncMessages = async () => {
                     const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
                     if (fulizaRepayment) {
                         await saveFulizaTransaction(fulizaRepayment);
+
+                        // IF the repayment message contains an account balance, we should save it
+                        // as a "SENT" transaction so that the main balance logic (which looks at 'transactions' table)
+                        // picks it up!
+                        if (fulizaRepayment.accountBalance !== undefined) {
+                            await saveTransaction({
+                                id: fulizaRepayment.id, // Use same ID
+                                amount: fulizaRepayment.amount,
+                                type: 'SENT',
+                                recipientId: 'FULIZA_REPAYMENT',
+                                recipientName: 'Fuliza Repayment',
+                                date: fulizaRepayment.date,
+                                balance: fulizaRepayment.accountBalance,
+                                transactionCost: 0,
+                                categoryId: undefined, // Or assign to a Debt category if preferred
+                                rawSms: fulizaRepayment.rawSms
+                            });
+                        }
+
                         continue;
                     }
                 }

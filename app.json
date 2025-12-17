@@ -12,7 +12,8 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "fanga_budget.android",
+      "package": "com.bensa.fangabudget",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
