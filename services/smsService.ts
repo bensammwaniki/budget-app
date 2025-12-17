@@ -2,8 +2,8 @@ import { PermissionsAndroid, Platform } from 'react-native';
 // @ts-ignore
 import SmsAndroid from 'react-native-get-sms-android';
 import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
-import { parseMpesaSms } from '../utils/smsParser';
-import { getUserSettings, initDatabase, saveTransaction, transactionExists } from './database';
+import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../utils/smsParser';
+import { getUserSettings, initDatabase, saveFulizaTransaction, saveTransaction, transactionExists } from './database';
 
 export interface SMSMessage {
     _id: string;
@@ -108,6 +108,24 @@ export const syncMessages = async () => {
                 if (parsed) {
                     await saveTransaction(parsed);
                     newTransactionsCount++;
+                } else {
+                    // Try parsing as Fuliza Loan
+                    const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
+                    if (fulizaLoan) {
+                        await saveFulizaTransaction(fulizaLoan);
+                        // We also treat loans as 'Received' money conceptually, but for now we just track debt
+                        // If we want it to show as income, we'd need to convert it to a Transaction too
+                        // But typically Fuliza acts as an overdraft on a transaction, so it's complex.
+                        // For now, just saving to fuliza_transactions is enough for fee calculation.
+                        continue;
+                    }
+
+                    // Try parsing as Fuliza Repayment
+                    const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
+                    if (fulizaRepayment) {
+                        await saveFulizaTransaction(fulizaRepayment);
+                        continue;
+                    }
                 }
             }
         }

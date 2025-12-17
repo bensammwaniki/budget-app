@@ -198,6 +198,7 @@ export default function ProfileScreen() {
                         { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                         { icon: 'calculator', label: 'Personal Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                         { icon: 'bank', label: 'My Banks', color: '#2563eb', action: () => router.push('/banks') },
+                        { icon: 'shield', label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}
