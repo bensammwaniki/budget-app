@@ -300,17 +300,6 @@ export default function HomeScreen() {
           <View className="flex-row items-center mb-6">
           </View>
 
-          {/* Fuliza Debt Warning - Only show if user has outstanding Fuliza */}
-          {spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0 && (
-            <View className="bg-orange-500/20 px-3 py-2 rounded-lg mb-6">
-              <Text className="text-orange-200 text-xs font-medium">
-                ⚠️ Fuliza Debt: KES {spending.fulizaOutstanding.toLocaleString()}
-              </Text>
-              <Text className="text-orange-300 text-[10px] mt-0.5">
-                Daily charge: KES {calculateFulizaDailyCharge(spending.fulizaOutstanding).toFixed(2)} • Repay soon to minimize fees
-              </Text>
-            </View>
-          )}
 
           <View className="flex-row justify-between gap-3">
             <View className="flex-1 bg-green-500/30 px-3 py-2 rounded-xl">
@@ -321,12 +310,12 @@ export default function HomeScreen() {
               <Text className="text-red-100 text-xs mb-1">Expense</Text>
               <Text className="text-white font-bold">KES {periodSummary.expense.toLocaleString()}</Text>
             </View>
-            {periodSummary.fulizaBalance > 0 && (
+            {/* {periodSummary.fulizaBalance > 0 && (
               <View className="flex-1 bg-orange-500/30 px-3 py-2 rounded-xl">
                 <Text className="text-orange-100 text-xs mb-1">Fuliza</Text>
                 <Text className="text-white font-bold">KES {periodSummary.fulizaBalance.toLocaleString()}</Text>
               </View>
-            )}
+            )} */}
           </View>
         </View>
 
@@ -389,31 +378,60 @@ export default function HomeScreen() {
 
 
 
-      {/* Monthly Fuliza Fees - Only displayed if there are fees */}
-      {filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-')) && (
+      {/* Combined Fuliza Section: Debt Overview + Monthly Fees */}
+      {((spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0) || filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-'))) && (
         <View className="px-6 mt-8 mb-2">
-          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
-          <View className="gap-4">
-            {filteredTransactions
-              .filter(t => t.id.startsWith('FULIZA-FEES-'))
-              .map((tx) => (
-                <View
-                  key={tx.id}
-                  className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm"
-                >
-                  <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
-                    <FontAwesome name="warning" size={20} color="#f97316" />
+          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Fuliza & Overdraft</Text>
+
+          {/* 1. Outstanding Debt Card */}
+          {spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0 && (
+            <View className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-2xl border border-orange-200 dark:border-orange-800 mb-6">
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 bg-orange-100 dark:bg-orange-900/40 rounded-full items-center justify-center mr-3">
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
-                  </View>
-                  <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
-                    - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
+                  <Text className="text-orange-800 dark:text-orange-200 font-bold text-base">Outstanding Loan</Text>
                 </View>
-              ))}
-          </View>
+              </View>
+
+              <Text className="text-slate-900 dark:text-white text-3xl font-bold mb-1">
+                KES {spending.fulizaOutstanding.toLocaleString()}
+              </Text>
+              <Text className="text-slate-500 dark:text-slate-400 text-xs">
+                Daily Interest: <Text className="font-bold text-slate-900 dark:text-white">KES {calculateFulizaDailyCharge(spending.fulizaOutstanding).toFixed(2)}</Text>
+              </Text>
+            </View>
+          )}
+
+          {/* 2. Monthly Fees List */}
+          {filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-')) && (
+            <View>
+              {spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0 && (
+                <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Fees This Period</Text>
+              )}
+              <View className="gap-4">
+                {filteredTransactions
+                  .filter(t => t.id.startsWith('FULIZA-FEES-'))
+                  .map((tx) => (
+                    <View
+                      key={tx.id}
+                      className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm"
+                    >
+                      <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
+                        <FontAwesome name="warning" size={20} color="#f97316" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
+                      </View>
+                      <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
+                        - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                  ))}
+              </View>
+            </View>
+          )}
         </View>
       )}
 

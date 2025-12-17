@@ -441,8 +441,9 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     );
 
     // Get latest balance from a REAL transaction (exclude generated fees)
-    const balanceResult = await database.getAllAsync<{ balance: number }>(
-        "SELECT balance FROM transactions WHERE id NOT LIKE 'FULIZA-FEES-%' AND balance > 0 ORDER BY date DESC LIMIT 1"
+    // Remove "AND balance > 0" to allow seeing legitimate 0 balances
+    const balanceResult = await database.getAllAsync<{ balance: number, date: string }>(
+        "SELECT balance, date FROM transactions WHERE id NOT LIKE 'FULIZA-FEES-%' ORDER BY date DESC LIMIT 1"
     );
 
     const countResult = await database.getAllAsync<{ count: number }>(
@@ -462,16 +463,27 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         "SELECT SUM(amount) as total FROM transactions WHERE type = 'RECEIVED'"
     );
 
-    const fulizaResult = await database.getAllAsync<{ balance: number }>(
-        `SELECT outstandingBalance as balance 
+    const fulizaResult = await database.getAllAsync<{ balance: number, date: string, type: string }>(
+        `SELECT outstandingBalance as balance, date, type
          FROM fuliza_transactions 
          WHERE outstandingBalance IS NOT NULL 
          ORDER BY date DESC 
          LIMIT 1`
     );
 
-    const currentBalance = balanceResult[0]?.balance || 0;
-    const fulizaOutstanding = currentBalance > 0 ? 0 : (fulizaResult[0]?.balance || 0);
+    let currentBalance = balanceResult[0]?.balance || 0;
+    const fulizaOutstanding = fulizaResult[0]?.balance || 0;
+
+    // Logic: If the latest Fuliza event is NEWER than the latest M-PESA transaction,
+    // AND it is a LOAN (borrowing), it implies the M-PESA balance is 0.
+    // We do NOT reset balance for 'REPAYMENT' because a repayment implies logic handled by the source transaction,
+    // and you might still have a balance remaining after partial payment.
+    const latestTxDate = balanceResult[0]?.date ? new Date(balanceResult[0].date) : new Date(0);
+    const latestFulizaDate = fulizaResult[0]?.date ? new Date(fulizaResult[0].date) : new Date(0);
+
+    if (latestFulizaDate > latestTxDate && fulizaResult[0]?.type === 'LOAN') {
+        currentBalance = 0;
+    }
 
     return {
         currentBalance: currentBalance,
