@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { useScrollVisibility } from '../../services/ScrollContext';
 import { PieChart } from "react-native-gifted-charts";
 import { getTransactions } from '../../services/database';
 import { Transaction } from '../../types/transaction';
@@ -17,6 +19,25 @@ export default function AnalyticsScreen() {
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const { showTabBar, hideTabBar } = useScrollVisibility();
+  const lastScrollY = useSharedValue(0);
+
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const currentY = event.contentOffset.y;
+      const diff = currentY - lastScrollY.value;
+
+      if (currentY <= 0) {
+        hideTabBar();
+      } else if (diff > 5) {
+        showTabBar();
+      } else if (diff < -5) {
+        hideTabBar();
+      }
+      lastScrollY.value = currentY;
+    },
+  });
 
   const loadData = useCallback(async () => {
     const allTransactions = await getTransactions();
@@ -168,9 +189,11 @@ export default function AnalyticsScreen() {
   };
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
       contentContainerStyle={{ paddingBottom: 120 }}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
     >
       <StatusBar style="light" />
 
@@ -371,6 +394,6 @@ export default function AnalyticsScreen() {
           </View>
         </View>
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }

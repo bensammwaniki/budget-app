@@ -2,7 +2,9 @@ import { FontAwesome } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { useScrollVisibility } from '../../services/ScrollContext';
 import CategorizationModal from '../../components/CategorizationModal';
 import { useAuth } from '../../services/AuthContext';
 import {
@@ -25,6 +27,8 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { colorScheme } = useColorScheme();
   const firstName = user?.displayName?.split(' ')[0] || 'User';
+  const { showTabBar, hideTabBar } = useScrollVisibility();
+  const lastScrollY = useSharedValue(0);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('THIS_MONTH');
@@ -247,6 +251,24 @@ export default function HomeScreen() {
     // Note: Closing modal in Queue Mode skips the current item for now
   };
 
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const currentY = event.contentOffset.y;
+      const diff = currentY - lastScrollY.value;
+
+      if (currentY <= 0) {
+        hideTabBar();
+      } else if (diff > 5) {
+        // Scrolling down (finger up, content moving up)
+        showTabBar();
+      } else if (diff < -5) {
+        // Scrolling up (finger down, content moving down)
+        // hideTabBar(); // Uncomment if you want to hide on scroll up
+      }
+      lastScrollY.value = currentY;
+    },
+  });
+
   if (loading) {
     return (
       <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
@@ -256,9 +278,11 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
       contentContainerStyle={{ paddingBottom: 120 }}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />}
     >
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
@@ -518,6 +542,6 @@ export default function HomeScreen() {
           />
         )}
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
