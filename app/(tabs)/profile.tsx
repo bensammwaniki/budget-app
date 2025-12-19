@@ -6,6 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { useScrollVisibility } from '../../services/ScrollContext';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories } from '../../services/database';
@@ -16,6 +18,23 @@ export default function ProfileScreen() {
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const router = useRouter();
     const firstName = user?.displayName?.split(' ')[0] || 'User';
+
+    const { showTabBar, hideTabBar } = useScrollVisibility();
+    const lastScrollY = useSharedValue(0);
+
+    const handleScroll = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            const currentY = event.contentOffset.y;
+            const diff = currentY - lastScrollY.value;
+
+            if (currentY <= 0) {
+                hideTabBar();
+            } else if (diff > 5) {
+                showTabBar();
+            }
+            lastScrollY.value = currentY;
+        },
+    });
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
@@ -155,9 +174,11 @@ export default function ProfileScreen() {
     };
 
     return (
-        <ScrollView
+        <Animated.ScrollView
             className="flex-1 bg-gray-50 dark:bg-[#020617]"
             contentContainerStyle={{ paddingBottom: 120 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
@@ -366,6 +387,6 @@ export default function ProfileScreen() {
 
                 <Text className="text-center text-slate-400 dark:text-slate-600 text-xs mb-8">Version 1.0.0</Text>
             </View>
-        </ScrollView>
+        </Animated.ScrollView>
     );
 }

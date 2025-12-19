@@ -1,38 +1,40 @@
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScrollVisibility } from '../services/ScrollContext';
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     const insets = useSafeAreaInsets();
+    const colorScheme = useColorScheme();
+    const isDark = colorScheme === 'dark';
+    const { tabBarVisible } = useScrollVisibility();
+
+    const animatedStyle = useAnimatedStyle(() => {
+        return {
+            transform: [
+                {
+                    translateY: (1 - tabBarVisible.value) * (65 + insets.bottom + 20), // Height + Padding + Margin
+                },
+            ],
+            opacity: tabBarVisible.value,
+        };
+    });
 
     return (
-        <View style={[styles.container, { paddingBottom: insets.bottom > 0 ? insets.bottom : -2 }]}>
-            <View style={styles.blurContainer}>
-                {/* Gradient Border/Glow Effect */}
-                <LinearGradient
-                    colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.1)']}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                />
-
-                {/* Glass Background */}
-                <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-
+        <Animated.View style={[styles.container, { paddingBottom: insets.bottom > 0 ? insets.bottom : 0 }, animatedStyle]}>
+            <View style={[
+                styles.innerContainer,
+                {
+                    backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                    borderTopColor: isDark ? '#1e293b' : '#e2e8f0',
+                }
+            ]}>
                 {/* Tab Items */}
                 <View style={styles.tabsContainer}>
                     {state.routes.map((route, index) => {
                         const { options } = descriptors[route.key];
-                        const label =
-                            options.tabBarLabel !== undefined
-                                ? options.tabBarLabel
-                                : options.title !== undefined
-                                    ? options.title
-                                    : route.name;
-
                         const isFocused = state.index === index;
 
                         const onPress = () => {
@@ -63,34 +65,22 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                                 testID={(options as any).tabBarTestID}
                                 onPress={onPress}
                                 onLongPress={onLongPress}
-                                style={[styles.tabItem, { flex: isFocused ? 1.2 : 1 }]} // Give active tab slightly more space
+                                style={styles.tabItem}
                             >
-                                {/* Active Indicator (Pill) */}
-                                {isFocused && (
-                                    <View style={styles.activePill}>
-                                        <LinearGradient
-                                            colors={['#ffffffa8', '#f6f6f6ae']} // Dark bluish gradient
-                                            style={StyleSheet.absoluteFill}
-                                        />
-                                    </View>
-                                )}
-
-                                {/* Icon */}
+                                {/* Icon Only */}
                                 <View style={styles.iconContainer}>
                                     {options.tabBarIcon?.({
                                         focused: isFocused,
-                                        color: isFocused ? '#1d1212ff' : '#64748b',
-                                        size: 24,
+                                        color: isFocused ? '#3b82f6' : '#64748b',
+                                        size: 26,
                                     })}
                                 </View>
-
-
                             </TouchableOpacity>
                         );
                     })}
                 </View>
             </View>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -100,54 +90,41 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        pointerEvents: 'box-none',
+        zIndex: 1000,
     },
-    blurContainer: {
-        width: '90%',
-        maxWidth: 380,
-        height: 60,
-        borderRadius: 40,
-        overflow: 'hidden',
-        position: 'relative',
-        marginBottom: 20,
+    innerContainer: {
+        width: '100%',
+        height: 65,
+        borderTopWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
-            height: 10,
+            height: -2,
         },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 5,
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 10,
     },
     tabsContainer: {
         flexDirection: 'row',
+        width: '100%',
         height: '100%',
         alignItems: 'center',
-        justifyContent: 'space-evenly',
-        paddingHorizontal: 5,
+        justifyContent: 'space-around',
     },
     tabItem: {
+        flex: 1,
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        position: 'relative',
-    },
-    activePill: {
-        position: 'absolute',
-        width: '90%',
-        height: '85%',
-        borderRadius: 24, // Rounded Rectangle / Squircle
-        overflow: 'hidden',
     },
     iconContainer: {
-        marginBottom: 2,
-        width: 24,
-        height: 24,
+        width: 32,
+        height: 32,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1, // Ensure on top of pill
     },
-
 });
