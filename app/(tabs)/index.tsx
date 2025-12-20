@@ -5,12 +5,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
-import { HomeSkeleton, TransactionSkeleton } from '../../components/SkeletonLoader';
+import { TransactionSkeleton } from '../../components/SkeletonLoader';
+import TransactionItem from '../../components/TransactionItem';
 import { useSpendingSummary, useTransactions } from '../../hooks/useDatabase';
 import { useAuth } from '../../services/AuthContext';
 import {
   deleteTransaction,
-  initDatabase, // Added
+  getUserSettings,
+  initDatabase,
   saveRecipientCategory,
   updateFulizaFees,
   updateTransactionCategory,
@@ -39,6 +41,10 @@ export default function HomeScreen() {
   const [periodLoading, setPeriodLoading] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20); // Smaller initial limit for better fast-load
   const [loadingMore, setLoadingMore] = useState(false);
+  const [appIsLaunching, setAppIsLaunching] = useState(true);
+  const [isCategorizationSuppressed, setIsCategorizationSuppressed] = useState(false);
+  const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
@@ -48,30 +54,58 @@ export default function HomeScreen() {
   // Derived state: Use selectedTransaction if set (Edit Mode), otherwise check queue (Queue Mode)
   const activeTransaction = selectedTransaction || (uncategorizedQueue.length > 0 ? uncategorizedQueue[0] : null);
 
-  const initialLoading = txLoading && summaryLoading && allTransactions.length === 0;
+  // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
+  const initialLoading = appIsLaunching && !hasPerformedSyncOnce;
 
   useEffect(() => {
-    // Initial Sync in background - Quick Sync (7 days)
-    const runQuickSync = async () => {
+    const runProgressiveSync = async () => {
       try {
+        setIsSyncing(true);
         await initDatabase();
-        await syncMessages(7); // Quick Sync
-        await updateFulizaFees();
+        const lastSync = await getUserSettings('last_sync_timestamp');
+
+        if (!lastSync) {
+          // FIRST LAUNCH: Dual-Stage Sync
+          console.log('🚀 First launch: Starting Quick Start sync (30 days)...');
+          await syncMessages(30);
+          await updateFulizaFees();
+          setHasPerformedSyncOnce(true);
+          setAppIsLaunching(false);
+
+          console.log('⏳ Quick start complete. Starting Background Deep Sync (366 days)...');
+          // Keep isSyncing true during background sync
+          syncMessages(366).then(() => {
+            console.log('✅ Deep sync complete.');
+            updateFulizaFees();
+            setIsSyncing(false);
+          }).catch(err => {
+            console.error('Deep sync error:', err);
+            setIsSyncing(false);
+          });
+        } else {
+          // NORMAL LAUNCH: Quick refresh
+          await syncMessages(7);
+          await updateFulizaFees();
+          setIsSyncing(false);
+        }
       } catch (error) {
-        console.error('Error in background quick sync:', error);
+        console.error('Error in progressive sync:', error);
+        setIsSyncing(false);
       }
     };
-    runQuickSync();
+    runProgressiveSync();
   }, []);
 
   useEffect(() => {
     // Check for ALL uncategorized transactions (both SENT and RECEIVED)
     const uncategorized = allTransactions.filter(t => !t.categoryId);
-    if (uncategorized.length > 0 && !modalVisible && !selectedTransaction) {
+
+    // Only auto-trigger if not suppressed and not already in an edit mode
+    if (uncategorized.length > 0 && !modalVisible && !selectedTransaction && !isCategorizationSuppressed) {
       setUncategorizedQueue(uncategorized);
       setModalVisible(true);
     }
-  }, [allTransactions]);
+  }, [allTransactions, isCategorizationSuppressed]);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -132,16 +166,11 @@ export default function HomeScreen() {
       if (t.type === 'RECEIVED') {
         income += t.amount;
       } else {
-        // SENT (includes Fuliza fees, transfers, etc.)
         expense += t.amount;
       }
       cost += t.transactionCost || 0;
     });
 
-    // Only show Fuliza if:
-    // 1. We're looking at THIS_MONTH (current month)
-    // 2. The current balance is 0 or negative (meaning Fuliza is active)
-    // For past periods, don't show Fuliza as it's not relevant to historical data
     if (selectedPeriod === 'THIS_MONTH' && spending?.currentBalance !== undefined && spending.currentBalance <= 0) {
       fulizaBalance = spending.fulizaOutstanding || 0;
     }
@@ -155,24 +184,17 @@ export default function HomeScreen() {
     };
   }, [filteredTransactions, spending, selectedPeriod]);
 
-
-
-
-
   const handleTransactionPress = (tx: Transaction) => {
-    // Allow categorizing both SENT and RECEIVED transactions
     setSelectedTransaction(tx);
     setModalVisible(true);
   };
 
   const handleCategorySelect = async (category: Category) => {
     if (activeTransaction) {
-      // Close modal immediately for "instant" feel
       if (selectedTransaction) {
         setModalVisible(false);
         setSelectedTransaction(null);
       } else {
-        // Queue Mode: Move to next item immediately
         const newQueue = uncategorizedQueue.slice(1);
         setUncategorizedQueue(newQueue);
         if (newQueue.length === 0) {
@@ -180,14 +202,8 @@ export default function HomeScreen() {
         }
       }
 
-      // BACKGROUND: Perform DB operations
       try {
-        // 1. Update the mapping for future transactions
         await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
-
-        // 2. Update the specific transaction
-        // This will trigger notifyListeners('TRANSACTIONS') in database.ts, 
-        // which our hook is listening to, causing an automatic UI refresh.
         await updateTransactionCategory(activeTransaction.id, category.id);
       } catch (error) {
         console.error("Failed to save category:", error);
@@ -199,12 +215,9 @@ export default function HomeScreen() {
     try {
       setModalVisible(false);
       setSelectedTransaction(null);
-
-      // DB Operation (triggers notifyListeners)
       await deleteTransaction(tx.id);
     } catch (error) {
       console.error("Failed to delete transaction:", error);
-      alert("Failed to delete transaction.");
     }
   };
 
@@ -223,14 +236,13 @@ export default function HomeScreen() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedTransaction(null);
-    // Note: Closing modal in Queue Mode skips the current item for now
+    // If the user manually closes the modal, suppress auto-triggers for this session
+    setIsCategorizationSuppressed(true);
   };
 
   const handleEndReached = () => {
     if (loadingMore || displayLimit >= filteredTransactions.length) return;
-
     setLoadingMore(true);
-    // Simulate loading for shimmer effect
     setTimeout(() => {
       setDisplayLimit(prev => prev + 20);
       setLoadingMore(false);
@@ -241,7 +253,6 @@ export default function HomeScreen() {
     onScroll: (event) => {
       const currentY = event.contentOffset.y;
       const diff = currentY - lastScrollY.value;
-
       if (currentY <= 0) {
         hideTabBar();
       } else if (diff > 5) {
@@ -251,22 +262,38 @@ export default function HomeScreen() {
     },
   });
 
-  if (initialLoading) {
-    return <HomeSkeleton />;
-  }
+  // if (initialLoading) {
+  //   return <HomeSkeleton />;
+  // }
 
   const renderHeader = () => (
     <View>
-      {/* Header */}
       <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg shadow-black/5">
         <View className="flex-row justify-between items-center mb-8">
           <View>
-            <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium">Welcome back,</Text>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium">
+                Welcome back,
+              </Text>
+
+              {isSyncing && (
+                <View className="flex-row items-center dark:bg-blue-900/20 px-2 py-0.5">
+                  <ActivityIndicator
+                    size="small"
+                    color="#3b82f6"
+                    style={{ transform: [{ scale: 0.6 }] }}
+                  />
+                  <Text className="text-blue-600 dark:text-blue-400 text-[10px] font-bold ml-0.5">
+                    Syncing SMS...
+                  </Text>
+                </View>
+              )}
+            </View>
+
             <Text className="text-slate-900 dark:text-white text-3xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
         </View>
 
-        {/* Balance Card */}
         <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
           <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
           <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
@@ -295,7 +322,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Period Selector */}
         <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-xl border border-gray-200 dark:border-slate-700 mt-6">
           {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR'] as Period[]).map((period) => (
             <TouchableOpacity
@@ -318,7 +344,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Fuliza Section - Now using periodFulizaFees */}
       {((spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0) || periodFulizaFees.length > 0) && (
         <View className="px-6 mt-8 mb-2">
           <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Fuliza & Overdraft</Text>
@@ -352,7 +377,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Transactions Label */}
       <View className="px-6 mt-6 mb-4 flex-row justify-between items-center">
         <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Spendings</Text>
         <Text className="text-slate-500 text-xs">
@@ -366,37 +390,6 @@ export default function HomeScreen() {
         </View>
       )}
     </View>
-  );
-
-  const renderTransaction = ({ item: tx }: { item: Transaction }) => (
-    <TouchableOpacity
-      className="flex-row items-center bg-white dark:bg-[#1e293b] mx-6 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm mb-4 active:opacity-70"
-      onPress={() => handleTransactionPress(tx)}
-    >
-      <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
-        <FontAwesome
-          name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
-          size={18}
-          color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8')}
-        />
-      </View>
-      <View className="flex-1">
-        <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>{tx.recipientName}</Text>
-        <View className="flex-row items-center mt-0.5">
-          <View className={`px-1.5 py-0.5 rounded mr-2 ${tx.id.startsWith('IM_') ? 'bg-blue-100' : 'bg-green-100'}`}>
-            <Text className={`text-[8px] font-bold ${tx.id.startsWith('IM_') ? 'text-blue-700' : 'text-green-700'}`}>
-              {tx.id.startsWith('IM_') ? 'BANK' : 'M-PESA'}
-            </Text>
-          </View>
-          <Text className="text-slate-400 text-[10px]">
-            {tx.date.toLocaleDateString()}
-          </Text>
-        </View>
-      </View>
-      <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
-        {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
-      </Text>
-    </TouchableOpacity>
   );
 
   const renderFooter = () => {
@@ -416,7 +409,6 @@ export default function HomeScreen() {
     <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
-      {/* Moved CategorizationModal outside FlatList to prevent flickering */}
       <CategorizationModal
         visible={modalVisible}
         transaction={activeTransaction}
@@ -431,13 +423,26 @@ export default function HomeScreen() {
           .filter(t => !t.id.startsWith('FULIZA-FEES-'))
           .slice(0, displayLimit)}
         keyExtractor={(item) => item.id}
-        renderItem={renderTransaction}
+        renderItem={({ item }) => (
+          <TransactionItem
+            transaction={item}
+            onPress={handleTransactionPress}
+          />
+        )}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
+        getItemLayout={(data, index) => (
+          { length: 86, offset: 86 * index, index }
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

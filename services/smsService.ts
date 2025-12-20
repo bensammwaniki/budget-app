@@ -51,11 +51,7 @@ export const requestSMSPermission = async (): Promise<boolean> => {
 /**
  * Read M-PESA SMS messages from the phone
  */
-// Old readMpesaSMS removed, replaced by readAllSMS below
-
-// Kept for backward compatibility if needed, but index.tsx uses readMpesaSMS directly
 export const syncMessages = async (days: number = 30) => {
-    // Initialize DB if not already
     await initDatabase();
 
     try {
@@ -71,49 +67,56 @@ export const syncMessages = async (days: number = 30) => {
         let syncDays = days;
         const lastSyncStr = await getUserSettings('last_sync_timestamp');
 
-        if (!lastSyncStr) {
-            // DEEP SYNC: On first launch, go back 180 days (6 months)
-            syncDays = 180;
-            console.log(`🚀 Initial launch: Performing deep historical sync (180 days).`);
-        } else {
+        // AND this is the first ever sync.
+        if (!lastSyncStr && days === 30) {
+            syncDays = 30;
+            console.log(`🚀 Initial launch: Performing default sync (30 days).`);
+        } else if (lastSyncStr) {
             const lastSync = parseInt(lastSyncStr, 10);
             const daysSinceLastSync = Math.ceil((Date.now() - lastSync) / (1000 * 60 * 60 * 24));
 
             // For periodic syncs, we usually bridge the gap plus one extra day for safety.
-            // But we respect the 'days' cap (which is usually 30 for manual refresh, 7 for quick sync).
-            syncDays = Math.max(1, Math.min(Math.max(days, daysSinceLastSync + 1), 365));
+            syncDays = Math.max(1, Math.min(Math.max(days, daysSinceLastSync + 1), 366));
             console.log(`🔄 Last sync was ${daysSinceLastSync} days ago. Syncing ${syncDays} days.`);
+        } else {
+            console.log(`⚡ Performing requested ${days}-day sync.`);
         }
 
         const messages = await readMpesaSMS(syncDays);
         const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
 
-
         let newTransactionsCount = 0;
+        let processedCount = 0;
 
-        const sendersFound = new Set<string>();
+        // Helper to yield to main thread every N items to prevent UI freezing
+        const yieldIfNecessary = async () => {
+            processedCount++;
+            if (processedCount % 50 === 0) {
+                // Yield to JS thread
+                await new Promise(resolve => setTimeout(resolve, 0));
+                notifyListeners('TRANSACTIONS');
+            }
+        };
 
         // PASS 1: Process M-PESA Messages ONLY
         for (const msg of messages) {
-            sendersFound.add(msg.address);
+            await yieldIfNecessary();
+
             if (msg.address === 'MPESA') {
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
-                    // Check if already exists to avoid overwriting manual categories
                     const exists = await transactionExists(parsed.id);
                     if (!exists) {
-                        await saveTransaction(parsed, false); // No individual notification
+                        await saveTransaction(parsed, false);
                         newTransactionsCount++;
                     }
                 } else {
-                    // Try parsing as Fuliza Loan
                     const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
                     if (fulizaLoan) {
                         await saveFulizaTransaction(fulizaLoan);
                         continue;
                     }
 
-                    // Try parsing as Fuliza Repayment
                     const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
                     if (fulizaRepayment) {
                         await saveFulizaTransaction(fulizaRepayment);
@@ -130,9 +133,8 @@ export const syncMessages = async (days: number = 30) => {
                                 transactionCost: 0,
                                 categoryId: undefined,
                                 rawSms: fulizaRepayment.rawSms
-                            }, false); // No individual notification
+                            }, false);
                         }
-
                         continue;
                     }
                 }
@@ -142,6 +144,7 @@ export const syncMessages = async (days: number = 30) => {
         // PASS 2: Process Bank Messages (if enabled)
         if (imBankEnabled) {
             for (const msg of messages) {
+                await yieldIfNecessary();
                 if (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK')) {
                     const parsed = parseBankSms(msg.body, msg.address);
                     if (parsed) {
@@ -152,7 +155,7 @@ export const syncMessages = async (days: number = 30) => {
                         }
 
                         parsed.date = new Date(msg.date);
-                        await saveTransaction(parsed, false); // No individual notification
+                        await saveTransaction(parsed, false);
                         newTransactionsCount++;
                     }
                 }
@@ -174,13 +177,7 @@ export const syncMessages = async (days: number = 30) => {
 };
 
 /**
- * Read ALL SMS messages from the phone (filtered by known senders later)
- * We modify readMpesaSMS to actually read broader set if needed, 
- * but since filter is JSON, we can't do OR. 
- * So we will read ALL and filter in JS, OR make multiple calls.
- * For efficiency, let's keep the filter generic or empty address? 
- * No, empty address reads EVERYTHING. 
- * Better strategy: Read with no address filter, but rely on indexFrom/maxCount and date.
+ * Read ALL SMS messages from the phone
  */
 export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
     if (Platform.OS !== 'android') return [];
@@ -227,9 +224,9 @@ export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
             allMessages = [...allMessages, ...batch];
             indexFrom += batch.length;
 
-            if (batch.length < batchSize) break; // Last page
-            if (allMessages.length > 10000) { // Safety cap to prevent memory issues
-                console.warn('⚠️ Reached safety cap of 10,000 messages. Stopping scan.');
+            if (batch.length < batchSize) break;
+            if (allMessages.length > 20000) { // Increased cap slightly for deep sync
+                console.warn('⚠️ Reached safety cap of 20,000 messages. Stopping scan.');
                 break;
             }
         }
@@ -243,6 +240,4 @@ export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
     }
 };
 
-// Override readMpesaSMS to use readAllSMS for backward compat, 
-// or update callsites. SyncMessages is the main one used.
 export const readMpesaSMS = readAllSMS;

@@ -19,9 +19,19 @@ export const subscribeToDatabaseChanges = (listener: DatabaseChangeListener) => 
     };
 };
 
+const debounceTimeouts: Record<string, any> = {};
+
 export const notifyListeners = (type: DatabaseChangeType) => {
-    console.log(`🔔 Notifying listeners of change: ${type}`);
-    listeners.forEach(l => l(type));
+    // Debounce notifications to prevent UI flooding during bulk operations (sync)
+    if (debounceTimeouts[type]) {
+        clearTimeout(debounceTimeouts[type]);
+    }
+
+    debounceTimeouts[type] = setTimeout(() => {
+        console.log(`🔔 Notifying listeners of change: ${type}`);
+        listeners.forEach(l => l(type));
+        delete debounceTimeouts[type];
+    }, 500); // 500ms debounce for smoother UI during deep sync
 };
 
 export const initDatabase = async () => {
@@ -175,7 +185,7 @@ const seedCategories = async () => {
         { name: 'Shopping', type: 'EXPENSE', icon: 'shopping-bag', color: '#ec4899', description: 'Clothes, gadgets, and personal items' },
         { name: 'Entertainment', type: 'EXPENSE', icon: 'film', color: '#8b5cf6', description: 'Movies, games, and events' },
         { name: 'Bills & Utilities', type: 'EXPENSE', icon: 'bolt', color: '#3b82f6', description: 'Electricity, water, and internet' },
-        { name: 'Health', type: 'EXPENSE', icon: 'heartbeat', color: '#10b981', description: 'Medical and fitness' },
+        { name: 'Health', type: 'EXPENSE', icon: 'heart-pulse', color: '#10b981', description: 'Medical and fitness' },
         { name: 'Education', type: 'EXPENSE', icon: 'graduation-cap', color: '#6366f1', description: 'Tuition, books, and courses' },
         { name: 'Personal Care', type: 'EXPENSE', icon: 'smile-o', color: '#f472b6', description: 'Grooming and wellness' },
         { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e', description: 'Monthly salary' },
