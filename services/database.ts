@@ -7,6 +7,23 @@ import { calculateMonthlyFulizaCosts } from '../utils/fulizaCalculator';
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Reactive Subscription Logic
+export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS';
+type DatabaseChangeListener = (type: DatabaseChangeType) => void;
+let listeners: DatabaseChangeListener[] = [];
+
+export const subscribeToDatabaseChanges = (listener: DatabaseChangeListener) => {
+    listeners.push(listener);
+    return () => {
+        listeners = listeners.filter(l => l !== listener);
+    };
+};
+
+export const notifyListeners = (type: DatabaseChangeType) => {
+    console.log(`🔔 Notifying listeners of change: ${type}`);
+    listeners.forEach(l => l(type));
+};
+
 export const initDatabase = async () => {
     // If already initializing, wait for it
     if (initPromise) {
@@ -213,12 +230,14 @@ export const addCategory = async (category: Omit<Category, 'id'>) => {
         'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
         [category.name, category.type, category.icon, category.color, 1, category.description || '']
     );
+    notifyListeners('CATEGORIES');
     return result.lastInsertRowId;
 };
 
 export const deleteCategory = async (id: number) => {
     const database = ensureDb();
     await database.runAsync('DELETE FROM categories WHERE id = ?', [id]);
+    notifyListeners('CATEGORIES');
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
@@ -230,6 +249,7 @@ export const saveUserSettings = async (key: string, value: string) => {
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
         [key, value]
     );
+    notifyListeners('SETTINGS');
 };
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
@@ -303,8 +323,9 @@ export const updateFulizaFees = async () => {
                 rawSms: 'Generated Monthly Fee'
             };
 
-            await saveTransaction(bundledAccessFeeTransaction);
+            await saveTransaction(bundledAccessFeeTransaction, false); // Suppress notification in loop
         }
+        notifyListeners('TRANSACTIONS'); // Notify once at the end
     } catch (e) {
         console.error('❌ Error updating Fuliza fees:', e);
     }
@@ -324,6 +345,7 @@ export const saveRecipientCategory = async (recipientId: string, categoryId: num
         'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
         [categoryId || null, recipientId, type]
     );
+    notifyListeners('TRANSACTIONS');
 };
 
 export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
@@ -336,6 +358,7 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
         'UPDATE transactions SET categoryId = ? WHERE id = ?',
         [categoryId || null, transactionId]
     );
+    notifyListeners('TRANSACTIONS');
 };
 
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
@@ -344,6 +367,7 @@ export const updateTransactionDate = async (transactionId: string, newDate: Date
         'UPDATE transactions SET date = ? WHERE id = ?',
         [newDate.toISOString(), transactionId]
     );
+    notifyListeners('TRANSACTIONS');
 };
 
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
@@ -366,7 +390,7 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
     );
 };
 
-export const saveTransaction = async (transaction: Transaction) => {
+export const saveTransaction = async (transaction: Transaction, shouldNotify: boolean = true) => {
     const database = ensureDb();
 
     // AUTOMATION: If categoryId is missing, try to apply automation rules
@@ -401,6 +425,10 @@ export const saveTransaction = async (transaction: Transaction) => {
             transaction.rawSms
         ]
     );
+
+    if (shouldNotify) {
+        notifyListeners('TRANSACTIONS');
+    }
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
@@ -644,6 +672,7 @@ export const saveMonthlyBudget = async (month: string, totalIncome: number, allo
             );
         }
     });
+    notifyListeners('BUDGETS');
 };
 
 export const getCategorySpending = async (month: string): Promise<Record<number, number>> => {
@@ -682,4 +711,5 @@ export const transactionExists = async (id: string): Promise<boolean> => {
 export const deleteTransaction = async (id: string) => {
     const database = ensureDb();
     await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+    notifyListeners('TRANSACTIONS');
 };
