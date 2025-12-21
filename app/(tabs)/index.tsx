@@ -14,6 +14,7 @@ import {
   getUserSettings,
   initDatabase,
   saveRecipientCategory,
+  subscribeToDatabaseChanges,
   updateFulizaFees,
   updateTransactionCategory,
   updateTransactionDate
@@ -58,7 +59,7 @@ export default function HomeScreen() {
   // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
   const initialLoading = appIsLaunching && !hasPerformedSyncOnce;
 
-  // Load bank settings
+  // Load bank settings and subscribe to changes
   useEffect(() => {
     const loadBankSettings = async () => {
       try {
@@ -68,7 +69,17 @@ export default function HomeScreen() {
         console.error('Error loading bank settings:', error);
       }
     };
+
     loadBankSettings();
+
+    // Subscribe to settings changes so we update when user toggles banks
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'SETTINGS') {
+        loadBankSettings();
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -147,9 +158,7 @@ export default function HomeScreen() {
   const filteredTransactions = useMemo(() => {
     const filtered = allTransactions.filter((t: Transaction) => {
       // Filter out bank transactions if bank is disabled
-      const isBankTransaction = t.id.startsWith('IM_') ||
-        t.id.includes('VCSA') ||
-        t.id.includes('OIGG');
+      const isBankTransaction = t.id.startsWith('IM_');
 
       if (isBankTransaction && !imBankEnabled) {
         return false; // Hide bank transactions when bank is disabled
@@ -173,11 +182,7 @@ export default function HomeScreen() {
     });
 
     // Debug: Count bank transactions
-    const bankTransactions = filtered.filter(t =>
-      t.id.startsWith('IM_') ||
-      t.id.includes('VCSA') ||
-      t.id.includes('OIGG')
-    );
+    const bankTransactions = filtered.filter(t => t.id.startsWith('IM_'));
 
     // Show sample IDs to verify what's in the database
     const sampleIds = allTransactions.slice(0, 10).map(t => t.id);

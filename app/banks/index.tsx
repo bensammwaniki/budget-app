@@ -6,6 +6,8 @@ import { ActivityIndicator, Alert, ScrollView, StatusBar, Switch, Text, Touchabl
 import { clearProcessedSms, getUserSettings, saveUserSettings } from '../../services/database';
 import { syncMessages } from '../../services/smsService';
 
+import { Image } from 'expo-image';
+
 export default function MyBanksScreen() {
     const router = useRouter();
     const { colorScheme } = useColorScheme();
@@ -75,15 +77,17 @@ export default function MyBanksScreen() {
             {/* Header */}
             <View className="px-6 pt-16 pb-6 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800">
                 <View className="flex-row items-center">
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        className="mr-4 p-2 -ml-2 rounded-full active:bg-gray-100 dark:active:bg-slate-800"
-                    >
-                        <Ionicons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#fff' : '#0f172a'} />
+                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+                        <Image
+                            source={require('../../assets/svg/back.svg')}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            contentFit="contain"
+                        />
                     </TouchableOpacity>
                     <Text className="text-2xl font-bold text-slate-900 dark:text-white">My Banks</Text>
                 </View>
-                <Text className="mt-2 text-slate-500 dark:text-slate-400">
+                <Text className="mt-2 text-slate-500 dark:text-slate-400 text-[11px]">
                     Enable SMS parsing for your banks to automatically track transactions.
                 </Text>
             </View>
@@ -96,7 +100,12 @@ export default function MyBanksScreen() {
                     <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center flex-1 mr-4">
                             <View className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center mr-4">
-                                <Ionicons name="business" size={24} color="#2563eb" />
+                                
+                                <Image
+                                    source={require('../../assets/banks/iandm-logo.png')}
+                                    style={{ width: 24, height: 24 }}
+                                    contentFit="cover"
+                                />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-lg font-semibold text-slate-900 dark:text-white">I&M Bank</Text>
