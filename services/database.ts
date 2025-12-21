@@ -246,14 +246,14 @@ export const addCategory = async (category: Omit<Category, 'id'>) => {
         'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
         [category.name, category.type, category.icon, category.color, 1, category.description || '']
     );
-    notifyListeners('CATEGORIES');
+    notifyListenersImmediate('CATEGORIES');
     return result.lastInsertRowId;
 };
 
 export const deleteCategory = async (id: number) => {
     const database = ensureDb();
     await database.runAsync('DELETE FROM categories WHERE id = ?', [id]);
-    notifyListeners('CATEGORIES');
+    notifyListenersImmediate('CATEGORIES');
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
@@ -265,7 +265,7 @@ export const saveUserSettings = async (key: string, value: string) => {
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
         [key, value]
     );
-    notifyListeners('SETTINGS');
+    notifyListenersImmediate('SETTINGS');
 };
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
@@ -361,7 +361,7 @@ export const saveRecipientCategory = async (recipientId: string, categoryId: num
         'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
         [categoryId || null, recipientId, type]
     );
-    notifyListeners('TRANSACTIONS');
+    notifyListenersImmediate('TRANSACTIONS');
 };
 
 export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
@@ -374,7 +374,7 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
         'UPDATE transactions SET categoryId = ? WHERE id = ?',
         [categoryId || null, transactionId]
     );
-    notifyListeners('TRANSACTIONS');
+    notifyListenersImmediate('TRANSACTIONS');
 };
 
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
@@ -383,7 +383,7 @@ export const updateTransactionDate = async (transactionId: string, newDate: Date
         'UPDATE transactions SET date = ? WHERE id = ?',
         [newDate.toISOString(), transactionId]
     );
-    notifyListeners('TRANSACTIONS');
+    notifyListenersImmediate('TRANSACTIONS');
 };
 
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
@@ -717,7 +717,7 @@ export const saveMonthlyBudget = async (month: string, totalIncome: number, allo
             );
         }
     });
-    notifyListeners('BUDGETS');
+    notifyListenersImmediate('BUDGETS');
 };
 
 export const getCategorySpending = async (month: string): Promise<Record<number, number>> => {
@@ -756,5 +756,5 @@ export const transactionExists = async (id: string): Promise<boolean> => {
 export const deleteTransaction = async (id: string) => {
     const database = ensureDb();
     await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
-    notifyListeners('TRANSACTIONS');
+    notifyListenersImmediate('TRANSACTIONS');
 };
