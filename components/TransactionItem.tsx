@@ -24,9 +24,9 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                     : 'bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700'
                 }`}>
                 <FontAwesome
-                    name={isBankTransaction ? 'bank' : ((tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'))}
+                    name={((tx.categoryIcon) || (isBankTransaction ? 'bank' : (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'))) as any}
                     size={18}
-                    color={isBankTransaction ? '#2563eb' : (tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8'))}
+                    color={tx.categoryColor || (isBankTransaction ? '#2563eb' : (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8'))}
                 />
             </View>
             <View className="flex-1">
@@ -39,6 +39,11 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                             {isBankTransaction ? 'I&M BANK' : 'M-PESA'}
                         </Text>
                     </View>
+                    {tx.categoryName && (
+                        <Text className="text-[10px] font-medium mr-2" style={{ color: tx.categoryColor }}>
+                            {tx.categoryName}
+                        </Text>
+                    )}
                     <Text className="text-slate-400 text-[10px]">
                         {tx.date.toLocaleDateString()}
                     </Text>
