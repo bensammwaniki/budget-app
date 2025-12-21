@@ -34,6 +34,12 @@ export const notifyListeners = (type: DatabaseChangeType) => {
     }, 500); // 500ms debounce for smoother UI during deep sync
 };
 
+// Immediate notification for user-initiated actions (no debounce)
+export const notifyListenersImmediate = (type: DatabaseChangeType) => {
+    console.log(`⚡ Immediate notification of change: ${type}`);
+    listeners.forEach(l => l(type));
+};
+
 export const initDatabase = async () => {
     // If already initializing, wait for it
     if (initPromise) {
