@@ -9,16 +9,24 @@ interface TransactionItemProps {
 }
 
 const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPress }) => {
+    // Detect if this is a bank transaction
+    const isBankTransaction = tx.id.startsWith('IM_') ||
+        tx.id.includes('VCSA') ||
+        tx.id.includes('OIGG');
+
     return (
         <TouchableOpacity
             className="flex-row items-center bg-white dark:bg-[#1e293b] mx-6 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm mb-4 active:opacity-70"
             onPress={() => onPress(tx)}
         >
-            <View className="w-12 h-12 rounded-full bg-gray-50 dark:bg-[#0f172a] items-center justify-center mr-4 border border-gray-100 dark:border-slate-700">
+            <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 border ${isBankTransaction
+                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                    : 'bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700'
+                }`}>
                 <FontAwesome
-                    name={(tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart')}
+                    name={isBankTransaction ? 'bank' : ((tx.categoryIcon as any) || (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'))}
                     size={18}
-                    color={tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8')}
+                    color={isBankTransaction ? '#2563eb' : (tx.categoryColor || (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8'))}
                 />
             </View>
             <View className="flex-1">
@@ -26,9 +34,9 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                     {tx.recipientName}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
-                    <View className={`px-1.5 py-0.5 rounded mr-2 ${tx.id.startsWith('IM_') ? 'bg-blue-100' : 'bg-green-100'}`}>
-                        <Text className={`text-[8px] font-bold ${tx.id.startsWith('IM_') ? 'text-blue-700' : 'text-green-700'}`}>
-                            {tx.id.startsWith('IM_') ? 'BANK' : 'M-PESA'}
+                    <View className={`px-1.5 py-0.5 rounded mr-2 ${isBankTransaction ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                        <Text className={`text-[8px] font-bold ${isBankTransaction ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'}`}>
+                            {isBankTransaction ? 'I&M BANK' : 'M-PESA'}
                         </Text>
                     </View>
                     <Text className="text-slate-400 text-[10px]">

@@ -45,6 +45,7 @@ export default function HomeScreen() {
   const [isCategorizationSuppressed, setIsCategorizationSuppressed] = useState(false);
   const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [imBankEnabled, setImBankEnabled] = useState(false);
 
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
@@ -56,6 +57,19 @@ export default function HomeScreen() {
 
   // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
   const initialLoading = appIsLaunching && !hasPerformedSyncOnce;
+
+  // Load bank settings
+  useEffect(() => {
+    const loadBankSettings = async () => {
+      try {
+        const enabled = await getUserSettings('bank_im_enabled');
+        setImBankEnabled(enabled === 'true');
+      } catch (error) {
+        console.error('Error loading bank settings:', error);
+      }
+    };
+    loadBankSettings();
+  }, []);
 
   useEffect(() => {
     const runProgressiveSync = async () => {
@@ -129,9 +143,18 @@ export default function HomeScreen() {
     return { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months };
   }, []);
 
-  // Filter transactions based on selected period
+  // Filter transactions based on selected period AND bank settings
   const filteredTransactions = useMemo(() => {
-    return allTransactions.filter((t: Transaction) => {
+    const filtered = allTransactions.filter((t: Transaction) => {
+      // Filter out bank transactions if bank is disabled
+      const isBankTransaction = t.id.startsWith('IM_') ||
+        t.id.includes('VCSA') ||
+        t.id.includes('OIGG');
+
+      if (isBankTransaction && !imBankEnabled) {
+        return false; // Hide bank transactions when bank is disabled
+      }
+
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       if (isNaN(txDate.getTime())) return false;
 
@@ -148,7 +171,24 @@ export default function HomeScreen() {
       }
       return true;
     });
-  }, [allTransactions, selectedPeriod, dateRange]);
+
+    // Debug: Count bank transactions
+    const bankTransactions = filtered.filter(t =>
+      t.id.startsWith('IM_') ||
+      t.id.includes('VCSA') ||
+      t.id.includes('OIGG')
+    );
+
+    // Show sample IDs to verify what's in the database
+    const sampleIds = allTransactions.slice(0, 10).map(t => t.id);
+    console.log(`📊 Total transactions: ${allTransactions.length}, Filtered: ${filtered.length}, Bank: ${bankTransactions.length}`);
+    console.log(`🔍 Sample transaction IDs:`, sampleIds);
+    if (bankTransactions.length > 0) {
+      console.log(`🏦 Bank transaction IDs:`, bankTransactions.map(t => t.id));
+    }
+
+    return filtered;
+  }, [allTransactions, selectedPeriod, dateRange, imBankEnabled]);
 
   // Fuliza Fees for the selected period
   const periodFulizaFees = useMemo(() => {

@@ -143,23 +143,42 @@ export const syncMessages = async (days: number = 30) => {
 
         // PASS 2: Process Bank Messages (if enabled)
         if (imBankEnabled) {
+            console.log('🏦 Bank parsing enabled, checking messages...');
+            let bankMessagesFound = 0;
+            let bankTransactionsParsed = 0;
+
             for (const msg of messages) {
                 await yieldIfNecessary();
                 if (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK')) {
+                    bankMessagesFound++;
+                    console.log(`🏦 Found I&M Bank SMS from ${msg.address}`);
+                    console.log(`📧 SMS Body: ${msg.body.substring(0, 100)}...`);
+
                     const parsed = parseBankSms(msg.body, msg.address);
                     if (parsed) {
+                        bankTransactionsParsed++;
+                        console.log(`✅ Parsed bank transaction: ${parsed.type} ${parsed.amount} to ${parsed.recipientName}`);
+
                         const mpesaRef = extractMpesaRefFromBankSms(msg.body);
                         if (mpesaRef) {
                             const exists = await transactionExists(mpesaRef);
-                            if (exists) continue;
+                            if (exists) {
+                                console.log(`⏭️ Skipping duplicate (M-PESA Ref: ${mpesaRef})`);
+                                continue;
+                            }
                         }
 
                         parsed.date = new Date(msg.date);
+                        console.log(`💾 Saving bank transaction with ID: ${parsed.id}, Date: ${parsed.date.toISOString()}`);
                         await saveTransaction(parsed, false);
                         newTransactionsCount++;
+                    } else {
+                        console.log(`❌ Failed to parse bank SMS`);
                     }
                 }
             }
+
+            console.log(`🏦 Bank SMS Summary: Found ${bankMessagesFound} messages, parsed ${bankTransactionsParsed} transactions`);
         }
 
         // Save sync time
