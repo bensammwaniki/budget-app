@@ -1,14 +1,19 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { getUserSettings, saveUserSettings } from '../../services/database';
+import { ActivityIndicator, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useAlert } from '../../context/AlertContext';
+import { clearProcessedSms, getUserSettings, saveUserSettings } from '../../services/database';
+import { syncMessages } from '../../services/smsService';
+
+import { Image } from 'expo-image';
 
 export default function MyBanksScreen() {
     const router = useRouter();
     const { colorScheme } = useColorScheme();
+    const { showAlert } = useAlert();
     const [imBankEnabled, setImBankEnabled] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -26,6 +31,48 @@ export default function MyBanksScreen() {
     const toggleImBank = async (value: boolean) => {
         setImBankEnabled(value);
         await saveUserSettings('bank_im_enabled', value.toString());
+
+        // Auto-sync when enabling
+        if (value) {
+            setIsSyncing(true);
+            try {
+                // Clear cache to force fresh scan of bank transactions
+                await clearProcessedSms();
+
+                // Trigger background sync
+                const result = await syncMessages(30);
+
+                if (result.success) {
+                    showAlert({
+                        title: 'Sync Complete',
+                        message: 'Successfully synced bank transactions! Check your Home screen.',
+                        type: 'success',
+                        buttons: [{ text: 'OK' }]
+                    });
+                } else {
+                    const errorMessage = result.error
+                        ? (typeof result.error === 'string' ? result.error : 'Sync failed')
+                        : 'Could not sync transactions. Please try again.';
+
+                    showAlert({
+                        title: 'Sync Failed',
+                        message: errorMessage,
+                        type: 'error',
+                        buttons: [{ text: 'OK', style: 'cancel' }]
+                    });
+                }
+            } catch (error) {
+                console.error('Error during auto-sync:', error);
+                showAlert({
+                    title: 'Sync Error',
+                    message: 'An error occurred while syncing. Please try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'cancel' }]
+                });
+            } finally {
+                setIsSyncing(false);
+            }
+        }
     };
 
     return (
@@ -35,15 +82,17 @@ export default function MyBanksScreen() {
             {/* Header */}
             <View className="px-6 pt-16 pb-6 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800">
                 <View className="flex-row items-center">
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        className="mr-4 p-2 -ml-2 rounded-full active:bg-gray-100 dark:active:bg-slate-800"
-                    >
-                        <Ionicons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#fff' : '#0f172a'} />
+                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+                        <Image
+                            source={require('../../assets/svg/back.svg')}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            contentFit="contain"
+                        />
                     </TouchableOpacity>
                     <Text className="text-2xl font-bold text-slate-900 dark:text-white">My Banks</Text>
                 </View>
-                <Text className="mt-2 text-slate-500 dark:text-slate-400">
+                <Text className="mt-2 text-slate-500 dark:text-slate-400 text-[11px]">
                     Enable SMS parsing for your banks to automatically track transactions.
                 </Text>
             </View>
@@ -56,39 +105,33 @@ export default function MyBanksScreen() {
                     <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center flex-1 mr-4">
                             <View className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center mr-4">
-                                <Ionicons name="business" size={24} color="#2563eb" />
+
+                                <Image
+                                    source={require('../../assets/banks/iandm-logo.png')}
+                                    style={{ width: 40, height: 40, borderRadius: 50 }}
+                                    contentFit="cover"
+                                />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-lg font-semibold text-slate-900 dark:text-white">I&M Bank</Text>
-                                <Text className="text-sm text-slate-500 dark:text-slate-400">Parses transfers & card purchases</Text>
+                                <Text className="text-sm text-slate-500 dark:text-slate-400">
+                                    {isSyncing ? 'Syncing transactions...' : 'Parses transfers & card purchases'}
+                                </Text>
                             </View>
                         </View>
-                        <Switch
-                            value={imBankEnabled}
-                            onValueChange={toggleImBank}
-                            trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
-                            thumbColor={'#ffffff'}
-                        />
+                        <View className="flex-row items-center gap-2">
+                            {isSyncing && (
+                                <ActivityIndicator size="small" color="#2563eb" />
+                            )}
+                            <Switch
+                                value={imBankEnabled}
+                                onValueChange={toggleImBank}
+                                trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                                thumbColor={'#ffffff'}
+                                disabled={isSyncing}
+                            />
+                        </View>
                     </View>
-                </View>
-
-                {/* Resync Button */}
-                <View className="mb-8">
-                    <TouchableOpacity
-                        className="bg-gray-100 dark:bg-[#1e293b] p-4 rounded-xl flex-row items-center justify-center border border-gray-200 dark:border-slate-700 active:bg-gray-200"
-                        onPress={async () => {
-                            // Import here to avoid circular dependencies if any, or just use general import
-                            const { clearProcessedSms } = require('../../services/database');
-                            await clearProcessedSms();
-                            alert('Transaction cache cleared! Please pull-to-refresh on the Home Screen to re-scan.');
-                        }}
-                    >
-                        <Ionicons name="refresh" size={20} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
-                        <Text className="ml-2 font-semibold text-slate-600 dark:text-slate-400">Resync Transactions</Text>
-                    </TouchableOpacity>
-                    <Text className="text-center text-xs text-slate-400 mt-2 px-4">
-                        If transactions are missing, tap this and then refresh the Home Screen.
-                    </Text>
                 </View>
 
                 {/* Coming Soon Placeholder */}

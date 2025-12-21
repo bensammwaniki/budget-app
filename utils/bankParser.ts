@@ -31,7 +31,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const mpesaRef = match[5]; // M-PESA Ref - useful for deduplication
 
         return {
-            id: bankRef, // Use Bank Ref as ID
+            id: `IM_TRANSFER_${bankRef}`, // Standardize ID with IM_ prefix
             amount: amount,
             type: 'SENT',
             recipientId: phoneNumber,
@@ -59,7 +59,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const mpesaRef = match[4];
 
         return {
-            id: bankRef, // SAME ID as the transfer message
+            id: `IM_TRANSFER_${bankRef}`, // SAME ID as the transfer message
             amount: amount,
             type: 'SENT', // Force SENT to maintain it as an expense/transfer record
             recipientId: 'SELF', // Or user name

@@ -8,7 +8,7 @@ export const calculateFulizaDailyCharge = (outstandingBalance: number): number =
 };
 
 export const calculateAccessFee = (loanAmount: number): number => {
-    return loanAmount * 0.01; // 1%
+    return loanAmount * 0.01; // 1% interest
 };
 
 export const estimateFulizaCost = (

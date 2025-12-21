@@ -31,8 +31,6 @@ export default function ProfileScreen() {
                 hideTabBar();
             } else if (diff > 5) {
                 showTabBar();
-            } else if (diff < -5) {
-                hideTabBar();
             }
             lastScrollY.value = currentY;
         },

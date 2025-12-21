@@ -3,14 +3,17 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addAutomationRule, applyRuleToExistingTransactions, getCategories } from '../../services/database';
 import { AutomationCondition, AutomationRule } from '../../types/automation';
 import { Category } from '../../types/transaction';
 
+import { useAlert } from '../../context/AlertContext';
+
 export default function CreateAutomationRuleScreen() {
     const router = useRouter();
+    const { showAlert } = useAlert();
     const { colorScheme } = useColorScheme();
     const insets = useSafeAreaInsets();
 
@@ -49,12 +52,12 @@ export default function CreateAutomationRuleScreen() {
 
     const handleSave = async () => {
         if (!name.trim()) {
-            Alert.alert('Error', 'Please enter a rule name');
+            showAlert({ title: 'Error', message: 'Please enter a rule name', type: 'error' });
             return;
         }
 
         if (!selectedCategory) {
-            Alert.alert('Error', 'Please select a target category');
+            showAlert({ title: 'Error', message: 'Please select a target category', type: 'error' });
             return;
         }
 
@@ -87,7 +90,7 @@ export default function CreateAutomationRuleScreen() {
         }
 
         if (conditions.length === 0) {
-            Alert.alert('Error', 'Please enable at least one condition');
+            showAlert({ title: 'Error', message: 'Please enable at least one condition', type: 'error' });
             return;
         }
 
@@ -109,15 +112,16 @@ export default function CreateAutomationRuleScreen() {
             const updatedCount = await applyRuleToExistingTransactions({ ...rule, id: newId });
             setLoading(false);
 
-            Alert.alert(
-                'Rule Created',
-                `Rule saved successfully!\n\n${updatedCount} existing transaction${updatedCount !== 1 ? 's' : ''} were updated to match this rule.`,
-                [{ text: 'OK', onPress: () => router.back() }]
-            );
+            showAlert({
+                title: 'Rule Created',
+                message: `Rule saved successfully!\n\n${updatedCount} existing transaction${updatedCount !== 1 ? 's' : ''} were updated to match this rule.`,
+                type: 'success',
+                buttons: [{ text: 'OK', onPress: () => router.back() }]
+            });
         } catch (error) {
             console.error('Failed to save rule:', error);
             setLoading(false);
-            Alert.alert('Error', 'Failed to save rule');
+            showAlert({ title: 'Error', message: 'Failed to save rule', type: 'error' });
         }
     };
 

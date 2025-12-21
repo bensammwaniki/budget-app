@@ -5,6 +5,7 @@ import { useColorScheme } from 'nativewind';
 import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 
 export default function PrivacyPolicyScreen() {
     const router = useRouter();
@@ -16,12 +17,14 @@ export default function PrivacyPolicyScreen() {
 
             {/* Header */}
             <View className="px-6 py-4 flex-row items-center border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-[#0f172a]">
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    className="w-10 h-10 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800 mr-4"
-                >
-                    <FontAwesome name="arrow-left" size={16} color={colorScheme === 'dark' ? '#fff' : '#0f172a'} />
-                </TouchableOpacity>
+                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+                        <Image
+                            source={require('../assets/svg/back.svg')}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            contentFit="contain"
+                        />
+                    </TouchableOpacity>
                 <Text className="text-xl font-bold text-slate-900 dark:text-white">Privacy & Policy</Text>
             </View>
 

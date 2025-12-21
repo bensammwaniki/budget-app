@@ -15,7 +15,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
         return {
             transform: [
                 {
-                    translateY: (1 - tabBarVisible.value) * (60 + insets.bottom + 20), // Height + Padding + Margin
+                    translateY: (1 - tabBarVisible.value) * (65 + insets.bottom + 20), // Height + Padding + Margin
                 },
             ],
             opacity: tabBarVisible.value,

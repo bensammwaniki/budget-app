@@ -2,7 +2,9 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import GlassLayout from "../components/GlassLayout";
+import PermissionGuard from "../components/PermissionGuard";
 import "../global.css";
 import { AuthProvider, useAuth } from "../services/AuthContext";
 
@@ -43,15 +45,25 @@ function InitialLayout() {
 
   return (
     <GlassLayout>
-      <Stack screenOptions={{ headerShown: false }} />
+      <PermissionGuard>
+        <Stack screenOptions={{ headerShown: false }} />
+      </PermissionGuard>
     </GlassLayout>
   );
 }
 
+import CustomAlert from "../components/CustomAlert";
+import { AlertProvider } from "../context/AlertContext";
+
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <InitialLayout />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <AlertProvider>
+          <InitialLayout />
+          <CustomAlert />
+        </AlertProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
