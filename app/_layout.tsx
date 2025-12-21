@@ -52,11 +52,17 @@ function InitialLayout() {
   );
 }
 
+import CustomAlert from "../components/CustomAlert";
+import { AlertProvider } from "../context/AlertContext";
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <InitialLayout />
+        <AlertProvider>
+          <InitialLayout />
+          <CustomAlert />
+        </AlertProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

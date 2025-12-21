@@ -7,6 +7,7 @@ import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native
 import CategorizationModal from '../../components/CategorizationModal';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
 import TransactionItem from '../../components/TransactionItem';
+import { useAlert } from '../../context/AlertContext';
 import { useSpendingSummary, useTransactions } from '../../hooks/useDatabase';
 import { useAuth } from '../../services/AuthContext';
 import {
@@ -53,7 +54,7 @@ export default function HomeScreen() {
   const [uncategorizedQueue, setUncategorizedQueue] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  // Derived state: Use selectedTransaction if set (Edit Mode), otherwise check queue (Queue Mode)
+  const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction || (uncategorizedQueue.length > 0 ? uncategorizedQueue[0] : null);
 
   // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
@@ -256,14 +257,37 @@ export default function HomeScreen() {
     }
   };
 
+
   const handleDeleteTransaction = async (tx: Transaction) => {
-    try {
-      setModalVisible(false);
-      setSelectedTransaction(null);
-      await deleteTransaction(tx.id);
-    } catch (error) {
-      console.error("Failed to delete transaction:", error);
-    }
+    // Show confirmation dialog before deleting
+    showAlert({
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this transaction?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel', onPress: () => { } }, // Just close alert
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setModalVisible(false);
+              setSelectedTransaction(null);
+              await deleteTransaction(tx.id);
+
+              // Optional: Show success alert or toast
+            } catch (error) {
+              console.error("Failed to delete transaction:", error);
+              showAlert({
+                title: 'Error',
+                message: 'Could not delete transaction.',
+                type: 'error'
+              });
+            }
+          }
+        }
+      ]
+    });
   };
 
   const handleDateChange = async (newDate: Date) => {

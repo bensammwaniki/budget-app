@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useAlert } from '../../context/AlertContext';
 import { clearProcessedSms, getUserSettings, saveUserSettings } from '../../services/database';
 import { syncMessages } from '../../services/smsService';
 
@@ -11,6 +11,7 @@ import { Image } from 'expo-image';
 export default function MyBanksScreen() {
     const router = useRouter();
     const { colorScheme } = useColorScheme();
+    const { showAlert } = useAlert();
     const [imBankEnabled, setImBankEnabled] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
@@ -42,28 +43,32 @@ export default function MyBanksScreen() {
                 const result = await syncMessages(30);
 
                 if (result.success) {
-                    Alert.alert(
-                        'Sync Complete',
-                        `Successfully synced bank transactions! Check your Home screen.`,
-                        [{ text: 'OK' }]
-                    );
+                    showAlert({
+                        title: 'Sync Complete',
+                        message: 'Successfully synced bank transactions! Check your Home screen.',
+                        type: 'success',
+                        buttons: [{ text: 'OK' }]
+                    });
                 } else {
                     const errorMessage = result.error
                         ? (typeof result.error === 'string' ? result.error : 'Sync failed')
                         : 'Could not sync transactions. Please try again.';
-                    Alert.alert(
-                        'Sync Failed',
-                        errorMessage,
-                        [{ text: 'OK' }]
-                    );
+
+                    showAlert({
+                        title: 'Sync Failed',
+                        message: errorMessage,
+                        type: 'error',
+                        buttons: [{ text: 'OK', style: 'cancel' }]
+                    });
                 }
             } catch (error) {
                 console.error('Error during auto-sync:', error);
-                Alert.alert(
-                    'Sync Error',
-                    'An error occurred while syncing. Please try again.',
-                    [{ text: 'OK' }]
-                );
+                showAlert({
+                    title: 'Sync Error',
+                    message: 'An error occurred while syncing. Please try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'cancel' }]
+                });
             } finally {
                 setIsSyncing(false);
             }
@@ -100,10 +105,10 @@ export default function MyBanksScreen() {
                     <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center flex-1 mr-4">
                             <View className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center mr-4">
-                                
+
                                 <Image
                                     source={require('../../assets/banks/iandm-logo.png')}
-                                    style={{ width: 24, height: 24 }}
+                                    style={{ width: 40, height: 40, borderRadius: 50 }}
                                     contentFit="cover"
                                 />
                             </View>

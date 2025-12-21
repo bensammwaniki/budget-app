@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCategories } from '../services/database';
 import { Category, Transaction } from '../types/transaction';
@@ -55,18 +55,9 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
     };
 
     const handleDeletePress = () => {
-        Alert.alert(
-            "Delete Transaction",
-            "Are you sure you want to delete this transaction? This action cannot be undone.",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => onDelete && onDelete(transaction!)
-                }
-            ]
-        );
+        if (onDelete && transaction) {
+            onDelete(transaction);
+        }
     };
 
     if (!transaction) return null;

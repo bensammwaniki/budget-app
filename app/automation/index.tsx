@@ -2,16 +2,24 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deleteAutomationRule, getAutomationRules, toggleAutomationRule } from '../../services/database';
+import {
+    applyRuleToExistingTransactions,
+    deleteAutomationRule,
+    getAutomationRules,
+    toggleAutomationRule
+} from '../../services/database';
 import { AutomationRule } from '../../types/automation';
 
 
 import { Image } from 'expo-image';
 
+import { useAlert } from '../../context/AlertContext';
+
 export default function AutomationListScreen() {
     const router = useRouter();
+    const { showAlert } = useAlert();
     const { colorScheme } = useColorScheme();
     const insets = useSafeAreaInsets();
     const [rules, setRules] = useState<AutomationRule[]>([]);
@@ -35,11 +43,12 @@ export default function AutomationListScreen() {
     );
 
     const handleDelete = (id: number) => {
-        Alert.alert(
-            'Delete Rule',
-            'Are you sure you want to delete this automation rule?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        showAlert({
+            title: 'Delete Rule',
+            message: 'Are you sure you want to delete this automation rule? This will only affect future transactions.',
+            type: 'warning',
+            buttons: [
+                { text: 'Cancel', style: 'cancel', onPress: () => { } },
                 {
                     text: 'Delete',
                     style: 'destructive',
@@ -49,21 +58,48 @@ export default function AutomationListScreen() {
                     }
                 }
             ]
-        );
+        });
     };
 
+    const [togglingRuleId, setTogglingRuleId] = useState<number | null>(null);
+
     const handleToggle = async (rule: AutomationRule) => {
-        // Optimistic update
-        const updatedRules = rules.map(r =>
-            r.id === rule.id ? { ...r, isEnabled: !r.isEnabled } : r
-        );
-        setRules(updatedRules);
+        // Prevent double taps
+        if (togglingRuleId) return;
+        setTogglingRuleId(rule.id);
+
+        const newState = !rule.isEnabled;
+
+        // Optimistic update for UI responsiveness
+        setRules(rules.map(r => r.id === rule.id ? { ...r, isEnabled: newState } : r));
 
         try {
-            await toggleAutomationRule(rule.id, !rule.isEnabled);
+            await toggleAutomationRule(rule.id, newState);
+
+            if (newState) {
+                // Turning ON: Apply to existing
+                const appliedCount = await applyRuleToExistingTransactions({ ...rule, isEnabled: true });
+                if (appliedCount > 0) {
+                    showAlert({
+                        title: 'Rule Applied',
+                        message: `Automation applied to ${appliedCount} existing transaction(s).`,
+                        type: 'success'
+                    });
+                }
+            }
+            // Turning OFF: Just disable for future transactions (no reversion)
         } catch (error) {
             console.error('Failed to toggle rule:', error);
-            loadRules(); // Revert on error
+            showAlert({
+                title: 'Error',
+                message: 'Failed to update rule',
+                type: 'error'
+            });
+            // Revert optimistic update
+            setRules(rules.map(r => r.id === rule.id ? { ...r, isEnabled: !newState } : r));
+        } finally {
+            setTogglingRuleId(null);
+            loadRules(); // Refresh to ensure sync
         }
     };
 

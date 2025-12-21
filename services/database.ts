@@ -641,6 +641,35 @@ export const applyRuleToExistingTransactions = async (rule: AutomationRule): Pro
     return updatedCount;
 };
 
+export const revertRuleEffects = async (rule: AutomationRule): Promise<number> => {
+    const database = ensureDb();
+    const allTransactions = await getTransactions();
+    let revertedCount = 0;
+
+    await database.withTransactionAsync(async () => {
+        for (const tx of allTransactions) {
+            // Check if rule applied to this transaction
+            const matchedRule = evaluateTransaction(tx, [rule]);
+
+            // We only revert IF:
+            // 1. The transaction matches the rule criteria (so it WAS likely targeted by this)
+            // 2. The transaction's CURRENT category matches what this rule would have applied (so we don't undo manual overrides)
+            if (matchedRule && tx.categoryId === rule.action.categoryId) {
+                await database.runAsync(
+                    'UPDATE transactions SET categoryId = NULL WHERE id = ?',
+                    [tx.id]
+                );
+                revertedCount++;
+            }
+        }
+    });
+
+    if (revertedCount > 0) {
+        notifyListeners('TRANSACTIONS');
+    }
+    return revertedCount;
+};
+
 // Budget Management
 
 export const getMonthlyBudget = async (month: string) => {
