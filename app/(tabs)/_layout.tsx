@@ -50,6 +50,19 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="debts"
+          options={{
+            title: 'Debts',
+            tabBarIcon: ({ color, focused }) => (
+              <Image
+                source={require('../../assets/svg/debt.svg')}
+                style={{ width: 24, height: 24, tintColor: color }}
+                contentFit="contain"
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: 'Profile',

@@ -75,20 +75,58 @@ const runStrictMigrations = async (database: SQLite.SQLiteDatabase) => {
     // Seed immediately after structure is guaranteed
     await seedDefaultAccounts(database);
 
+    // 3. Create DEBTS Table (Ensure this runs)
+    console.log('Checking DEBTS table...');
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS debts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL DEFAULT 'local_user',
+            account_id TEXT, -- Optional origin account
+            name TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'LIABILITY' CHECK (type IN ('LIABILITY', 'RECEIVABLE')),
+            principal_amount REAL NOT NULL,
+            current_balance REAL NOT NULL,
+            interest_rate REAL,
+            status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PAID', 'DEFAULTED')),
+            start_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            due_date TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (account_id) REFERENCES accounts(id)
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_debts_user_id ON debts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_debts_status ON debts(status);
+    `);
+
+    // 4. Create DEBT_PAYMENTS Table
+    console.log('Checking DEBT_PAYMENTS table...');
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS debt_payments (
+            id TEXT PRIMARY KEY,
+            debt_id TEXT NOT NULL,
+            transaction_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            date TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE, 
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_debt_payments_debt_id ON debt_payments(debt_id);
+    `);
+
     // 2. Update Transactions Table to Strict Ledger Schema
     const result = await database.getAllAsync<{ name: string }>('PRAGMA table_info(transactions)');
     const columns = result.map(c => c.name);
 
     // If we haven't fully migrated to the strict schema yet
-    if (!columns.includes('balance_after')) {
+    if (!columns.includes('balance_after') || !columns.includes('linked_debt_id')) {
         console.log('🔄 Applying Strict Ledger Schema to Transactions...');
-
-        // It is often safer to CREATE a new table and copy data if constraints are changing fundamentally,
-        // but for now we will Alter and Backfill to preserve data easier.
 
         // Add columns if they don't exist (Idempotent-ish check)
         const columnsToAdd = [
-            { name: 'uuid', def: 'TEXT' }, // Unique constraint added later via index? SQLite ALTER TABLE doesn't support adding UNIQUE easily.
+            { name: 'uuid', def: 'TEXT' },
             { name: 'user_id', def: "TEXT DEFAULT 'local_user'" },
             { name: 'account_id', def: 'TEXT REFERENCES accounts(id)' },
             { name: 'transactionKind', def: "TEXT CHECK (transactionKind IN ('EXPENSE', 'INCOME', 'TRANSFER', 'DEBT_PRINCIPAL', 'DEBT_REPAYMENT', 'SAVINGS_TRANSFER'))" },
@@ -98,13 +136,12 @@ const runStrictMigrations = async (database: SQLite.SQLiteDatabase) => {
             { name: 'deleted_at', def: 'TEXT' },
             { name: 'created_at', def: 'TEXT' },
             { name: 'updated_at', def: 'TEXT' },
-            { name: 'linkedDebtId', def: 'TEXT' },
-            { name: 'linkedGoalId', def: 'TEXT' }
+            { name: 'linked_debt_id', def: 'TEXT' }, // FK to debts
+            { name: 'linked_goal_id', def: 'TEXT' }
         ];
 
         for (const col of columnsToAdd) {
             if (!columns.includes(col.name)) {
-                // simple ADD COLUMN
                 try {
                     await database.execAsync(`ALTER TABLE transactions ADD COLUMN ${col.name} ${col.def}`);
                 } catch (e) {
@@ -120,6 +157,7 @@ const runStrictMigrations = async (database: SQLite.SQLiteDatabase) => {
             CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);
             CREATE INDEX IF NOT EXISTS idx_tx_uuid ON transactions(uuid);
             CREATE INDEX IF NOT EXISTS idx_tx_reference_id ON transactions(reference_id);
+            CREATE INDEX IF NOT EXISTS idx_tx_linked_debt ON transactions(linked_debt_id);
         `);
 
 

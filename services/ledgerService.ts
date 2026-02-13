@@ -22,6 +22,7 @@ interface TransactionPayload {
     categoryId?: number;
     userId: string;
     referenceId?: string; // Optional manual link
+    linkedDebtId?: string;
 }
 
 export const ledgerService = {
@@ -59,8 +60,8 @@ export const ledgerService = {
                     amount, type, transactionKind,
                     recipientName, rawSms,
                     date, balance, balance_after, reference_id,
-                    created_at, updated_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    created_at, updated_at, is_deleted, linked_debt_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             `, [
                 uuid, uuid, payload.userId, payload.accountId, payload.categoryId || null,
                 payload.amount, payload.type, payload.kind,
@@ -69,7 +70,7 @@ export const ledgerService = {
                 balanceAfter, // Current snapshot balance
                 balanceAfter, // balance_after (same for now, strictly speaking balance after THIS tx)
                 payload.referenceId || null,
-                now, now
+                now, now, payload.linkedDebtId || null
             ]);
         });
 
@@ -175,6 +176,12 @@ export const ledgerService = {
 
             if (!tx) throw new Error("Transaction not found");
             if (tx.is_deleted) throw new Error("Transaction already deleted");
+
+            // Prevent deletion if linked to a debt
+            const linkedTx = await db.getFirstAsync<{ linked_debt_id: string }>('SELECT linked_debt_id FROM transactions WHERE id = ?', [transactionId]);
+            if (linkedTx?.linked_debt_id) {
+                throw new Error("Cannot delete a transaction linked to a debt. Unlink it from the Debt screen first.");
+            }
 
             // 1. Reverse Balance
             const reverseAmount = tx.type === 'SENT' ? tx.amount : -tx.amount; // Add back expense, subtract income
