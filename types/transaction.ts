@@ -1,18 +1,44 @@
+export type TransactionKind = 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'DEBT_PRINCIPAL' | 'DEBT_REPAYMENT' | 'SAVINGS_TRANSFER';
+
 export interface Transaction {
-    id: string;
-    amount: number;
-    type: 'SENT' | 'RECEIVED';
-    recipientId: string; // Name or Account Number (e.g., "DAD RONGAI" or "333667")
-    recipientName: string; // Display name
-    date: Date;
-    balance: number;
-    transactionCost: number;
+    id: string; // UUID (Primary Key)
+    uuid: string; // Redundant but explicit in reqs, often same as ID
+    userId: string;
+    accountId: string;
     categoryId?: number;
+
+    amount: number;
+    type: 'SENT' | 'RECEIVED'; // Legacy/Display direction
+    transactionKind: TransactionKind;
+
+    recipientId?: string;
+    recipientName: string;
+
+    date: Date;
+
+    // Ledger Auditing
+    balanceAfter?: number;
+    referenceId?: string; // For linking transfers (Account A debit <-> Account B credit)
+
+    // Meta
+    createdAt: Date;
+    updatedAt: Date;
+    deletedAt?: Date;
+    isDeleted: boolean;
+
+    // Legacy/Display
     categoryName?: string;
     categoryIcon?: string;
     categoryColor?: string;
-    categoryDescription?: string;
     rawSms: string;
+
+    // Legacy support
+    balance?: number;
+    transactionCost: number;
+
+    // Debt/Goal linking (Optional for now, part of Phase 2/3 but good to have type ready)
+    linkedDebtId?: string;
+    linkedGoalId?: string;
 }
 
 export interface Category {
@@ -41,6 +67,7 @@ export interface FulizaTransaction {
     linkedTransactionId?: string;
     date: Date;
     rawSms: string;
+    transactionKind: TransactionKind;
 }
 
 export interface SpendingSummary {

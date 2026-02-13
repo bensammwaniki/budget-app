@@ -170,7 +170,15 @@ export const initDatabase = async () => {
                 await seedCategories();
             }
 
+
+
             console.log('✅ Database initialized successfully');
+
+            // Run Ledger Migrations (Phase 1)
+            console.log('🔄 Running Ledger Migrations...');
+            const { initDatabase: initCoreDatabase } = require('./core/db');
+            await initCoreDatabase();
+
         } catch (error) {
             console.error("❌ Database initialization error:", error);
             db = null;
@@ -324,19 +332,31 @@ export const updateFulizaFees = async () => {
         // 4. Save fee transactions
         for (const [monthKey, totalCost] of monthlyCosts.entries()) {
             const [year, month] = monthKey.split('-');
-            const feeDate = new Date(parseInt(year), parseInt(month), 0);
+            const feeDate: Date = new Date(parseInt(year), parseInt(month), 0);
+            const uuid = `FULIZA-FEES-${monthKey}`;
+            const now = new Date();
 
             const bundledAccessFeeTransaction: Transaction = {
-                id: `FULIZA-FEES-${monthKey}`,
+                id: uuid,
+                uuid: uuid,
+                userId: 'local_user',
+                accountId: 'ACC-MPESA-DEFAULT', // Defaulting to M-PESA for fees
                 amount: totalCost,
                 type: 'SENT',
+                transactionKind: 'EXPENSE',
                 recipientId: 'FULIZA-FEES',
-                recipientName: 'Fuliza Fees', // Hardcoded name instead of using monthName
+                recipientName: 'Fuliza Fees',
                 date: feeDate,
-                balance: 0,
+
+                balance: 0, // Legacy
+                balanceAfter: 0, // TODO: Fetch actual balance if needed
                 transactionCost: 0,
                 categoryId: fulizaCategory.id,
-                rawSms: 'Generated Monthly Fee'
+                rawSms: 'Generated Monthly Fee',
+
+                createdAt: now,
+                updatedAt: now,
+                isDeleted: false
             };
 
             await saveTransaction(bundledAccessFeeTransaction, false); // Suppress notification in loop
@@ -412,7 +432,7 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
     // AUTOMATION: If categoryId is missing, try to apply automation rules
     if (!transaction.categoryId) {
         try {
-            const rules = await getAutomationRules(); // This might be slightly expensive, consider caching if performance issues arise
+            const rules = await getAutomationRules();
             const matchedRule = evaluateTransaction(transaction, rules);
 
             if (matchedRule) {
@@ -424,22 +444,43 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
         }
     }
 
+    // Ensure Recipient Exists (to satisfy Strict FK)
+    if (transaction.recipientId) {
+        await database.runAsync(
+            'INSERT OR IGNORE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
+            [transaction.recipientId, transaction.type, null, new Date().toISOString()]
+        );
+    }
+
+    // Insert with new Ledger Columns
+    const values = [
+        transaction.id,
+        transaction.uuid || transaction.id,
+        transaction.userId || 'local_user',
+        transaction.accountId || 'ACC-MPESA-DEFAULT',
+        transaction.categoryId || null,
+        transaction.amount,
+        transaction.type,
+        transaction.transactionKind || (transaction.type === 'SENT' ? 'EXPENSE' : 'INCOME'),
+        transaction.recipientId || null,
+        transaction.recipientName,
+        transaction.date.toISOString(),
+        transaction.balance || 0,
+        transaction.balanceAfter || transaction.balance || 0,
+        transaction.transactionCost || 0,
+        transaction.rawSms,
+        (transaction.createdAt || new Date()).toISOString(),
+        (transaction.updatedAt || new Date()).toISOString(),
+        transaction.isDeleted ? 1 : 0
+    ];
+
+
+
     await database.runAsync(
         `INSERT OR REPLACE INTO transactions 
-    (id, amount, type, recipientId, recipientName, date, balance, transactionCost, categoryId, rawSms) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            transaction.id,
-            transaction.amount,
-            transaction.type,
-            transaction.recipientId,
-            transaction.recipientName,
-            transaction.date.toISOString(),
-            transaction.balance,
-            transaction.transactionCost,
-            transaction.categoryId || null,
-            transaction.rawSms
-        ]
+    (id, uuid, user_id, account_id, categoryId, amount, type, transactionKind, recipientId, recipientName, date, balance, balance_after, transactionCost, rawSms, created_at, updated_at, is_deleted) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        values
     );
 
     if (shouldNotify) {
@@ -456,10 +497,25 @@ export const getTransactions = async (): Promise<Transaction[]> => {
         ORDER BY t.date DESC
     `);
 
-    return result.map(row => ({
-        ...row,
-        date: new Date(row.date)
-    }));
+    console.log(`📊 getTransactions fetched ${result.length} rows`);
+    return result.map(row => {
+        let txDate = new Date();
+        if (row.date) {
+            txDate = new Date(row.date);
+            if (isNaN(txDate.getTime())) {
+                console.warn(`⚠️ Invalid date for tx ${row.id}: ${row.date}, fallback to now`);
+                txDate = new Date();
+            }
+        }
+        return {
+            ...row,
+            date: txDate,
+            // Ensure compatibility
+            type: row.type || (row.amount < 0 ? 'SENT' : 'RECEIVED'),
+            amount: Math.abs(row.amount), // Frontend expects positive amount + type
+            categoryId: row.categoryId // Ensure this is passed
+        };
+    });
 };
 
 export const getSpendingSummary = async (): Promise<SpendingSummary> => {
