@@ -30,7 +30,13 @@ export function ScrollProvider({ children }: { children: React.ReactNode }) {
 export function useScrollVisibility() {
     const context = useContext(ScrollContext);
     if (!context) {
-        throw new Error('useScrollVisibility must be used within a ScrollProvider');
+        // Return no-op functions instead of throwing to prevent crashes during initialization
+        console.warn('useScrollVisibility called outside ScrollProvider, using no-op functions');
+        return {
+            tabBarVisible: { value: 1 },
+            showTabBar: () => { },
+            hideTabBar: () => { }
+        };
     }
     return context;
 }

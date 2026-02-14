@@ -1,6 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,8 +44,9 @@ export default function AddDebtScreen() {
             });
             router.back();
         } catch (error) {
-            Alert.alert('Error', 'Failed to create debt.');
-            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            Alert.alert('Error', `Failed to create debt: ${errorMessage}`);
+            console.error('Debt creation error:', error);
         } finally {
             setLoading(false);
         }

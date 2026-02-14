@@ -83,9 +83,10 @@ const runStrictMigrations = async (database: SQLite.SQLiteDatabase) => {
             user_id TEXT NOT NULL DEFAULT 'local_user',
             account_id TEXT, -- Optional origin account
             name TEXT NOT NULL,
-            type TEXT NOT NULL DEFAULT 'LIABILITY' CHECK (type IN ('LIABILITY', 'RECEIVABLE')),
+            type TEXT NOT NULL DEFAULT 'LIABILITY' CHECK (type IN ('LIABILITY', 'RECEIVABLE', 'OVERDRAFT')),
             principal_amount REAL NOT NULL,
             current_balance REAL NOT NULL,
+            is_revolving INTEGER DEFAULT 0, -- 1 for revolving/overdraft
             interest_rate REAL,
             status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PAID', 'DEFAULTED')),
             start_date TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -129,6 +130,7 @@ const runStrictMigrations = async (database: SQLite.SQLiteDatabase) => {
             { name: 'uuid', def: 'TEXT' },
             { name: 'user_id', def: "TEXT DEFAULT 'local_user'" },
             { name: 'account_id', def: 'TEXT REFERENCES accounts(id)' },
+            { name: 'category_id', def: 'TEXT' }, // Category reference
             { name: 'transactionKind', def: "TEXT CHECK (transactionKind IN ('EXPENSE', 'INCOME', 'TRANSFER', 'DEBT_PRINCIPAL', 'DEBT_REPAYMENT', 'SAVINGS_TRANSFER'))" },
             { name: 'reference_id', def: 'TEXT' },
             { name: 'balance_after', def: 'REAL' },

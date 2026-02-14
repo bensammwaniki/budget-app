@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -20,15 +21,17 @@ import {
   updateTransactionCategory,
   updateTransactionDate
 } from '../../services/database';
+import { debtService } from '../../services/debtService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
 import { Category, Transaction } from '../../types/transaction';
-import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
+// calculateFulizaDailyCharge removed - now handled in debt detail if needed
 
 type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST 3 MONTHS' | 'CURRENT YEAR';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const { colorScheme } = useColorScheme();
   const firstName = user?.displayName?.split(' ')[0] || 'User';
   const { showTabBar, hideTabBar } = useScrollVisibility();
@@ -53,6 +56,13 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [uncategorizedQueue, setUncategorizedQueue] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [debtSummary, setDebtSummary] = useState<{
+    totalLiabilities: number;
+    totalReceivables: number;
+    netDebt: number;
+    activeDebts: number;
+  } | null>(null);
+  const [dbReady, setDbReady] = useState(false);
 
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction || (uncategorizedQueue.length > 0 ? uncategorizedQueue[0] : null);
@@ -62,6 +72,8 @@ export default function HomeScreen() {
 
   // Load bank settings and subscribe to changes
   useEffect(() => {
+    if (!dbReady) return;
+
     const loadBankSettings = async () => {
       try {
         const enabled = await getUserSettings('bank_im_enabled');
@@ -81,13 +93,40 @@ export default function HomeScreen() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [dbReady]);
+
+  // Load debt summary
+  useEffect(() => {
+    if (!dbReady) return;
+
+    const loadDebtSummary = async () => {
+      try {
+        const summary = await debtService.getDebtSummary('local_user');
+        setDebtSummary(summary);
+      } catch (error) {
+        console.error('Error loading debt summary:', error);
+      }
+    };
+
+    loadDebtSummary();
+
+    // Subscribe to transaction changes to refresh debt summary
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'TRANSACTIONS') {
+        loadDebtSummary();
+      }
+    });
+
+    return unsubscribe;
+  }, [dbReady]);
 
   useEffect(() => {
     const runProgressiveSync = async () => {
       try {
         setIsSyncing(true);
         await initDatabase();
+        setDbReady(true); // Signal other effects to start
+
         const lastSync = await getUserSettings('last_sync_timestamp');
 
         if (!lastSync) {
@@ -113,10 +152,13 @@ export default function HomeScreen() {
           await syncMessages(7);
           await updateFulizaFees();
           setIsSyncing(false);
+          setHasPerformedSyncOnce(true);
+          setAppIsLaunching(false);
         }
       } catch (error) {
         console.error('Error in progressive sync:', error);
         setIsSyncing(false);
+        setAppIsLaunching(false);
       }
     };
     runProgressiveSync();
@@ -217,16 +259,10 @@ export default function HomeScreen() {
       cost += t.transactionCost || 0;
     });
 
-    if (selectedPeriod === 'THIS_MONTH' && spending?.currentBalance !== undefined && spending.currentBalance <= 0) {
-      fulizaBalance = spending.fulizaOutstanding || 0;
-    }
-
     return {
       income,
       expense,
-      cost,
-      fulizaBalance,
-      net: income - expense
+      cost
     };
   }, [filteredTransactions, spending, selectedPeriod]);
 
@@ -249,7 +285,9 @@ export default function HomeScreen() {
       }
 
       try {
-        await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
+        if (activeTransaction.recipientId) {
+          await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
+        }
         await updateTransactionCategory(activeTransaction.id, category.id);
       } catch (error) {
         console.error("Failed to save category:", error);
@@ -323,9 +361,9 @@ export default function HomeScreen() {
       const currentY = event.contentOffset.y;
       const diff = currentY - lastScrollY.value;
       if (currentY <= 0) {
-        hideTabBar();
-      } else if (diff > 5) {
         showTabBar();
+      } else if (diff > 5) {
+        hideTabBar();
       }
       lastScrollY.value = currentY;
     },
@@ -413,36 +451,51 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {((spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0) || periodFulizaFees.length > 0) && (
+      {/* Debt Summary Widget */}
+      {debtSummary && debtSummary.activeDebts > 0 && (
         <View className="px-6 mt-8 mb-2">
-          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Fuliza & Overdraft</Text>
-          {spending?.fulizaOutstanding !== undefined && spending.fulizaOutstanding > 0 && (
-            <View className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-2xl border border-orange-200 dark:border-orange-800 mb-6">
-              <Text className="text-orange-800 dark:text-orange-200 font-bold text-base mb-1">Outstanding Loan</Text>
-              <Text className="text-slate-900 dark:text-white text-3xl font-bold mb-1">
-                KES {spending.fulizaOutstanding.toLocaleString()}
-              </Text>
-              <Text className="text-slate-500 dark:text-slate-400 text-xs">
-                Daily: <Text className="font-bold">KES {calculateFulizaDailyCharge(spending.fulizaOutstanding).toFixed(2)}</Text>
-              </Text>
-            </View>
-          )}
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-slate-900 dark:text-white text-lg font-bold">Debts</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/debts')}
+              className="flex-row items-center gap-1"
+            >
+              <Text className="text-blue-600 dark:text-blue-400 text-sm font-medium">View All</Text>
+              <FontAwesome name="chevron-right" size={12} color="#3b82f6" />
+            </TouchableOpacity>
+          </View>
 
-          {periodFulizaFees.slice(0, 12).map((tx: Transaction) => (
-            <View key={tx.id} className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 mb-4">
-              <View className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4">
-                <FontAwesome name="warning" size={16} color="#f97316" />
-              </View>
+          <View className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 p-5 rounded-2xl border border-purple-200 dark:border-purple-800">
+            <View className="flex-row justify-between items-start mb-4">
               <View className="flex-1">
-                <Text className="text-slate-900 dark:text-white font-bold text-sm">{tx.recipientName}</Text>
-                <Text className="text-slate-500 text-[10px]">{tx.date.toLocaleDateString()}</Text>
+                <Text className="text-purple-800 dark:text-purple-200 font-bold text-base mb-1">Total Debt</Text>
+                <Text className="text-slate-900 dark:text-white text-3xl font-bold">
+                  KES {Math.abs(debtSummary.netDebt).toLocaleString()}
+                </Text>
+                <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                  {debtSummary.activeDebts} active {debtSummary.activeDebts === 1 ? 'debt' : 'debts'}
+                </Text>
               </View>
-              <Text className="text-orange-600 dark:text-orange-400 font-bold">-KES {tx.amount.toLocaleString()}</Text>
+              <View className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/40 items-center justify-center">
+                <FontAwesome name="exchange" size={20} color="#9333ea" />
+              </View>
             </View>
-          ))}
-          {periodFulizaFees.length > 11 && (
-            <Text className="text-center text-slate-400 text-[10px] mb-4">plus {periodFulizaFees.length - 11} This are the fuliza for the current year</Text>
-          )}
+
+            <View className="flex-row gap-3">
+              {debtSummary.totalLiabilities > 0 && (
+                <View className="flex-1 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">
+                  <Text className="text-red-600 dark:text-red-400 text-xs mb-1">You Owe</Text>
+                  <Text className="text-red-700 dark:text-red-300 font-bold">KES {debtSummary.totalLiabilities.toLocaleString()}</Text>
+                </View>
+              )}
+              {debtSummary.totalReceivables > 0 && (
+                <View className="flex-1 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-xl">
+                  <Text className="text-green-600 dark:text-green-400 text-xs mb-1">Owed to You</Text>
+                  <Text className="text-green-700 dark:text-green-300 font-bold">KES {debtSummary.totalReceivables.toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       )}
 

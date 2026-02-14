@@ -79,7 +79,6 @@ export interface SpendingSummary {
     totalSpent: number;
     monthlyTransactionCost: number;
     totalIncome: number;
-    fulizaOutstanding: number;
 }
 
 export interface MonthlyBudget {

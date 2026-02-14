@@ -4,6 +4,7 @@ import SmsAndroid from 'react-native-get-sms-android';
 import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../utils/smsParser';
 import {
+    fulizaTransactionExists,
     getUserSettings,
     initDatabase,
     notifyListeners,
@@ -12,6 +13,7 @@ import {
     saveUserSettings,
     transactionExists
 } from './database';
+import { debtService } from './debtService';
 
 export interface SMSMessage {
     _id: string;
@@ -113,27 +115,59 @@ export const syncMessages = async (days: number = 30) => {
                 } else {
                     const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
                     if (fulizaLoan) {
-                        await saveFulizaTransaction(fulizaLoan);
+                        const exists = await fulizaTransactionExists(fulizaLoan.id);
+                        if (!exists) {
+                            await saveFulizaTransaction(fulizaLoan);
+                            const fulizaDebt = await debtService.getOrCreateFulizaDebt();
+
+                            if (fulizaLoan.outstandingBalance !== undefined) {
+                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaLoan.outstandingBalance);
+                            } else {
+                                // Fallback if outstanding balance not found in SMS
+                                await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.amount);
+                                if (fulizaLoan.accessFee && fulizaLoan.accessFee > 0) {
+                                    await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.accessFee);
+                                }
+                            }
+                        }
                         continue;
                     }
 
                     const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
                     if (fulizaRepayment) {
-                        await saveFulizaTransaction(fulizaRepayment);
+                        const exists = await fulizaTransactionExists(fulizaRepayment.id);
+                        if (!exists) {
+                            await saveFulizaTransaction(fulizaRepayment);
+                            const fulizaDebt = await debtService.getOrCreateFulizaDebt();
 
-                        if (fulizaRepayment.accountBalance !== undefined) {
-                            await saveTransaction({
-                                id: fulizaRepayment.id,
-                                amount: fulizaRepayment.amount,
-                                type: 'SENT',
-                                recipientId: 'FULIZA_REPAYMENT',
-                                recipientName: 'Fuliza Repayment',
-                                date: fulizaRepayment.date,
-                                balance: fulizaRepayment.accountBalance,
-                                transactionCost: 0,
-                                categoryId: undefined,
-                                rawSms: fulizaRepayment.rawSms
-                            }, false);
+                            if (fulizaRepayment.outstandingBalance !== undefined) {
+                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaRepayment.outstandingBalance);
+                            } else {
+                                await debtService.reduceDebtAmount(fulizaDebt.id, fulizaRepayment.amount);
+                            }
+
+                            if (fulizaRepayment.accountBalance !== undefined) {
+                                await saveTransaction({
+                                    id: fulizaRepayment.id,
+                                    uuid: fulizaRepayment.id,
+                                    userId: 'local_user',
+                                    accountId: 'ACC-MPESA-DEFAULT', // Fuliza affects M-PESA balance
+                                    amount: fulizaRepayment.amount,
+                                    type: 'SENT',
+                                    transactionKind: 'DEBT_REPAYMENT',
+                                    recipientId: 'FULIZA_REPAYMENT',
+                                    recipientName: 'Fuliza Repayment',
+                                    date: fulizaRepayment.date,
+                                    balance: fulizaRepayment.accountBalance,
+                                    transactionCost: 0,
+                                    categoryId: undefined,
+                                    rawSms: fulizaRepayment.rawSms,
+                                    createdAt: new Date(),
+                                    updatedAt: new Date(),
+                                    isDeleted: false,
+                                    linkedDebtId: fulizaDebt.id
+                                }, false);
+                            }
                         }
                         continue;
                     }
@@ -183,6 +217,9 @@ export const syncMessages = async (days: number = 30) => {
 
         // Save sync time
         await saveUserSettings('last_sync_timestamp', Date.now().toString());
+
+        // Final reconciliation check for Fuliza
+        await debtService.reconcileFulizaBalance();
 
         // Notify once after everything is synced
         notifyListeners('TRANSACTIONS');

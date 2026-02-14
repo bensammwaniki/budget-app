@@ -1,6 +1,5 @@
-import { Transaction } from '../types/transaction';
 
-export const parseMpesaSms = (smsText: string): Transaction | null => {
+export const parseMpesaSms = (smsText: string): any | null => {
     // 1. Standard Payment (Sent)
     // "TKTFVBL1ZS Confirmed. Ksh1,510.00 paid to DAD RONGAI. on 29/11/25 at 7:25 PM. New M-PESA balance is..."
     const sentPattern = /([A-Z0-9]+)\s+Confirmed\.[\s]*Ksh\s*([\d,]+\.\d{2})\s+paid\s+to\s+(.+?)\.\s+on\s+(\d{1,2}\/\d{1,2}\/\d{2})\s+at\s+([\d:]+\s+[AP]M)\.\s*New\s+M-PESA\s+balance\s+is\s+Ksh\s*([\d,]+\.\d{2})\.\s+Transaction\s+cost,\s+Ksh\s*([\d,]+\.\d{2})/;
@@ -21,7 +20,8 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
     // "RKXABCD123 Confirmed. You have received Ksh500.00 from JOHN DOE on 29/11/25 at 10:00 AM. New M-PESA balance is..."
     const receivedPattern = /([A-Z0-9]+)\s+Confirmed\.[\s]*You\s+have\s+received\s+Ksh\s*([\d,]+\.\d{2})\s+from\s+(.+?)\s+on\s+(\d{1,2}\/\d{1,2}\/\d{2})\s+at\s+([\d:]+\s+[AP]M)/;
 
-    let match = smsText.match(sentPattern);
+    let balanceMatch: RegExpMatchArray | null;
+    let match: RegExpMatchArray | null = smsText.match(sentPattern);
     if (match) {
         return {
             id: match[1],
@@ -39,7 +39,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
     match = smsText.match(bankPattern);
     if (match) {
         // For bank, recipientId is the account number, recipientName is the Bank Name
-        const balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
+        balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
         const costMatch = smsText.match(/cost,\s+Ksh\s*([\d,]+\.\d{2})/);
 
         return {
@@ -57,7 +57,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
 
     match = sentPersonPattern.exec(smsText);
     if (match) {
-        const balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
+        balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
         const costMatch = smsText.match(/cost,\s+Ksh\s*([\d,]+\.\d{2})/);
 
         return {
@@ -75,7 +75,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
 
     match = withdrawPattern.exec(smsText);
     if (match) {
-        const balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
+        balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
         const costMatch = smsText.match(/cost,\s+Ksh\s*([\d,]+\.\d{2})/);
 
         return {
@@ -93,7 +93,7 @@ export const parseMpesaSms = (smsText: string): Transaction | null => {
 
     match = smsText.match(receivedPattern);
     if (match) {
-        const balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
+        balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
 
         return {
             id: match[1],
@@ -179,33 +179,38 @@ export const parseFulizaRepayment = (smsText: string, timestamp?: number): any |
     if (match) {
         const paymentType = match[3]; // 'partially' or 'fully'
 
-        // Try to extract remaining balance/limit - handle both formats
+        // Try to extract remaining balance - handle both formats
         let outstandingBalance: number | undefined = undefined;
 
-        // Try "Your available" format
-        let limitMatch = normalizedText.match(/Your available Fuliza M-PESA limit is Ksh\s+([\d,]+\.\d{2})/);
-
-        // If not found, try "Available" format (without "Your")
-        if (!limitMatch) {
-            limitMatch = normalizedText.match(/Available Fuliza M-PESA limit is Ksh\s+([\d,]+\.\d{2})/);
+        // 1. Try explicit "Your outstanding Fuliza M-PESA amount is Ksh" format (repayment detail)
+        let balanceMatch = normalizedText.match(/Your outstanding Fuliza M-PESA amount is Ksh\s*([\d,]+\.\d{2})/);
+        if (!balanceMatch) {
+            balanceMatch = normalizedText.match(/Outstanding Fuliza M-PESA amount is Ksh\s*([\d,]+\.\d{2})/);
         }
 
-        if (paymentType === 'fully') {
+        if (balanceMatch) {
+            outstandingBalance = parseFloat(balanceMatch[1].replace(/,/g, ''));
+        } else if (paymentType === 'fully') {
             // If it says "fully pay", the outstanding balance is 0
             outstandingBalance = 0;
-        } else if (limitMatch) {
-            // For partial payments, if we found the limit, use it
-            // Note: "Available limit" is NOT the outstanding balance, it's the credit available
-            // But the old parser was treating it as such, so keeping for consistency
-            outstandingBalance = parseFloat(limitMatch[1].replace(/,/g, ''));
+        } else {
+            // If no explicit balance, try calculating from limit if available
+            // Note: This is a fallback and might be less accurate if limit is unknown
+            let limitMatch = normalizedText.match(/Your available Fuliza M-PESA limit is Ksh\s+([\d,]+\.\d{2})/);
+            if (!limitMatch) {
+                limitMatch = normalizedText.match(/Available Fuliza M-PESA limit is Ksh\s+([\d,]+\.\d{2})/);
+            }
+
+            // We can't actually calculate outstanding from just "Available limit" 
+            // without knowing the TOTAL limit, so we leave it as undefined to be calculated/ignored
         }
         // else: partial payment with no balance info = undefined (will be calculated)
 
         // EXTRACT ACCOUNT BALANCE
-        let accountBalance: number | undefined = undefined;
-        const balanceMatch = normalizedText.match(balancePattern);
-        if (balanceMatch) {
-            accountBalance = parseFloat(balanceMatch[1].replace(/,/g, ''));
+        let accBalance: number | undefined = undefined;
+        let accountBalanceMatch = normalizedText.match(balancePattern);
+        if (accountBalanceMatch) {
+            accBalance = parseFloat(accountBalanceMatch[1].replace(/,/g, ''));
         }
 
         return {
@@ -213,7 +218,7 @@ export const parseFulizaRepayment = (smsText: string, timestamp?: number): any |
             amount: parseFloat(match[2].replace(/,/g, '')),
             type: 'REPAYMENT',
             outstandingBalance: outstandingBalance,
-            accountBalance: accountBalance, // New field
+            accountBalance: accBalance, // New field
             date: timestamp ? new Date(timestamp) : new Date(),
             rawSms: smsText
         };

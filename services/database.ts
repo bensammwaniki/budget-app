@@ -304,6 +304,7 @@ export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
     }));
 };
 
+
 export const updateFulizaFees = async () => {
     try {
         // 1. Get Fuliza Charges category ID
@@ -424,6 +425,15 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
             fuliza.rawSms
         ]
     );
+};
+
+export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
+    const database = ensureDb();
+    const result = await database.getFirstAsync<{ count: number }>(
+        'SELECT count(*) as count FROM fuliza_transactions WHERE id = ?',
+        [id]
+    );
+    return (result?.count || 0) > 0;
 };
 
 export const saveTransaction = async (transaction: Transaction, shouldNotify: boolean = true) => {
@@ -572,7 +582,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     );
 
     let currentBalance = balanceResult[0]?.balance || 0;
-    const fulizaOutstanding = fulizaResult[0]?.balance || 0;
+    // const fulizaOutstanding = fulizaResult[0]?.balance || 0; // REPLACED by Debt system
 
     // Logic: If the latest Fuliza event is NEWER than the latest M-PESA transaction,
     // AND it is a LOAN (borrowing), it implies the M-PESA balance is 0.
@@ -593,8 +603,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
         transactionCount: countResult[0]?.count || 0,
         totalSpent: totalSpentResult[0]?.total || 0,
         monthlyTransactionCost: monthlyCostResult[0]?.total || 0,
-        totalIncome: totalIncomeResult[0]?.total || 0,
-        fulizaOutstanding: fulizaOutstanding
+        totalIncome: totalIncomeResult[0]?.total || 0
     };
 };
 
