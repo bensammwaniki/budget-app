@@ -14,7 +14,6 @@ import { useAuth } from '../../services/AuthContext';
 import {
   deleteTransaction,
   getUserSettings,
-  initDatabase,
   saveRecipientCategory,
   subscribeToDatabaseChanges,
   updateFulizaFees,
@@ -124,8 +123,8 @@ export default function HomeScreen() {
     const runProgressiveSync = async () => {
       try {
         setIsSyncing(true);
-        await initDatabase();
-        setDbReady(true); // Signal other effects to start
+        // initDatabase() call removed - now handled in Root Layout
+        setDbReady(true);
 
         const lastSync = await getUserSettings('last_sync_timestamp');
 
@@ -500,7 +499,7 @@ export default function HomeScreen() {
       )}
 
       <View className="px-6 mt-6 mb-4 flex-row justify-between items-center">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Spendings</Text>
+        <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Transactions</Text>
         <Text className="text-slate-500 text-xs">
           {filteredTransactions.length} items
         </Text>

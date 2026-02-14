@@ -4,8 +4,7 @@ import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../ty
 import { evaluateTransaction } from '../utils/automationEngine';
 import { calculateMonthlyFulizaCosts } from '../utils/fulizaCalculator';
 
-let db: SQLite.SQLiteDatabase | null = null;
-let initPromise: Promise<void> | null = null;
+import { getDb, initDatabase } from './core/db';
 
 // Reactive Subscription Logic
 export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS';
@@ -40,207 +39,10 @@ export const notifyListenersImmediate = (type: DatabaseChangeType) => {
     listeners.forEach(l => l(type));
 };
 
-export const initDatabase = async () => {
-    // If already initializing, wait for it
-    if (initPromise) {
-        return initPromise;
-    }
+export { initDatabase };
 
-    // If already initialized, return
-    if (db) {
-        return Promise.resolve();
-    }
-
-    // Create the initialization promise
-    initPromise = (async () => {
-        try {
-            console.log('🔧 Initializing database...');
-            db = await SQLite.openDatabaseAsync('budget.db');
-
-            // Check if we need to migrate by trying to query a table
-            let needsMigration = false;
-            try {
-                await db.getFirstAsync('SELECT * FROM recipients LIMIT 1');
-            } catch (error: any) {
-                if (error.message?.includes('no such table')) {
-                    needsMigration = true;
-                    console.log('🔄 Database migration needed - tables will be recreated');
-                }
-            }
-
-            // If migration needed, drop all tables
-            if (needsMigration) {
-                await db.execAsync(`
-                    DROP TABLE IF EXISTS transactions;
-                    DROP TABLE IF EXISTS recipients;
-                    DROP TABLE IF EXISTS categories;
-                    DROP TABLE IF EXISTS fuliza_transactions;
-                    DROP TABLE IF EXISTS user_settings;
-                    DROP TABLE IF EXISTS processed_sms;
-                    DROP TABLE IF EXISTS automation_rules;
-                `);
-            }
-
-            // Create tables
-            await db.execAsync(`
-                CREATE TABLE IF NOT EXISTS categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    icon TEXT NOT NULL,
-                    color TEXT NOT NULL,
-                    isCustom INTEGER DEFAULT 0,
-                    description TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS recipients (
-                    id TEXT,
-                    type TEXT,
-                    categoryId INTEGER,
-                    lastSeen TEXT,
-                    PRIMARY KEY (id, type),
-                    FOREIGN KEY (categoryId) REFERENCES categories (id)
-                );
-
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id TEXT PRIMARY KEY,
-                    amount REAL,
-                    type TEXT,
-                    recipientId TEXT,
-                    recipientName TEXT,
-                    date TEXT,
-                    balance REAL,
-                    transactionCost REAL,
-                    categoryId INTEGER,
-                    rawSms TEXT,
-                    FOREIGN KEY (categoryId) REFERENCES categories (id),
-                    FOREIGN KEY (recipientId, type) REFERENCES recipients (id, type)
-                );
-
-                CREATE TABLE IF NOT EXISTS fuliza_transactions (
-                    id TEXT PRIMARY KEY,
-                    amount REAL,
-                    type TEXT,
-                    accessFee REAL,
-                    outstandingBalance REAL,
-                    dueDate TEXT,
-                    linkedTransactionId TEXT,
-                    date TEXT,
-                    rawSms TEXT,
-                    FOREIGN KEY (linkedTransactionId) REFERENCES transactions (id)
-                );
-
-                CREATE TABLE IF NOT EXISTS user_settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS processed_sms (
-                    sms_id TEXT PRIMARY KEY,
-                    processed_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS automation_rules (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    conditions TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    isEnabled INTEGER DEFAULT 1
-                );
-
-                CREATE TABLE IF NOT EXISTS monthly_budgets (
-                    month TEXT PRIMARY KEY,
-                    totalIncome REAL DEFAULT 0
-                );
-
-                CREATE TABLE IF NOT EXISTS category_budgets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    month TEXT NOT NULL,
-                    categoryId INTEGER NOT NULL,
-                    budgetAmount REAL DEFAULT 0,
-                    FOREIGN KEY (categoryId) REFERENCES categories (id),
-                    UNIQUE(month, categoryId)
-                );
-            `);
-
-            // Seed default categories if empty
-            const result = await db.getFirstAsync<{ count: number }>('SELECT count(*) as count FROM categories');
-            if (result && result.count === 0) {
-                await seedCategories();
-            }
-
-
-
-            console.log('✅ Database initialized successfully');
-
-            // Run Ledger Migrations (Phase 1)
-            console.log('🔄 Running Ledger Migrations...');
-            const { initDatabase: initCoreDatabase } = require('./core/db');
-            await initCoreDatabase();
-
-        } catch (error) {
-            console.error("❌ Database initialization error:", error);
-            db = null;
-            initPromise = null;
-            throw error; // Propagate error so callers know initialization failed
-        }
-    })();
-
-    return initPromise;
-};
-
-const seedCategories = async () => {
-    if (!db) return;
-
-    const categories: Omit<Category, 'id'>[] = [
-        { name: 'Food & Dining', type: 'EXPENSE', icon: 'cutlery', color: '#ef4444', description: 'Groceries, restaurants, and snacks' },
-        { name: 'Transport', type: 'EXPENSE', icon: 'bus', color: '#f59e0b', description: 'Commute, fuel, and travel' },
-        { name: 'Shopping', type: 'EXPENSE', icon: 'shopping-bag', color: '#ec4899', description: 'Clothes, gadgets, and personal items' },
-        { name: 'Entertainment', type: 'EXPENSE', icon: 'film', color: '#8b5cf6', description: 'Movies, games, and events' },
-        { name: 'Bills & Utilities', type: 'EXPENSE', icon: 'bolt', color: '#3b82f6', description: 'Electricity, water, and internet' },
-        { name: 'Health', type: 'EXPENSE', icon: 'stethoscope', color: '#10b981', description: 'Medical and fitness' },
-        { name: 'Education', type: 'EXPENSE', icon: 'graduation-cap', color: '#6366f1', description: 'Tuition, books, and courses' },
-        { name: 'Personal Care', type: 'EXPENSE', icon: 'smile-o', color: '#f472b6', description: 'Grooming and wellness' },
-        { name: 'Salary', type: 'INCOME', icon: 'money', color: '#22c55e', description: 'Monthly salary' },
-        { name: 'Business', type: 'INCOME', icon: 'briefcase', color: '#0ea5e9', description: 'Business revenue' },
-        { name: 'Gifts', type: 'INCOME', icon: 'gift', color: '#d946ef', description: 'Gifts received' },
-        { name: 'Fuliza Charges', type: 'EXPENSE', icon: 'warning', color: '#f97316', description: 'Fuliza access fees and interest' }
-    ];
-
-    // Use a single transaction for all inserts to avoid locks
-    await db.withTransactionAsync(async () => {
-        for (const cat of categories) {
-            await db!.runAsync(
-                'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
-                [cat.name, cat.type, cat.icon, cat.color, 0, cat.description || '']
-            );
-        }
-    });
-};
-
-export const clearDatabase = async () => {
-    if (!db) return;
-
-    await db.execAsync(`
-        DROP TABLE IF EXISTS transactions;
-        DROP TABLE IF EXISTS recipients;
-        DROP TABLE IF EXISTS categories;
-        DROP TABLE IF EXISTS fuliza_transactions;
-        DROP TABLE IF EXISTS user_settings;
-        DROP TABLE IF EXISTS processed_sms;
-    `);
-
-    // Reset initialization state
-    db = null;
-    initPromise = null;
-};
-
-const ensureDb = () => {
-    if (!db) {
-        throw new Error('Database not initialized. Please call initDatabase() first.');
-    }
-    return db;
+const ensureDb = (): SQLite.SQLiteDatabase => {
+    return getDb();
 };
 
 export const getCategories = async (): Promise<Category[]> => {
@@ -265,11 +67,8 @@ export const deleteCategory = async (id: number) => {
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
-    if (!db) {
-        console.warn('Database not initialized yet, cannot save user settings');
-        return;
-    }
-    await db.runAsync(
+    const database = ensureDb();
+    await database.runAsync(
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
         [key, value]
     );
@@ -277,11 +76,8 @@ export const saveUserSettings = async (key: string, value: string) => {
 };
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
-    if (!db) {
-        console.warn('Database not initialized yet, returning null for user settings');
-        return null;
-    }
-    const result = await db.getFirstAsync<{ value: string }>(
+    const database = ensureDb();
+    const result = await database.getFirstAsync<{ value: string }>(
         'SELECT value FROM user_settings WHERE key = ?',
         [key]
     );

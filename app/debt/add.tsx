@@ -1,6 +1,8 @@
-import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useColorScheme } from 'nativewind';
+
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accountService } from '../../services/accountService';
@@ -10,6 +12,7 @@ import { Account } from '../../types/account';
 export default function AddDebtScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { colorScheme } = useColorScheme();
 
     const [type, setType] = useState<'LIABILITY' | 'RECEIVABLE'>('LIABILITY');
     const [name, setName] = useState('');
@@ -20,8 +23,12 @@ export default function AddDebtScreen() {
     const [loading, setLoading] = useState(false);
 
     useFocusEffect(
-        React.useCallback(() => {
-            accountService.getAccounts().then(setAccounts);
+        useCallback(() => {
+            let active = true;
+            accountService.getAccounts().then(accs => {
+                if (active) setAccounts(accs);
+            });
+            return () => { active = false; };
         }, [])
     );
 
@@ -55,8 +62,13 @@ export default function AddDebtScreen() {
     return (
         <View className="flex-1 bg-gray-50 dark:bg-[#020617]" style={{ paddingTop: insets.top }}>
             <View className="px-6 py-4 flex-row items-center border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0f172a]">
-                <TouchableOpacity onPress={() => router.back()} className="mr-4">
-                    <FontAwesome name="arrow-left" size={20} color="#64748b" />
+                <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+                    <Image
+                        source={require('../../assets/svg/back.svg')}
+                        style={{ width: 24, height: 24 }}
+                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                        contentFit="contain"
+                    />
                 </TouchableOpacity>
                 <Text className="text-xl font-bold text-slate-900 dark:text-white">Add New {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text>
             </View>

@@ -1,41 +1,60 @@
 import { Stack, useRouter, useSegments } from "expo-router";
-import { useColorScheme } from "nativewind";
-import { useEffect } from "react";
+import "../global.css";
+
+import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import GlassLayout from "../components/GlassLayout";
+import CustomAlert from "../components/CustomAlert";
 import PermissionGuard from "../components/PermissionGuard";
-import "../global.css";
+import { AlertProvider } from "../context/AlertContext";
 import { AuthProvider, useAuth } from "../services/AuthContext";
+import { ScrollProvider } from "../services/ScrollContext";
+import { initDatabase } from "../services/core/db";
 
-function InitialLayout() {
-  const { user, loading } = useAuth();
+function RootLayoutContent() {
+  const { user, loading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const { colorScheme, setColorScheme } = useColorScheme();
 
   useEffect(() => {
-    // Default to light mode if not set
-    if (!colorScheme) {
-      setColorScheme('light');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (loading) return;
+    if (authLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
 
     if (!user && !inAuthGroup) {
-      // Redirect to the login page if not signed in
       router.replace("/login");
     } else if (user && inAuthGroup) {
-      // Redirect to the tabs page if signed in
       router.replace("/(tabs)");
     }
-  }, [user, loading, segments]);
+  }, [user, authLoading, segments]);
 
-  if (loading) {
+  // IMPORTANT: Do NOT return null or a skeleton if authLoading is true 
+  // after the initial DB load, because that unmounts the Stack and 
+  // breaks navigation context for children (tabs).
+  // The children should handle their own local loading states.
+
+  return (
+    <PermissionGuard>
+      <ScrollProvider>
+       <Stack screenOptions={{ headerShown: false }} />
+      </ScrollProvider>
+    </PermissionGuard>
+  );
+}
+
+export default function RootLayout() {
+  const [dbLoading, setDbLoading] = useState(true);
+
+  useEffect(() => {
+    initDatabase()
+      .then(() => setDbLoading(false))
+      .catch((err) => {
+        console.error("Failed to initialize database in RootLayout:", err);
+        // We could show a fatal error screen here
+      });
+  }, []);
+
+  if (dbLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-blue-600">
         <ActivityIndicator size="large" color="#ffffff" />
@@ -44,26 +63,14 @@ function InitialLayout() {
   }
 
   return (
-    <GlassLayout>
-      <PermissionGuard>
-        <Stack screenOptions={{ headerShown: false }} />
-      </PermissionGuard>
-    </GlassLayout>
-  );
-}
-
-import CustomAlert from "../components/CustomAlert";
-import { AlertProvider } from "../context/AlertContext";
-
-export default function RootLayout() {
-  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <AlertProvider>
-          <InitialLayout />
+          <RootLayoutContent />
           <CustomAlert />
         </AlertProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
 }
+
