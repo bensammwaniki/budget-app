@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Image as ExpoImage } from 'expo-image';
-import { Link, router } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { useColorScheme } from 'nativewind';
@@ -12,6 +12,7 @@ import { auth } from '../../services/firebaseConfig';
 
 export default function LoginScreen() {
     const { colorScheme } = useColorScheme();
+    const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);

@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
@@ -11,6 +11,7 @@ import { Category } from '../../types/transaction';
 
 export default function BudgetScreen() {
     const { colorScheme } = useColorScheme();
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 

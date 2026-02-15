@@ -13,20 +13,36 @@ import { initDatabase } from "../services/core/db";
 
 function RootLayoutContent() {
   const { user, loading: authLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  let segments: string[] = [];
+  let router: any = null;
+
+  try {
+    // These hooks can throw if the navigation context isn't ready yet
+    segments = useSegments();
+    router = useRouter();
+  } catch (err) {
+    // No navigation context available yet — we'll skip redirects until it's ready
+    segments = [];
+    router = null;
+  }
 
   useEffect(() => {
     if (authLoading) return;
+    if (!router || !segments || segments.length === 0) return;
 
     const inAuthGroup = segments[0] === "(auth)";
 
-    if (!user && !inAuthGroup) {
-      router.replace("/login");
-    } else if (user && inAuthGroup) {
-      router.replace("/(tabs)");
+    try {
+      if (!user && !inAuthGroup) {
+        router.replace("/login");
+      } else if (user && inAuthGroup) {
+        router.replace("/(tabs)");
+      }
+    } catch (err) {
+      // navigation not ready — ignore and wait for context
+      console.warn('Router not ready for redirects yet');
     }
-  }, [user, authLoading, segments]);
+  }, [user, authLoading, segments, router]);
 
   // IMPORTANT: Do NOT return null or a skeleton if authLoading is true 
   // after the initial DB load, because that unmounts the Stack and 

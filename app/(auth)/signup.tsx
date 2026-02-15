@@ -1,5 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { useColorScheme } from 'nativewind';
@@ -10,6 +10,7 @@ import { auth } from '../../services/firebaseConfig';
 
 export default function SignupScreen() {
     const { colorScheme } = useColorScheme();
+    const router = useRouter();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');

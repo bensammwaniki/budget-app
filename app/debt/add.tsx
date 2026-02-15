@@ -75,18 +75,42 @@ export default function AddDebtScreen() {
 
             <View className="p-6">
                 {/* Type Selection */}
-                <View className="flex-row bg-slate-200 dark:bg-slate-800 p-1 rounded-xl mb-6">
+                <View style={{ flexDirection: 'row', backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#e6edf3', padding: 4, borderRadius: 12, marginBottom: 24 }}>
                     <TouchableOpacity
-                        className={`flex-1 py-3 rounded-lg ${type === 'LIABILITY' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
                         onPress={() => setType('LIABILITY')}
+                        style={{
+                            flex: 1,
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: type === 'LIABILITY' ? (colorScheme === 'dark' ? '#334155' : '#ffffff') : 'transparent',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: type === 'LIABILITY' ? 1 : 0 },
+                            shadowOpacity: type === 'LIABILITY' ? 0.08 : 0,
+                            shadowRadius: type === 'LIABILITY' ? 4 : 0,
+                            elevation: type === 'LIABILITY' ? 1 : 0,
+                        }}
                     >
-                        <Text className={`text-center font-bold ${type === 'LIABILITY' ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>I Owe (Liability)</Text>
+                        <Text style={{ textAlign: 'center', fontWeight: '700', color: type === 'LIABILITY' ? (colorScheme === 'dark' ? '#ffffff' : '#0f172a') : '#64748b' }}>I Owe (Liability)</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        className={`flex-1 py-3 rounded-lg ${type === 'RECEIVABLE' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
                         onPress={() => setType('RECEIVABLE')}
+                        style={{
+                            flex: 1,
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: type === 'RECEIVABLE' ? (colorScheme === 'dark' ? '#334155' : '#ffffff') : 'transparent',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: type === 'RECEIVABLE' ? 1 : 0 },
+                            shadowOpacity: type === 'RECEIVABLE' ? 0.08 : 0,
+                            shadowRadius: type === 'RECEIVABLE' ? 4 : 0,
+                            elevation: type === 'RECEIVABLE' ? 1 : 0,
+                        }}
                     >
-                        <Text className={`text-center font-bold ${type === 'RECEIVABLE' ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Owed to Me</Text>
+                        <Text style={{ textAlign: 'center', fontWeight: '700', color: type === 'RECEIVABLE' ? (colorScheme === 'dark' ? '#ffffff' : '#0f172a') : '#64748b' }}>Owed to Me</Text>
                     </TouchableOpacity>
                 </View>
 

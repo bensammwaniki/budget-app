@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+// navigation will be imported dynamically in handlers to avoid requiring navigation context at render
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -26,6 +26,7 @@ export default function DebtsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'ACTIVE' | 'PAID'>('ACTIVE');
+  const [selectedFilter, setSelectedFilter] = useState<'ACTIVE' | 'PAID'>(filter);
 
   const formatCurrency = (value: any) =>
     `KES ${Number(value || 0).toLocaleString()}`;
@@ -54,6 +55,11 @@ export default function DebtsScreen() {
     loadDebts();
   }, [loadDebts]);
 
+  useEffect(() => {
+    // Keep the UI-selected filter in sync when filter changes externally
+    setSelectedFilter(filter);
+  }, [filter]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadDebts();
@@ -70,19 +76,23 @@ export default function DebtsScreen() {
   }, [debts]);
 
   const handleDebtPress = useCallback((debtId: string) => {
-    try {
-      router.push(`/debt/${debtId}`);
-    } catch (error) {
-      console.error('Navigation error:', error);
-    }
+    import('expo-router').then(({ router }) => {
+      try {
+        router.push(`/debt/${debtId}`);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }).catch(err => console.error('Failed to load router:', err));
   }, []);
 
   const handleAddDebt = useCallback(() => {
-    try {
-      router.push('/debt/add');
-    } catch (error) {
-      console.error('Navigation error:', error);
-    }
+    import('expo-router').then(({ router }) => {
+      try {
+        router.push('/debt/add');
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }).catch(err => console.error('Failed to load router:', err));
   }, []);
 
   const renderItem = useCallback(({ item }: { item: Debt }) => {
@@ -210,40 +220,22 @@ export default function DebtsScreen() {
               </View>
             )}
 
-            <View className="flex-row bg-slate-200 dark:bg-slate-800 p-1 rounded-xl mb-4">
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${filter === 'ACTIVE'
-                    ? 'bg-white dark:bg-slate-600 shadow-sm'
-                    : ''
-                  }`}
-                onPress={() => setFilter('ACTIVE')}
-              >
-                <Text
-                  className={`text-center font-bold ${filter === 'ACTIVE'
-                      ? 'text-slate-900 dark:text-white'
-                      : 'text-slate-500'
-                    }`}
+            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 4, borderRadius: 12, marginBottom: 16 }}>
+              {(['ACTIVE', 'PAID'] as const).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: selectedFilter === f ? '#ffffff' : 'transparent', alignItems: 'center' }}
+                  onPress={() => {
+                    setSelectedFilter(f);
+                    // small delay to mimic the index pattern and allow any UI animation
+                    setTimeout(() => setFilter(f), 100);
+                  }}
                 >
-                  Active
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${filter === 'PAID'
-                    ? 'bg-white dark:bg-slate-600 shadow-sm'
-                    : ''
-                  }`}
-                onPress={() => setFilter('PAID')}
-              >
-                <Text
-                  className={`text-center font-bold ${filter === 'PAID'
-                      ? 'text-slate-900 dark:text-white'
-                      : 'text-slate-500'
-                    }`}
-                >
-                  Paid
-                </Text>
-              </TouchableOpacity>
+                  <Text style={{ textAlign: 'center', fontWeight: '700', color: selectedFilter === f ? '#0f172a' : '#94a3b8' }}>
+                    {f === 'ACTIVE' ? 'Active' : 'Paid'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         }
