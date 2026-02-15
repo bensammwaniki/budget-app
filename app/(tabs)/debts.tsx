@@ -27,6 +27,10 @@ export default function DebtsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'PAID'>('ACTIVE');
   const [typeFilter, setTypeFilter] = useState<'LIABILITY' | 'RECEIVABLE'>('LIABILITY');
+  const [liabilityTotal, setLiabilityTotal] = useState<number>(0);
+  const [receivableTotal, setReceivableTotal] = useState<number>(0);
+  const [liabilityCount, setLiabilityCount] = useState<number>(0);
+  const [receivableCount, setReceivableCount] = useState<number>(0);
 
   const formatCurrency = (value: any) =>
     `KES ${Number(value || 0).toLocaleString()}`;
@@ -54,6 +58,29 @@ export default function DebtsScreen() {
   useEffect(() => {
     loadDebts();
   }, [loadDebts]);
+
+  // Load totals for both types based on status (ACTIVE or PAID)
+  const loadTotals = useCallback(async () => {
+    try {
+      const liabs = await debtService.getDebts('local_user', statusFilter, 'LIABILITY');
+      const recs = await debtService.getDebts('local_user', statusFilter, 'RECEIVABLE');
+
+      const sum = (rows: any[]) => rows.reduce((acc, r) => acc + (Number(r.current_balance || r.currentBalance || 0) + Number(r.accrued_fees || r.accruedFees || 0 || 0)), 0);
+
+      setLiabilityTotal(sum(liabs));
+      setReceivableTotal(sum(recs));
+      setLiabilityCount(Array.isArray(liabs) ? liabs.length : 0);
+      setReceivableCount(Array.isArray(recs) ? recs.length : 0);
+    } catch (err) {
+      console.error('Failed to load debt totals:', err);
+      setLiabilityTotal(0);
+      setReceivableTotal(0);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    loadTotals();
+  }, [loadTotals]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -244,8 +271,8 @@ export default function DebtsScreen() {
                       Total I Owe
                     </Text>
 
-                    <Text className={`text-3xl font-bold mt-2 ${typeFilter === 'LIABILITY' ? 'text-white' : 'text-slate-900'}`} >
-                      $4,250
+                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
+                      {formatCurrency(liabilityTotal)}
                     </Text>
 
                     <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`} >
@@ -266,8 +293,8 @@ export default function DebtsScreen() {
                       Total Owed To Me
                     </Text>
 
-                    <Text className={`text-3xl font-bold mt-2 ${typeFilter === 'RECEIVABLE' ? 'text-white' : 'text-slate-900'}`}>
-                      $2,180
+                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
+                      {formatCurrency(receivableTotal)}
                     </Text>
                     <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
                       2 people owe you
