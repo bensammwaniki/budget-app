@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { Image as ExpoImage } from 'expo-image';
+import { Image } from 'expo-image';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
@@ -87,16 +87,14 @@ export default function LoginScreen() {
             >
                 <SafeAreaView className="flex-1 justify-center items-center px-6">
                     {/* Logo/Brand Section */}
-                    <View className="mb-6 items-center">
-                        <View className="w-24 h-24 bg-blue-100 dark:bg-blue-600/20 rounded-full items-center justify-center mb-2 mt-6 border border-blue-200 dark:border-blue-500/30">
-                            <ExpoImage
-                                source={require('../../assets/svg/favicon.svg')}
-                                style={{ width: 48, height: 48 }}
+                    <View className="mb-[25px] mt-[65px] items-center">
+                        <View className="w-20 h-20 dark:bg-blue-600/20 items-center justify-center mb-4  dark:border-blue-500/30">
+                            <Image
+                                source={require('../../assets/images/wallet.png')}
+                                style={{ width: 150, height: 150 }}
                                 contentFit="contain"
                             />
                         </View>
-                        <Text className="text-4xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">Fanga Budget</Text>
-                        <Text className="text-slate-500 dark:text-slate-400 text-base">Take Charge of your finances</Text>
                     </View>
 
                     {/* Login Card */}
@@ -108,7 +106,12 @@ export default function LoginScreen() {
                         <View className="mb-5">
                             <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Email Address</Text>
                             <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="envelope" size={18} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
+                                    <Image
+                                        source={require('../../assets/svg/email.svg')}
+                                        style={{ width: 20, height: 20 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />                                 
                                 <TextInput
                                     className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="you@example.com"
@@ -125,9 +128,14 @@ export default function LoginScreen() {
                         <View className="mb-8">
                             <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Password</Text>
                             <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5">
-                                <FontAwesome name="lock" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
+                                    <Image
+                                        source={require('../../assets/svg/password.svg')}
+                                        style={{ width: 26, height: 26 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />                                  
                                 <TextInput
-                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
+                                    className="flex-1 ml-2 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Enter your password"
                                     value={password}
                                     onChangeText={setPassword}

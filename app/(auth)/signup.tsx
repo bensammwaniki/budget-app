@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
@@ -48,20 +49,25 @@ export default function SignupScreen() {
             >
                 <SafeAreaView className="flex-1 justify-center items-center px-6">
                     {/* Back Button */}
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        className="absolute top-12 left-6 bg-white dark:bg-[#1e293b] p-3 rounded-full border border-gray-200 dark:border-slate-700 shadow-sm z-10"
-                    >
-                        <FontAwesome name="arrow-left" size={20} color={colorScheme === 'dark' ? "white" : "#1e293b"} />
+                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 absolute top-12 left-6 dark:bg-[#1e293b] p-3 z-10">
+                        <Image
+                            source={require('../../assets/svg/back.svg')}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            contentFit="contain"
+                        />
                     </TouchableOpacity>
 
                     {/* Logo/Brand Section */}
                     <View className="mb-10 items-center mt-12">
-                        <View className="w-20 h-20 bg-blue-100 dark:bg-blue-600/20 rounded-full items-center justify-center mb-4 border border-blue-200 dark:border-blue-500/30">
-                            <FontAwesome name="user-plus" size={32} color="#3b82f6" />
+                        <View className="w-20 h-20 dark:bg-blue-600/20 items-center justify-center mb-4  dark:border-blue-500/30">
+                            <Image
+                                source={require('../../assets/images/signin.png')}
+                                style={{ width: 150, height: 150 }}
+                                contentFit="contain"
+                            />
                         </View>
-                        <Text className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create Account</Text>
-                        <Text className="text-slate-500 dark:text-slate-400 text-base">Join Fanga Budget today</Text>
+                        <Text className="text-xl font-bold text-slate-900 dark:text-white mt-3">Create Account</Text>
                     </View>
 
                     {/* Signup Card */}
@@ -71,7 +77,12 @@ export default function SignupScreen() {
                         <View className="mb-5">
                             <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Full Name</Text>
                             <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="user" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
+                                    <Image
+                                        source={require('../../assets/svg/name.svg')}
+                                        style={{ width: 22, height: 22 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />
                                 <TextInput
                                     className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Your full name"
@@ -87,8 +98,13 @@ export default function SignupScreen() {
                         <View className="mb-5">
                             <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Email Address</Text>
                             <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5 focus:border-blue-500">
-                                <FontAwesome name="envelope" size={18} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
-                                <TextInput
+                                    <Image
+                                        source={require('../../assets/svg/email.svg')}
+                                        style={{ width: 20, height: 20 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />                                
+                                    <TextInput
                                     className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="you@example.com"
                                     value={email}
@@ -104,7 +120,12 @@ export default function SignupScreen() {
                         <View className="mb-8">
                             <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2 ml-1">Password</Text>
                             <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3.5">
-                                <FontAwesome name="lock" size={20} color={colorScheme === 'dark' ? "#94a3b8" : "#64748b"} />
+                                    <Image
+                                        source={require('../../assets/svg/password.svg')}
+                                        style={{ width: 26, height: 26 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />                                  
                                 <TextInput
                                     className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Create a password"
