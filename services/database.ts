@@ -258,7 +258,7 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
         );
     }
 
-    // Insert with new Ledger Columns
+    // Insert with new Ledger Columns (Standardized snake_case)
     const values = [
         transaction.id,
         transaction.uuid || transaction.id,
@@ -280,11 +280,9 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
         transaction.isDeleted ? 1 : 0
     ];
 
-
-
     await database.runAsync(
         `INSERT OR REPLACE INTO transactions 
-    (id, uuid, user_id, account_id, categoryId, amount, type, transactionKind, recipientId, recipientName, date, balance, balance_after, transactionCost, rawSms, created_at, updated_at, is_deleted) 
+    (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, created_at, updated_at, is_deleted) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         values
     );
@@ -299,7 +297,7 @@ export const getTransactions = async (): Promise<Transaction[]> => {
     const result = await database.getAllAsync<any>(`
         SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
         FROM transactions t 
-        LEFT JOIN categories c ON t.categoryId = c.id 
+        LEFT JOIN categories c ON (t.category_id = c.id OR t.categoryId = c.id) 
         ORDER BY t.date DESC
     `);
 
@@ -316,10 +314,16 @@ export const getTransactions = async (): Promise<Transaction[]> => {
         return {
             ...row,
             date: txDate,
-            // Ensure compatibility
+            // Ensure compatibility across snake_case and camelCase
             type: row.type || (row.amount < 0 ? 'SENT' : 'RECEIVED'),
             amount: Math.abs(row.amount), // Frontend expects positive amount + type
-            categoryId: row.categoryId // Ensure this is passed
+            categoryId: row.category_id || row.categoryId,
+            recipientId: row.recipient_id || row.recipientId,
+            recipientName: row.recipient_name || row.recipientName,
+            transactionKind: row.transaction_kind || row.transactionKind,
+            transactionCost: row.transaction_cost || row.transactionCost,
+            rawSms: row.raw_sms || row.rawSms,
+            balanceAfter: row.balance_after || row.balanceAfter
         };
     });
 };
@@ -361,8 +365,8 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     );
 
     const monthlyCostResult = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(transactionCost) as total FROM transactions WHERE date >= ?",
-        [startOfMonth]
+        "SELECT SUM(transaction_cost) as total FROM transactions WHERE (date >= ? OR created_at >= ?)",
+        [startOfMonth, startOfMonth]
     );
 
     const totalIncomeResult = await database.getAllAsync<{ total: number }>(

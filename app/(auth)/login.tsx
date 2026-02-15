@@ -135,7 +135,7 @@ export default function LoginScreen() {
                                         contentFit="contain"
                                     />                                  
                                 <TextInput
-                                    className="flex-1 ml-2 text-slate-900 dark:text-white text-base outline-none"
+                                    className="flex-1 ml-3 text-slate-900 dark:text-white text-base outline-none"
                                     placeholder="Enter your password"
                                     value={password}
                                     onChangeText={setPassword}

@@ -114,64 +114,61 @@ const runUnifiedMigrations = async (database: SQLite.SQLiteDatabase) => {
         CREATE INDEX IF NOT EXISTS idx_debts_user_id ON debts(user_id);
     `);
 
-    // 5. Transactions Table (Strict Ledger)
-    // Note: This merges legacy columns and strict columns.
+    // 5. Transactions Table (Standardized snake_case)
     console.log('Checking TRANSACTIONS table...');
-    const result = await database.getAllAsync<{ name: string }>('PRAGMA table_info(transactions)');
-    const columns = result.map(c => c.name);
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS transactions (
+            id TEXT PRIMARY KEY,
+            uuid TEXT,
+            user_id TEXT DEFAULT 'local_user',
+            account_id TEXT,
+            category_id INTEGER,
+            amount REAL,
+            type TEXT,
+            transaction_kind TEXT DEFAULT 'EXPENSE',
+            recipient_id TEXT,
+            recipient_name TEXT,
+            date TEXT,
+            balance REAL,
+            balance_after REAL,
+            transaction_cost REAL,
+            raw_sms TEXT,
+            is_deleted INTEGER DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            linked_debt_id TEXT,
+            linked_goal_id TEXT,
+            reference_id TEXT,
+            FOREIGN KEY (category_id) REFERENCES categories (id),
+            FOREIGN KEY (account_id) REFERENCES accounts(id)
+        );
+    `);
 
-    if (columns.length === 0) {
-        // Fresh creation
-        await database.execAsync(`
-            CREATE TABLE IF NOT EXISTS transactions (
-                id TEXT PRIMARY KEY,
-                uuid TEXT,
-                user_id TEXT DEFAULT 'local_user',
-                account_id TEXT,
-                categoryId INTEGER,
-                amount REAL,
-                type TEXT,
-                transactionKind TEXT DEFAULT 'EXPENSE',
-                recipientId TEXT,
-                recipientName TEXT,
-                date TEXT,
-                balance REAL,
-                balance_after REAL,
-                transactionCost REAL,
-                rawSms TEXT,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                linked_debt_id TEXT,
-                linked_goal_id TEXT,
-                FOREIGN KEY (categoryId) REFERENCES categories (id),
-                FOREIGN KEY (account_id) REFERENCES accounts(id)
-            );
-        `);
-    } else {
-        // Migration of existing table
-        const columnsToAdd = [
-            { name: 'uuid', def: 'TEXT' },
-            { name: 'user_id', def: "TEXT DEFAULT 'local_user'" },
-            { name: 'account_id', def: 'TEXT REFERENCES accounts(id)' },
-            { name: 'transactionKind', def: "TEXT CHECK (transactionKind IN ('EXPENSE', 'INCOME', 'TRANSFER', 'DEBT_PRINCIPAL', 'DEBT_REPAYMENT', 'SAVINGS_TRANSFER'))" },
-            { name: 'balance_after', def: 'REAL' },
-            { name: 'is_deleted', def: 'INTEGER DEFAULT 0' },
-            { name: 'deleted_at', def: 'TEXT' },
-            { name: 'created_at', def: 'TEXT' },
-            { name: 'updated_at', def: 'TEXT' },
-            { name: 'linked_debt_id', def: 'TEXT' },
-            { name: 'linked_goal_id', def: 'TEXT' }
-        ];
+    // Defensive check for missing columns
+    const tableInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(transactions)');
+    const columns = tableInfo.map(c => c.name);
 
-        for (const col of columnsToAdd) {
-            if (!columns.includes(col.name)) {
-                try {
-                    await database.execAsync(`ALTER TABLE transactions ADD COLUMN ${col.name} ${col.def}`);
-                } catch (e) {
-                    console.log(`Note: Column ${col.name} might error adding:`, e);
-                }
+    const requiredColumns = [
+        { name: 'category_id', type: 'INTEGER' },
+        { name: 'transaction_kind', type: 'TEXT DEFAULT \'EXPENSE\'' },
+        { name: 'recipient_id', type: 'TEXT' },
+        { name: 'recipient_name', type: 'TEXT' },
+        { name: 'balance_after', type: 'REAL' },
+        { name: 'transaction_cost', type: 'REAL' },
+        { name: 'raw_sms', type: 'TEXT' },
+        { name: 'linked_debt_id', type: 'TEXT' },
+        { name: 'linked_goal_id', type: 'TEXT' },
+        { name: 'reference_id', type: 'TEXT' }
+    ];
+
+    for (const col of requiredColumns) {
+        if (!columns.includes(col.name)) {
+            console.log(`🛠️ Migrating: Adding missing column ${col.name} to transactions`);
+            try {
+                await database.execAsync(`ALTER TABLE transactions ADD COLUMN ${col.name} ${col.type}`);
+            } catch (e) {
+                console.warn(`⚠️ Failed to add column ${col.name}:`, e);
             }
         }
     }

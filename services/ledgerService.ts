@@ -57,8 +57,8 @@ export const ledgerService = {
             await db.runAsync(`
                 INSERT INTO transactions (
                     id, uuid, user_id, account_id, category_id,
-                    amount, type, transactionKind,
-                    recipientName, rawSms,
+                    amount, type, transaction_kind,
+                    recipient_name, raw_sms,
                     date, balance, balance_after, reference_id,
                     created_at, updated_at, is_deleted, linked_debt_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
@@ -124,8 +124,8 @@ export const ledgerService = {
             // Create Sender Transaction (EXPENSE/TRANSFER)
             await db.runAsync(`
                 INSERT INTO transactions (
-                    id, uuid, user_id, account_id, amount, type, transactionKind,
-                    recipientName, rawSms, date, balance_after, reference_id, created_at, updated_at, is_deleted
+                    id, uuid, user_id, account_id, amount, type, transaction_kind,
+                    recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
                 ) VALUES (?, ?, ?, ?, ?, 'SENT', 'TRANSFER', ?, ?, ?, ?, ?, ?, ?, 0)
             `, [
                 debitId, debitId, payload.userId, payload.fromAccountId, payload.amount,
@@ -146,8 +146,8 @@ export const ledgerService = {
             // Create Receiver Transaction (INCOME/TRANSFER)
             await db.runAsync(`
                 INSERT INTO transactions (
-                    id, uuid, user_id, account_id, amount, type, transactionKind,
-                    recipientName, rawSms, date, balance_after, reference_id, created_at, updated_at, is_deleted
+                    id, uuid, user_id, account_id, amount, type, transaction_kind,
+                    recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
                 ) VALUES (?, ?, ?, ?, ?, 'RECEIVED', 'TRANSFER', ?, ?, ?, ?, ?, ?, ?, 0)
             `, [
                 creditId, creditId, payload.userId, payload.toAccountId, payload.amount,

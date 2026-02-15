@@ -480,20 +480,31 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View className="flex-row gap-3">
-              {debtSummary.totalLiabilities > 0 && (
-                <View className="flex-1 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">
-                  <Text className="text-red-600 dark:text-red-400 text-xs mb-1">You Owe</Text>
-                  <Text className="text-red-700 dark:text-red-300 font-bold">KES {debtSummary.totalLiabilities.toLocaleString()}</Text>
+            {debtSummary.activeDebts > 0 && (
+              <View className="flex-row justify-between items-center mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+                <View>
+                  <Text className="text-slate-500 text-xs font-bold uppercase mb-1">Debt Summary</Text>
+                  <View className="flex-row items-center gap-4">
+                    {debtSummary.totalLiabilities > 0 && (
+                      <View>
+                        <Text className="text-[10px] text-slate-400 font-semibold uppercase">I Owe</Text>
+                        <Text className="text-red-600 dark:text-red-400 font-bold text-sm">KES {debtSummary.totalLiabilities.toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {debtSummary.totalReceivables > 0 && (
+                      <View>
+                        <Text className="text-[10px] text-slate-400 font-semibold uppercase">Owed to Me</Text>
+                        <Text className="text-green-600 dark:text-green-400 font-bold text-sm">KES {debtSummary.totalReceivables.toLocaleString()}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              )}
-              {debtSummary.totalReceivables > 0 && (
-                <View className="flex-1 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-xl">
-                  <Text className="text-green-600 dark:text-green-400 text-xs mb-1">Owed to You</Text>
-                  <Text className="text-green-700 dark:text-green-300 font-bold">KES {debtSummary.totalReceivables.toLocaleString()}</Text>
+                <View className="items-end">
+                  <Text className="text-[10px] text-slate-400 font-semibold uppercase mb-1">Active Debts</Text>
+                  <Text className="text-slate-900 dark:text-white font-bold text-sm">{debtSummary.activeDebts}</Text>
                 </View>
-              )}
-            </View>
+              </View>
+            )}
           </View>
         </View>
       )}

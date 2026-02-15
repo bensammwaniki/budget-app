@@ -30,27 +30,27 @@ const mapRowToTransaction = (row: any): Transaction => {
         uuid: row.uuid,
         userId: row.user_id,
         accountId: row.account_id,
-        categoryId: row.categoryId || row.category_id, // Handle legacy/new mix
+        categoryId: row.category_id || row.categoryId, // Standardized column is category_id
 
         amount: row.amount,
         type: row.type as 'SENT' | 'RECEIVED',
-        transactionKind: row.transactionKind,
+        transactionKind: row.transaction_kind || row.transactionKind,
 
-        recipientId: row.recipientId,
-        recipientName: row.recipientName,
+        recipientId: row.recipient_id || row.recipientId,
+        recipientName: row.recipient_name || row.recipientName,
 
         date: new Date(row.date),
 
-        balanceAfter: row.balance_after,
-        referenceId: row.reference_id,
+        balanceAfter: row.balance_after || row.balanceAfter,
+        referenceId: row.reference_id || row.referenceId,
 
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
         isDeleted: !!row.is_deleted,
 
-        rawSms: row.rawSms,
-        transactionCost: row.transactionCost,
-        linkedDebtId: row.linkedDebtId,
-        linkedGoalId: row.linkedGoalId
+        rawSms: row.raw_sms || row.rawSms,
+        transactionCost: row.transaction_cost || row.transactionCost,
+        linkedDebtId: row.linked_debt_id || row.linkedDebtId,
+        linkedGoalId: row.linked_goal_id || row.linkedGoalId
     };
 };

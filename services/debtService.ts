@@ -68,8 +68,8 @@ export const debtService = {
                 await db.runAsync(`
                     INSERT INTO transactions (
                         id, uuid, user_id, account_id, category_id,
-                        amount, type, transactionKind,
-                        recipientName, rawSms,
+                        amount, type, transaction_kind,
+                        recipient_name, raw_sms,
                         date, balance, balance_after, reference_id,
                         created_at, updated_at, is_deleted, linked_debt_id
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
@@ -156,7 +156,7 @@ export const debtService = {
             // 6. Update Transaction Kind & Link
             await db.runAsync(`
                 UPDATE transactions
-                SET transactionKind = 'DEBT_REPAYMENT', linked_debt_id = ?
+                SET transaction_kind = 'DEBT_REPAYMENT', linked_debt_id = ?
                 WHERE id = ?
             `, [payload.debtId, payload.transactionId]);
         });
@@ -198,21 +198,30 @@ export const debtService = {
 
             await db.runAsync(`
                 UPDATE transactions
-                SET transactionKind = ?, linked_debt_id = NULL
+                SET transaction_kind = ?, linked_debt_id = NULL
                 WHERE id = ?
             `, [kind, transactionId]);
         });
     },
 
-    async getDebts(userId: string = 'local_user', filter?: DebtStatus): Promise<Debt[]> {
+    async getDebts(userId: string = 'local_user', filter?: DebtStatus, type?: 'LIABILITY' | 'RECEIVABLE' | 'OVERDRAFT'): Promise<Debt[]> {
         await initDatabase();
         const db = getDb();
         let query = 'SELECT * FROM debts WHERE user_id = ?';
-        const params = [userId];
+        const params: any[] = [userId];
 
         if (filter) {
             query += ' AND status = ?';
             params.push(filter);
+        }
+
+        if (type) {
+            if (type === 'LIABILITY') {
+                query += " AND type IN ('LIABILITY', 'OVERDRAFT')";
+            } else {
+                query += ' AND type = ?';
+                params.push(type);
+            }
         }
 
         query += ' ORDER BY created_at DESC';
