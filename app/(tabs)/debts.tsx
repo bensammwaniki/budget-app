@@ -227,30 +227,66 @@ export default function DebtsScreen() {
               ))}
             </View>
 
-            {/* Sub Tabs (Debts vs Assets) */}
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-              <TouchableOpacity
-                onPress={() => setTypeFilter('LIABILITY')}
-                className={`px-4 py-2 rounded-full border ${typeFilter === 'LIABILITY' ? 'bg-red-500 border-red-500' : 'bg-transparent border-slate-300'}`}
-              >
-                <Text className={`font-bold ${typeFilter === 'LIABILITY' ? 'text-white' : 'text-slate-500'}`}>I Owe</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setTypeFilter('RECEIVABLE')}
-                className={`px-4 py-2 rounded-full border ${typeFilter === 'RECEIVABLE' ? 'bg-green-500 border-green-500' : 'bg-transparent border-slate-300'}`}
-              >
-                <Text className={`font-bold ${typeFilter === 'RECEIVABLE' ? 'text-white' : 'text-slate-500'}`}>Owed to Me</Text>
-              </TouchableOpacity>
+            <View className="flex-row gap-4 mb-5">
+                {/* Sub Tabs (Debts vs Assets) */}
+                <View className="flex-col gap-4 mb-5">
+
+                  {/* I Owe Card */}
+                  <TouchableOpacity
+                    onPress={() => setTypeFilter('LIABILITY')}
+                    className={`rounded-2xl p-5 border shadow-sm ${
+                      typeFilter === 'LIABILITY'
+                        ? 'bg-red-500 border-red-500'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <Text className={`text-sm font-medium ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500'}`} >
+                      Total I Owe
+                    </Text>
+
+                    <Text className={`text-3xl font-bold mt-2 ${typeFilter === 'LIABILITY' ? 'text-white' : 'text-slate-900'}`} >
+                      $4,250
+                    </Text>
+
+                    <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`} >
+                      3 active debts
+                    </Text>
+                  </TouchableOpacity>
+
+
+                  {/* Owed To Me Card */}
+                  <TouchableOpacity
+                    onPress={() => setTypeFilter('RECEIVABLE')}
+                    className={`rounded-2xl p-5 border shadow-sm ${
+                      typeFilter === 'RECEIVABLE'
+                        ? 'bg-green-500 border-green-500'
+                        : 'bg-white border-slate-200'
+                    }`}>
+                    <Text className={`text-sm font-medium ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500'}`}>
+                      Total Owed To Me
+                    </Text>
+
+                    <Text className={`text-3xl font-bold mt-2 ${typeFilter === 'RECEIVABLE' ? 'text-white' : 'text-slate-900'}`}>
+                      $2,180
+                    </Text>
+                    <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
+                      2 people owe you
+                    </Text>
+                  </TouchableOpacity>
+
+                </View>
+
+
+                {statusFilter === 'ACTIVE' && chartData.length > 0 && (
+                  <View className="bg-white dark:bg-[#0f172a] p-6 rounded-2xl border border-slate-200 shadow-sm items-center">
+                    <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
+                      {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
+                    </Text>
+                    <DebtBreakdownChart data={chartData} />
+                  </View>
+                )}
             </View>
 
-            {statusFilter === 'ACTIVE' && chartData.length > 0 && (
-              <View className="bg-white dark:bg-[#0f172a] p-6 rounded-3xl shadow-sm mb-6 items-center">
-                <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
-                  {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
-                </Text>
-                <DebtBreakdownChart data={chartData} />
-              </View>
-            )}
           </View>
         }
         ListEmptyComponent={

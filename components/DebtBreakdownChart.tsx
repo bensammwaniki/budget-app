@@ -40,14 +40,14 @@ export default function DebtBreakdownChart({ data }: Props) {
         : 100;
 
     return (
-        <View className="items-center justify-center">
+        <View className="items-center justify-center ">
 
             {/* Chart */}
             <PieChart
                 data={pieData}
                 donut
-                radius={110}
-                innerRadius={70}
+                radius={65}
+                innerRadius={50}
                 focusOnPress
                 showText={false}
                 innerCircleColor="#fff" // TODO: Handle Dark Mode via prop or hook
