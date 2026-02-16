@@ -255,17 +255,17 @@ export default function DebtsScreen() {
             </View>
 
             <View className="flex-row gap-4 mb-5">
-                {/* Sub Tabs (Debts vs Assets) */}
+              {/* Sub Tabs (Debts vs Assets) - Only show in ACTIVE view */}
+              {statusFilter === 'ACTIVE' && (
                 <View className="flex-col gap-4 mb-5">
 
                   {/* I Owe Card */}
                   <TouchableOpacity
                     onPress={() => setTypeFilter('LIABILITY')}
-                    className={`rounded-2xl p-5 border shadow-sm ${
-                      typeFilter === 'LIABILITY'
-                        ? 'bg-red-500 border-red-500'
-                        : 'bg-white border-slate-200'
-                    }`}
+                    className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'LIABILITY'
+                      ? 'bg-red-500 border-red-500'
+                      : 'bg-white border-slate-200'
+                      }`}
                   >
                     <Text className={`text-sm font-medium ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500'}`} >
                       Total I Owe
@@ -276,7 +276,7 @@ export default function DebtsScreen() {
                     </Text>
 
                     <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`} >
-                      3 active debts
+                      {liabilityCount} {statusFilter === 'ACTIVE' ? 'active' : ''} {liabilityCount === 1 ? 'debt' : 'debts'}
                     </Text>
                   </TouchableOpacity>
 
@@ -284,11 +284,10 @@ export default function DebtsScreen() {
                   {/* Owed To Me Card */}
                   <TouchableOpacity
                     onPress={() => setTypeFilter('RECEIVABLE')}
-                    className={`rounded-2xl p-5 border shadow-sm ${
-                      typeFilter === 'RECEIVABLE'
-                        ? 'bg-green-500 border-green-500'
-                        : 'bg-white border-slate-200'
-                    }`}>
+                    className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
+                      ? 'bg-green-500 border-green-500'
+                      : 'bg-white border-slate-200'
+                      }`}>
                     <Text className={`text-sm font-medium ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500'}`}>
                       Total Owed To Me
                     </Text>
@@ -297,21 +296,22 @@ export default function DebtsScreen() {
                       {formatCurrency(receivableTotal)}
                     </Text>
                     <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
-                      2 people owe you
+                      {receivableCount} {statusFilter === 'ACTIVE' ? (receivableCount === 1 ? 'person owes' : 'people owe') : 'past'} you
                     </Text>
                   </TouchableOpacity>
 
                 </View>
+              )}
 
 
-                {statusFilter === 'ACTIVE' && chartData.length > 0 && (
-                  <View className="bg-white dark:bg-[#0f172a] p-6 rounded-2xl border border-slate-200 shadow-sm items-center">
-                    <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
-                      {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
-                    </Text>
-                    <DebtBreakdownChart data={chartData} />
-                  </View>
-                )}
+              {statusFilter === 'ACTIVE' && chartData.length > 0 && (
+                <View className="bg-white dark:bg-[#0f172a] p-6 rounded-2xl border border-slate-200 shadow-sm items-center">
+                  <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
+                    {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
+                  </Text>
+                  <DebtBreakdownChart data={chartData} />
+                </View>
+              )}
             </View>
 
           </View>

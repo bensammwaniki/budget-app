@@ -9,7 +9,7 @@ export const accountService = {
 
         // Strict Schema Insert
         await db.runAsync(
-            'INSERT INTO accounts (id, user_id, name, type, balance, currency, isActive, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO accounts (id, user_id, name, type, balance, currency, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [id, userId, name, type, balance, currency, 1, now, now]
         );
 
@@ -28,14 +28,14 @@ export const accountService = {
 
     async getAccounts(): Promise<Account[]> {
         const db = getDb();
-        const results = await db.getAllAsync<any>('SELECT * FROM accounts WHERE isActive = 1 ORDER BY name ASC');
+        const results = await db.getAllAsync<any>('SELECT * FROM accounts WHERE is_active = 1 ORDER BY name ASC');
 
         return results.map(row => ({
             ...row,
             userId: row.user_id,
             createdAt: new Date(row.created_at),
             updatedAt: new Date(row.updated_at),
-            isActive: !!row.isActive
+            isActive: !!row.is_active
         }));
     },
 
@@ -50,7 +50,7 @@ export const accountService = {
             userId: result.user_id,
             createdAt: new Date(result.created_at),
             updatedAt: new Date(result.updated_at),
-            isActive: !!result.isActive
+            isActive: !!result.is_active
         };
     },
 

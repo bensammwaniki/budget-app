@@ -49,10 +49,18 @@ function RootLayoutContent() {
   // breaks navigation context for children (tabs).
   // The children should handle their own local loading states.
 
+  if (authLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-[#0f172a]">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
+
   return (
     <PermissionGuard>
       <ScrollProvider>
-       <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }} />
       </ScrollProvider>
     </PermissionGuard>
   );

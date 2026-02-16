@@ -1,7 +1,7 @@
 import { Debt, DebtStatus } from '../types/debt';
 import { calculateFulizaDailyCharge } from '../utils/fulizaCalculator';
-import { generateUUID, getDb } from './core/db';
-import { initDatabase } from './database';
+import { generateUUID } from '../utils/uuid';
+import { getDb, initDatabase } from './core/db';
 
 export const debtService = {
     /**
@@ -13,7 +13,7 @@ export const debtService = {
         type: 'LIABILITY' | 'RECEIVABLE';
         name: string;
         amount: number;
-        accountId?: string; // If the loan money was deposited into an account
+        accountId?: string;
         interestRate?: number;
         startDate?: Date;
         dueDate?: Date;
@@ -38,8 +38,8 @@ export const debtService = {
                 payload.name,
                 payload.type,
                 payload.amount,
-                payload.amount, // Initial balance = principal
-                0, // Default not revolving for manual creation
+                payload.amount,
+                0,
                 payload.interestRate || null,
                 'ACTIVE',
                 startDate,
@@ -49,21 +49,16 @@ export const debtService = {
 
             // 2. If valid account provided, create Ledger Transaction (INCOME/DEBT_PRINCIPAL)
             if (payload.accountId) {
-                // If LIABILITY (I borrowed), money comes IN -> INCOME / DEBT_PRINCIPAL
-                // If RECEIVABLE (I lent), money goes OUT -> EXPENSE / DEBT_PRINCIPAL
                 const txType = payload.type === 'LIABILITY' ? 'RECEIVED' : 'SENT';
 
-                // Get Account Balance
                 const account = await db.getFirstAsync<{ balance: number }>('SELECT balance FROM accounts WHERE id = ?', [payload.accountId]);
                 if (!account) throw new Error("Account not found");
 
                 const balanceChange = txType === 'SENT' ? -payload.amount : payload.amount;
                 const newBalance = account.balance + balanceChange;
 
-                // Update Account
                 await db.runAsync('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [newBalance, now, payload.accountId]);
 
-                // Insert Transaction
                 const txId = generateUUID();
                 await db.runAsync(`
                     INSERT INTO transactions (
@@ -80,9 +75,9 @@ export const debtService = {
                     `${payload.type === 'LIABILITY' ? 'Loan from' : 'Lent to'} ${payload.name}`,
                     startDate,
                     newBalance, newBalance,
-                    debtId, // Reference ID
+                    debtId,
                     now, now,
-                    debtId // Linked Debt ID
+                    debtId
                 ]);
             }
         });
@@ -91,7 +86,7 @@ export const debtService = {
             id: debtId,
             userId: payload.userId,
             accountId: payload.accountId,
-            type: payload.type,
+            type: payload.type as 'LIABILITY' | 'RECEIVABLE',
             name: payload.name,
             principalAmount: payload.amount,
             currentBalance: payload.amount,
@@ -105,10 +100,6 @@ export const debtService = {
         };
     },
 
-    /**
-     * Links an existing Transaction to a Debt (Repayment).
-     * Atomic: Updates Debt Balance + Inserts LINK + Updates Transaction Kind.
-     */
     async linkTransactionToDebt(payload: {
         debtId: string;
         transactionId: string;
@@ -117,33 +108,24 @@ export const debtService = {
         const now = new Date().toISOString();
 
         await db.withTransactionAsync(async () => {
-            // 1. Get Debt State
             const debt = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [payload.debtId]);
             if (!debt) throw new Error("Debt not found");
 
-            // 2. Get Transaction State
             const tx = await db.getFirstAsync<any>('SELECT * FROM transactions WHERE id = ?', [payload.transactionId]);
             if (!tx) throw new Error("Transaction not found");
             if (tx.linked_debt_id) throw new Error("Transaction is already linked to a debt");
 
-            // 3. Validation: Amount
-            // Liability Repayment = Sent money (EXPENSE)
-            // Receivable Repayment = Received money (INCOME)
-            // We use ABS amount for balance reduction
             const paymentAmount = Math.abs(tx.amount);
-
             if (paymentAmount > debt.current_balance) {
                 throw new Error(`Overpayment detected. Remaining balance is ${debt.current_balance}`);
             }
 
-            // 4. Insert Link (Debt Payment)
             const paymentId = generateUUID();
             await db.runAsync(`
                 INSERT INTO debt_payments (id, debt_id, transaction_id, amount, date, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
             `, [paymentId, payload.debtId, payload.transactionId, paymentAmount, tx.date, now]);
 
-            // 5. Update Debt Balance & Status
             const newBalance = debt.current_balance - paymentAmount;
             const newStatus = newBalance <= 0 ? 'PAID' : 'ACTIVE';
 
@@ -153,7 +135,6 @@ export const debtService = {
                 WHERE id = ?
             `, [newBalance, newStatus, now, payload.debtId]);
 
-            // 6. Update Transaction Kind & Link
             await db.runAsync(`
                 UPDATE transactions
                 SET transaction_kind = 'DEBT_REPAYMENT', linked_debt_id = ?
@@ -162,37 +143,26 @@ export const debtService = {
         });
     },
 
-    /**
-     * Unlinks a Transaction from a Debt (Reversal).
-     * Atomic: Restores Balance + Removes LINK + Reverts Transaction Kind.
-     */
     async unlinkTransaction(transactionId: string): Promise<void> {
         await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 
         await db.withTransactionAsync(async () => {
-            // 1. Get Link
             const link = await db.getFirstAsync<any>('SELECT * FROM debt_payments WHERE transaction_id = ?', [transactionId]);
             if (!link) throw new Error("Transaction is not linked to any debt payment");
 
             const debtId = link.debt_id;
             const linkAmount = link.amount;
 
-            // 2. Update Debt Balance (Restore)
             await db.runAsync(`
                 UPDATE debts
                 SET current_balance = current_balance + ?, status = 'ACTIVE', updated_at = ?
                 WHERE id = ?
             `, [linkAmount, now, debtId]);
 
-            // 3. Remove Link
             await db.runAsync('DELETE FROM debt_payments WHERE id = ?', [link.id]);
 
-            // 4. Update Transaction (Revert Kind)
-            // If amount < 0 (Sent) -> EXPENSE
-            // If amount > 0 (Received) -> INCOME
-            // We need to fetch tx to know sign? Or just rely on logic.
             const tx = await db.getFirstAsync<any>('SELECT amount FROM transactions WHERE id = ?', [transactionId]);
             const kind = (tx?.amount || 0) < 0 ? 'EXPENSE' : 'INCOME';
 
@@ -240,43 +210,25 @@ export const debtService = {
         return result?.total || 0;
     },
 
-    /**
-     * Finds unlinked transactions that could be repayments for this debt.
-     * Liability -> SENT transactions.
-     * Receivable -> RECEIVED transactions.
-     * Returns up to 50 transactions that haven't been linked yet.
-     */
     async getPotentialMatches(debtId: string): Promise<any[]> {
         await initDatabase();
         const db = getDb();
         const debt = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [debtId]);
         if (!debt) throw new Error("Debt not found");
 
-        // If Liability (I owe), repayment is me SENDING money.
-        // If Receivable (Owed to me), repayment is me RECEIVING money.
         const type = debt.type === 'LIABILITY' ? 'SENT' : 'RECEIVED';
-
-        // Filter: 
-        // 1. Correct Type
-        // 2. Not already linked
-        // 3. Amount <= Current Balance (Strict? Or loose? User said "Prevent overpayment". Filtering here is good UX)
-        // 4. Date after debt creation? (Optional, but logical)
 
         return await db.getAllAsync(`
             SELECT * FROM transactions 
             WHERE type = ? 
             AND linked_debt_id IS NULL 
-            AND transactionKind != 'DEBT_PRINCIPAL'
+            AND transaction_kind != 'DEBT_PRINCIPAL'
             AND is_deleted = 0
             ORDER BY date DESC
             LIMIT 50
         `, [type]);
     },
 
-    /**
-     * Gets the payment history for a debt.
-     * Returns debt_payments with joined transaction details.
-     */
     async getDebtHistory(debtId: string): Promise<any[]> {
         await initDatabase();
         const db = getDb();
@@ -287,8 +239,8 @@ export const debtService = {
                 dp.date as payment_date,
                 dp.created_at,
                 t.id as transaction_id,
-                t.recipientName,
-                t.rawSms,
+                t.recipient_name,
+                t.raw_sms,
                 t.type as transaction_type
             FROM debt_payments dp
             INNER JOIN transactions t ON dp.transaction_id = t.id
@@ -297,10 +249,6 @@ export const debtService = {
         `, [debtId]);
     },
 
-    /**
-     * Gets a summary of all debts for dashboard display.
-     * Returns total liabilities (money you owe) and receivables (money owed to you).
-     */
     async getDebtSummary(userId: string): Promise<{
         totalLiabilities: number;
         totalReceivables: number;
@@ -333,8 +281,6 @@ export const debtService = {
         let totalLiabilities = liabilities?.total || 0;
         const totalReceivables = receivables?.total || 0;
 
-        // ACCRUED FEES: Add daily maintenance fees for all active overdrafts
-        // that haven't been reconciled today.
         const overdrafts = await db.getAllAsync<any>(`
             SELECT current_balance, updated_at 
             FROM debts 
@@ -356,14 +302,11 @@ export const debtService = {
         return {
             totalLiabilities,
             totalReceivables,
-            netDebt: totalLiabilities - totalReceivables, // Positive = you owe more, Negative = you're owed more
+            netDebt: totalLiabilities - totalReceivables,
             activeDebts: (liabilities?.count || 0) + (receivables?.count || 0)
         };
     },
 
-    /**
-     * Gets or creates the special Fuliza overdraft debt.
-     */
     async getOrCreateFulizaDebt(): Promise<Debt> {
         await initDatabase();
         const db = getDb();
@@ -393,9 +336,6 @@ export const debtService = {
         return mapRowToDebt(debt);
     },
 
-    /**
-     * Increases a debt balance (e.g. borrowing more or fees added).
-     */
     async increaseDebtAmount(debtId: string, amount: number) {
         await initDatabase();
         const db = getDb();
@@ -406,9 +346,6 @@ export const debtService = {
         );
     },
 
-    /**
-     * Reduces a debt balance (e.g. repayment).
-     */
     async reduceDebtAmount(debtId: string, amount: number) {
         await initDatabase();
         const db = getDb();
@@ -419,9 +356,6 @@ export const debtService = {
         );
     },
 
-    /**
-     * Directly sets a debt balance (authoritative sync).
-     */
     async updateDebtBalance(debtId: string, balance: number) {
         await initDatabase();
         const db = getDb();
@@ -432,26 +366,33 @@ export const debtService = {
         );
     },
 
-    /**
-     * Reconciles the Fuliza debt balance with the latest transaction record.
-     */
     async reconcileFulizaBalance() {
         await initDatabase();
         const db = getDb();
-        const latest = await db.getFirstAsync<{ outstandingBalance: number }>(
-            `SELECT outstandingBalance 
+        const latest = await db.getFirstAsync<{ outstanding_balance: number }>(
+            `SELECT outstanding_balance 
              FROM fuliza_transactions 
-             WHERE outstandingBalance IS NOT NULL 
+             WHERE outstanding_balance IS NOT NULL 
              ORDER BY date DESC LIMIT 1`
         );
 
-        if (latest && latest.outstandingBalance !== undefined) {
+        if (latest && latest.outstanding_balance !== undefined) {
             const fulizaDebt = await this.getOrCreateFulizaDebt();
-            if (fulizaDebt.currentBalance !== latest.outstandingBalance) {
-                console.log(`⚖️ Reconciling Fuliza Balance: ${fulizaDebt.currentBalance} -> ${latest.outstandingBalance}`);
-                await this.updateDebtBalance(fulizaDebt.id, latest.outstandingBalance);
+            if (fulizaDebt.currentBalance !== latest.outstanding_balance) {
+                console.log(`⚖️ Reconciling Fuliza Balance: ${fulizaDebt.currentBalance} -> ${latest.outstanding_balance}`);
+                await this.updateDebtBalance(fulizaDebt.id, latest.outstanding_balance);
             }
         }
+    },
+
+    async settleDebt(debtId: string): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+        await db.runAsync(
+            "UPDATE debts SET current_balance = 0, status = 'PAID', updated_at = ? WHERE id = ?",
+            [now, debtId]
+        );
     }
 };
 

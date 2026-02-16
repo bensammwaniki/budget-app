@@ -46,8 +46,8 @@ export default function DebtBreakdownChart({ data }: Props) {
             <PieChart
                 data={pieData}
                 donut
-                radius={65}
-                innerRadius={50}
+                radius={60}
+                innerRadius={45}
                 focusOnPress
                 showText={false}
                 innerCircleColor="#fff" // TODO: Handle Dark Mode via prop or hook
@@ -77,7 +77,7 @@ export default function DebtBreakdownChart({ data }: Props) {
                                 style={{ backgroundColor: item.color }}
                                 className="w-3 h-3 rounded-full mr-3"
                             />
-                            <Text className="text-gray-700 font-medium">{item.label}</Text>
+                            <Text className="text-gray-700 font-medium">{item.label?.slice(0, 5)}  </Text>
                         </View>
 
                         <Text className="font-semibold text-gray-900">

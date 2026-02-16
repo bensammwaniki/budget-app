@@ -1,6 +1,7 @@
 import { Transaction } from '../types/transaction';
+import { generateUUID } from '../utils/uuid';
 import { accountService } from './accountService';
-import { generateUUID, getDb } from './core/db';
+import { getDb } from './core/db';
 
 interface TransferPayload {
     fromAccountId: string;

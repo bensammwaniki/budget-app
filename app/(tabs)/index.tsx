@@ -465,7 +465,7 @@ export default function HomeScreen() {
           </View>
 
           <View className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 p-5 rounded-2xl border border-purple-200 dark:border-purple-800">
-            <View className="flex-row justify-between items-start mb-4">
+            <View className="flex-row justify-between items-start mb-1">
               <View className="flex-1">
                 <Text className="text-purple-800 dark:text-purple-200 font-bold text-base mb-1">Total Debt</Text>
                 <Text className="text-slate-900 dark:text-white text-3xl font-bold">
@@ -481,7 +481,7 @@ export default function HomeScreen() {
             </View>
 
             {debtSummary.activeDebts > 0 && (
-              <View className="flex-row justify-between items-center mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+              <View className="flex-row justify-between items-center mb-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
                 <View>
                   <Text className="text-slate-500 text-xs font-bold uppercase mb-1">Debt Summary</Text>
                   <View className="flex-row items-center gap-4">

@@ -2,9 +2,17 @@ import * as SQLite from 'expo-sqlite';
 import { AutomationRule } from '../types/automation';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 import { evaluateTransaction } from '../utils/automationEngine';
-import { calculateMonthlyFulizaCosts } from '../utils/fulizaCalculator';
+import { generateUUID, getDb, initDatabase } from './core/db';
+import { debtService } from './debtService';
 
-import { getDb, initDatabase } from './core/db';
+export { generateUUID, initDatabase };
+
+/**
+ * Legacy alias for getDb to maintain backward compatibility.
+ */
+export const ensureDb = (): SQLite.SQLiteDatabase => {
+    return getDb();
+};
 
 // Reactive Subscription Logic
 export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS';
@@ -21,7 +29,6 @@ export const subscribeToDatabaseChanges = (listener: DatabaseChangeListener) => 
 const debounceTimeouts: Record<string, any> = {};
 
 export const notifyListeners = (type: DatabaseChangeType) => {
-    // Debounce notifications to prevent UI flooding during bulk operations (sync)
     if (debounceTimeouts[type]) {
         clearTimeout(debounceTimeouts[type]);
     }
@@ -30,28 +37,21 @@ export const notifyListeners = (type: DatabaseChangeType) => {
         console.log(`🔔 Notifying listeners of change: ${type}`);
         listeners.forEach(l => l(type));
         delete debounceTimeouts[type];
-    }, 500); // 500ms debounce for smoother UI during deep sync
+    }, 500);
 };
 
-// Immediate notification for user-initiated actions (no debounce)
 export const notifyListenersImmediate = (type: DatabaseChangeType) => {
     console.log(`⚡ Immediate notification of change: ${type}`);
     listeners.forEach(l => l(type));
 };
 
-export { initDatabase };
-
-const ensureDb = (): SQLite.SQLiteDatabase => {
-    return getDb();
-};
-
 export const getCategories = async (): Promise<Category[]> => {
-    const database = ensureDb();
+    const database = getDb();
     return await database.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
 };
 
 export const addCategory = async (category: Omit<Category, 'id'>) => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.runAsync(
         'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
         [category.name, category.type, category.icon, category.color, 1, category.description || '']
@@ -61,13 +61,13 @@ export const addCategory = async (category: Omit<Category, 'id'>) => {
 };
 
 export const deleteCategory = async (id: number) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync('DELETE FROM categories WHERE id = ?', [id]);
     notifyListenersImmediate('CATEGORIES');
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync(
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
         [key, value]
@@ -76,126 +76,67 @@ export const saveUserSettings = async (key: string, value: string) => {
 };
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
-    const database = ensureDb();
-    const result = await database.getFirstAsync<{ value: string }>(
-        'SELECT value FROM user_settings WHERE key = ?',
-        [key]
-    );
-    return result?.value || null;
+    try {
+        const database = getDb();
+        const result = await database.getFirstAsync<{ value: string }>(
+            'SELECT value FROM user_settings WHERE key = ?',
+            [key]
+        );
+        return result?.value || null;
+    } catch (e) {
+        return null;
+    }
 };
 
 export const getRecipientCategory = async (recipientId: string, type: string): Promise<number | null> => {
-    const database = ensureDb();
-    const result = await database.getAllAsync<{ categoryId: number }>('SELECT categoryId FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
-    return result.length > 0 ? result[0].categoryId : null;
+    const database = getDb();
+    const result = await database.getAllAsync<{ category_id: number }>('SELECT category_id FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
+    return result.length > 0 ? result[0].category_id : null;
 };
 
 export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.getAllAsync<any>('SELECT * FROM fuliza_transactions ORDER BY date ASC');
     return result.map(row => ({
-        ...row,
+        id: row.id,
+        amount: row.amount,
+        type: row.type,
+        accessFee: row.access_fee,
+        outstandingBalance: row.outstanding_balance,
+        dueDate: row.due_date ? new Date(row.due_date) : undefined,
+        linkedTransactionId: row.linked_transaction_id,
         date: new Date(row.date),
-        dueDate: row.dueDate ? new Date(row.dueDate) : undefined
+        rawSms: row.raw_sms,
+        transactionKind: 'EXPENSE' // Default for Fuliza
     }));
 };
 
-
-export const updateFulizaFees = async () => {
-    try {
-        // 1. Get Fuliza Charges category ID
-        const categories = await getCategories();
-        const fulizaCategory = categories.find(c => c.name === 'Fuliza Charges');
-
-        if (!fulizaCategory) {
-            return;
-        }
-
-        // 2. Load ALL history
-        const history = await getFulizaTransactions();
-
-        if (history.length === 0) {
-            return;
-        }
-
-        // 3. Calculate fees
-        const monthlyCosts = calculateMonthlyFulizaCosts(history);
-        console.log(`💰 Calculated fees for ${monthlyCosts.size} month(s):`);
-
-        monthlyCosts.forEach((cost, monthKey) => {
-            console.log(`   ${monthKey}: KES ${cost.toFixed(2)}`);
-        });
-
-        // 4. Save fee transactions
-        for (const [monthKey, totalCost] of monthlyCosts.entries()) {
-            const [year, month] = monthKey.split('-');
-            const feeDate: Date = new Date(parseInt(year), parseInt(month), 0);
-            const uuid = `FULIZA-FEES-${monthKey}`;
-            const now = new Date();
-
-            const bundledAccessFeeTransaction: Transaction = {
-                id: uuid,
-                uuid: uuid,
-                userId: 'local_user',
-                accountId: 'ACC-MPESA-DEFAULT', // Defaulting to M-PESA for fees
-                amount: totalCost,
-                type: 'SENT',
-                transactionKind: 'EXPENSE',
-                recipientId: 'FULIZA-FEES',
-                recipientName: 'Fuliza Fees',
-                date: feeDate,
-
-                balance: 0, // Legacy
-                balanceAfter: 0, // TODO: Fetch actual balance if needed
-                transactionCost: 0,
-                categoryId: fulizaCategory.id,
-                rawSms: 'Generated Monthly Fee',
-
-                createdAt: now,
-                updatedAt: now,
-                isDeleted: false
-            };
-
-            await saveTransaction(bundledAccessFeeTransaction, false); // Suppress notification in loop
-        }
-        notifyListeners('TRANSACTIONS'); // Notify once at the end
-    } catch (e) {
-        console.error('❌ Error updating Fuliza fees:', e);
-    }
-};
-
 export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
-    if (!recipientId || !type) {
-        console.warn('Skipping saveRecipientCategory: Missing recipientId or type');
-        return;
-    }
-    const database = ensureDb();
+    if (!recipientId || !type) return;
+    const database = getDb();
     await database.runAsync(
-        'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
-        [recipientId, type, categoryId || null, new Date().toISOString()]
+        'INSERT OR REPLACE INTO recipients (id, type, category_id, last_seen) VALUES (?, ?, ?, ?)',
+        [recipientId, type, categoryId ?? null, new Date().toISOString()]
     );
     await database.runAsync(
-        'UPDATE transactions SET categoryId = ? WHERE recipientId = ? AND type = ? AND categoryId IS NULL',
-        [categoryId || null, recipientId, type]
+        'UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND category_id IS NULL',
+        [categoryId ?? null, recipientId, type]
     );
     notifyListenersImmediate('TRANSACTIONS');
 };
 
-export const updateTransactionCategory = async (transactionId: string, categoryId: number) => {
-    if (!transactionId) {
-        console.warn('Skipping updateTransactionCategory: Missing transactionId');
-        return;
-    }
-    const database = ensureDb();
+export const updateTransactionCategory = async (transactionId: string, categoryId: number | null) => {
+    if (!transactionId) return;
+    const database = getDb();
     await database.runAsync(
-        'UPDATE transactions SET categoryId = ? WHERE id = ?',
-        [categoryId || null, transactionId]
+        'UPDATE transactions SET category_id = ? WHERE id = ?',
+        [categoryId ?? null, transactionId]
     );
     notifyListenersImmediate('TRANSACTIONS');
 };
 
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync(
         'UPDATE transactions SET date = ? WHERE id = ?',
         [newDate.toISOString(), transactionId]
@@ -203,28 +144,38 @@ export const updateTransactionDate = async (transactionId: string, newDate: Date
     notifyListenersImmediate('TRANSACTIONS');
 };
 
+export const transactionExists = async (id: string): Promise<boolean> => {
+    const database = getDb();
+    const result = await database.getFirstAsync<{ count: number }>(
+        'SELECT count(*) as count FROM transactions WHERE id = ?',
+        [id]
+    );
+    return (result?.count || 0) > 0;
+};
+
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync(
         `INSERT OR REPLACE INTO fuliza_transactions 
-        (id, amount, type, accessFee, outstandingBalance, dueDate, linkedTransactionId, date, rawSms) 
+        (id, amount, type, access_fee, outstanding_balance, due_date, linked_transaction_id, date, raw_sms) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             fuliza.id,
             fuliza.amount,
             fuliza.type,
-            fuliza.accessFee !== undefined ? fuliza.accessFee : null,
-            fuliza.outstandingBalance !== undefined ? fuliza.outstandingBalance : null,
-            fuliza.dueDate?.toISOString() || null,
-            fuliza.linkedTransactionId || null,
+            fuliza.accessFee ?? null,
+            fuliza.outstandingBalance ?? null,
+            fuliza.dueDate?.toISOString() ?? null,
+            fuliza.linkedTransactionId ?? null,
             fuliza.date.toISOString(),
             fuliza.rawSms
         ]
     );
+    notifyListeners('TRANSACTIONS');
 };
 
 export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.getFirstAsync<{ count: number }>(
         'SELECT count(*) as count FROM fuliza_transactions WHERE id = ?',
         [id]
@@ -233,59 +184,50 @@ export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
 };
 
 export const saveTransaction = async (transaction: Transaction, shouldNotify: boolean = true) => {
-    const database = ensureDb();
+    const database = getDb();
 
-    // AUTOMATION: If categoryId is missing, try to apply automation rules
     if (!transaction.categoryId) {
-        try {
-            const rules = await getAutomationRules();
-            const matchedRule = evaluateTransaction(transaction, rules);
+        const rules = await getAutomationRules();
+        const enabledRules = rules.filter(r => r.isEnabled);
+        const matchedRule = evaluateTransaction(transaction, enabledRules);
 
-            if (matchedRule) {
-                console.log(`🤖 Auto-categorizing transaction ${transaction.id} using rule: ${matchedRule.name}`);
-                transaction.categoryId = matchedRule.action.categoryId;
-            }
-        } catch (error) {
-            console.error('Error applying automation rules:', error);
+        if (matchedRule) {
+            transaction.categoryId = matchedRule.action.categoryId;
         }
     }
 
-    // Ensure Recipient Exists (to satisfy Strict FK)
+    await database.runAsync(
+        `INSERT OR REPLACE INTO transactions 
+        (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, created_at, updated_at, is_deleted) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            transaction.id,
+            transaction.uuid || transaction.id,
+            transaction.userId || 'local_user',
+            transaction.accountId || 'ACC-MPESA-DEFAULT',
+            transaction.categoryId ?? null,
+            transaction.amount,
+            transaction.type,
+            transaction.transactionKind || (transaction.type === 'SENT' ? 'EXPENSE' : 'INCOME'),
+            transaction.recipientId ?? null,
+            transaction.recipientName ?? null,
+            transaction.date.toISOString(),
+            transaction.balance || 0,
+            transaction.balanceAfter || transaction.balance || 0,
+            transaction.transactionCost || 0,
+            transaction.rawSms ?? null,
+            new Date().toISOString(),
+            new Date().toISOString(),
+            0
+        ]
+    );
+
     if (transaction.recipientId) {
         await database.runAsync(
-            'INSERT OR IGNORE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO recipients (id, type, category_id, last_seen) VALUES (?, ?, ?, ?)',
             [transaction.recipientId, transaction.type, null, new Date().toISOString()]
         );
     }
-
-    // Insert with new Ledger Columns (Standardized snake_case)
-    const values = [
-        transaction.id,
-        transaction.uuid || transaction.id,
-        transaction.userId || 'local_user',
-        transaction.accountId || 'ACC-MPESA-DEFAULT',
-        transaction.categoryId || null,
-        transaction.amount,
-        transaction.type,
-        transaction.transactionKind || (transaction.type === 'SENT' ? 'EXPENSE' : 'INCOME'),
-        transaction.recipientId || null,
-        transaction.recipientName,
-        transaction.date.toISOString(),
-        transaction.balance || 0,
-        transaction.balanceAfter || transaction.balance || 0,
-        transaction.transactionCost || 0,
-        transaction.rawSms,
-        (transaction.createdAt || new Date()).toISOString(),
-        (transaction.updatedAt || new Date()).toISOString(),
-        transaction.isDeleted ? 1 : 0
-    ];
-
-    await database.runAsync(
-        `INSERT OR REPLACE INTO transactions 
-    (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, created_at, updated_at, is_deleted) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        values
-    );
 
     if (shouldNotify) {
         notifyListeners('TRANSACTIONS');
@@ -293,131 +235,99 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.getAllAsync<any>(`
         SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
         FROM transactions t 
-        LEFT JOIN categories c ON (t.category_id = c.id OR t.categoryId = c.id) 
+        LEFT JOIN categories c ON t.category_id = c.id 
         ORDER BY t.date DESC
     `);
 
-    console.log(`📊 getTransactions fetched ${result.length} rows`);
     return result.map(row => {
         let txDate = new Date();
         if (row.date) {
             txDate = new Date(row.date);
             if (isNaN(txDate.getTime())) {
-                console.warn(`⚠️ Invalid date for tx ${row.id}: ${row.date}, fallback to now`);
                 txDate = new Date();
             }
         }
         return {
-            ...row,
-            date: txDate,
-            // Ensure compatibility across snake_case and camelCase
+            id: row.id,
+            uuid: row.uuid,
+            userId: row.user_id,
+            accountId: row.account_id,
+            categoryId: row.category_id,
+            amount: Math.abs(row.amount),
             type: row.type || (row.amount < 0 ? 'SENT' : 'RECEIVED'),
-            amount: Math.abs(row.amount), // Frontend expects positive amount + type
-            categoryId: row.category_id || row.categoryId,
-            recipientId: row.recipient_id || row.recipientId,
-            recipientName: row.recipient_name || row.recipientName,
-            transactionKind: row.transaction_kind || row.transactionKind,
-            transactionCost: row.transaction_cost || row.transactionCost,
-            rawSms: row.raw_sms || row.rawSms,
-            balanceAfter: row.balance_after || row.balanceAfter
+            transactionKind: row.transaction_kind,
+            recipientId: row.recipient_id,
+            recipientName: row.recipient_name,
+            date: txDate,
+            balanceAfter: row.balance_after,
+            transactionCost: row.transaction_cost,
+            rawSms: row.raw_sms,
+            createdAt: new Date(row.created_at),
+            updatedAt: new Date(row.updated_at),
+            isDeleted: row.is_deleted === 1,
+            categoryName: row.categoryName,
+            categoryIcon: row.categoryIcon,
+            categoryColor: row.categoryColor,
+            categoryDescription: row.categoryDescription,
+            linkedDebtId: row.linked_debt_id,
+            linkedGoalId: row.linked_goal_id,
+            referenceId: row.reference_id
         };
     });
 };
 
 export const getSpendingSummary = async (): Promise<SpendingSummary> => {
-    const database = ensureDb();
+    const database = getDb();
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-    const daily = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
+    const account = await database.getFirstAsync<{ balance: number }>(
+        "SELECT balance FROM accounts WHERE name = 'M-PESA'"
+    );
+
+    const daily = await database.getFirstAsync<{ total: number }>(
+        "SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND is_deleted = 0",
         [startOfDay]
     );
 
-    const weekly = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
-        [startOfWeek]
-    );
-
-    const monthly = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT' AND date >= ?",
-        [startOfMonth]
-    );
-
-    // Get latest balance from a REAL transaction (exclude generated fees)
-    // Remove "AND balance > 0" to allow seeing legitimate 0 balances
-    const balanceResult = await database.getAllAsync<{ balance: number, date: string }>(
-        "SELECT balance, date FROM transactions WHERE id NOT LIKE 'FULIZA-FEES-%' ORDER BY date DESC LIMIT 1"
-    );
-
-    const countResult = await database.getAllAsync<{ count: number }>(
-        "SELECT count(*) as count FROM transactions"
-    );
-
-    const totalSpentResult = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE type = 'SENT'"
-    );
-
-    const monthlyCostResult = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(transaction_cost) as total FROM transactions WHERE (date >= ? OR created_at >= ?)",
-        [startOfMonth, startOfMonth]
-    );
-
-    const totalIncomeResult = await database.getAllAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE type = 'RECEIVED'"
-    );
-
-    const fulizaResult = await database.getAllAsync<{ balance: number, date: string, type: string }>(
-        `SELECT outstandingBalance as balance, date, type
-         FROM fuliza_transactions 
-         WHERE outstandingBalance IS NOT NULL 
-         ORDER BY date DESC 
-         LIMIT 1`
-    );
-
-    let currentBalance = balanceResult[0]?.balance || 0;
-    // const fulizaOutstanding = fulizaResult[0]?.balance || 0; // REPLACED by Debt system
-
-    // Logic: If the latest Fuliza event is NEWER than the latest M-PESA transaction,
-    // AND it is a LOAN (borrowing), it implies the M-PESA balance is 0.
-    // We do NOT reset balance for 'REPAYMENT' because a repayment implies logic handled by the source transaction,
-    // and you might still have a balance remaining after partial payment.
-    const latestTxDate = balanceResult[0]?.date ? new Date(balanceResult[0].date) : new Date(0);
-    const latestFulizaDate = fulizaResult[0]?.date ? new Date(fulizaResult[0].date) : new Date(0);
-
-    if (latestFulizaDate > latestTxDate && fulizaResult[0]?.type === 'LOAN') {
-        currentBalance = 0;
-    }
+    const monthly = await database.getFirstAsync<{ totalSpent: number, income: number, costs: number, count: number }>(`
+        SELECT 
+            SUM(CASE WHEN type = 'SENT' THEN amount ELSE 0 END) as totalSpent,
+            SUM(CASE WHEN type = 'RECEIVED' THEN amount ELSE 0 END) as income,
+            SUM(transaction_cost) as costs,
+            COUNT(*) as count
+        FROM transactions 
+        WHERE date >= ? AND is_deleted = 0
+    `, [startOfMonth]);
 
     return {
-        currentBalance: currentBalance,
-        dailyTotal: daily[0]?.total || 0,
-        weeklyTotal: weekly[0]?.total || 0,
-        monthlyTotal: monthly[0]?.total || 0,
-        transactionCount: countResult[0]?.count || 0,
-        totalSpent: totalSpentResult[0]?.total || 0,
-        monthlyTransactionCost: monthlyCostResult[0]?.total || 0,
-        totalIncome: totalIncomeResult[0]?.total || 0
+        currentBalance: account?.balance || 0,
+        dailyTotal: daily?.total || 0,
+        weeklyTotal: 0,
+        monthlyTotal: monthly?.totalSpent || 0,
+        transactionCount: monthly?.count || 0,
+        totalSpent: monthly?.totalSpent || 0,
+        monthlyTransactionCost: monthly?.costs || 0,
+        totalIncome: monthly?.income || 0
     };
 };
 
 export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.getFirstAsync<{ sms_id: string }>(
         'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
         [smsId]
     );
-    return result !== null;
+    return !!result;
 };
 
 export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync(
         'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
         [smsId, new Date().toISOString()]
@@ -425,28 +335,27 @@ export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
 };
 
 export const clearProcessedSms = async (): Promise<void> => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync('DELETE FROM processed_sms');
-    console.log('✅ Cleared processed SMS cache');
 };
 
-// Automation Rules
-
 export const getAutomationRules = async (): Promise<AutomationRule[]> => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.getAllAsync<any>('SELECT * FROM automation_rules ORDER BY id DESC');
     return result.map(row => ({
-        ...row,
+        id: row.id,
+        name: row.name,
+        type: row.type,
         conditions: JSON.parse(row.conditions),
         action: JSON.parse(row.action),
-        isEnabled: row.isEnabled === 1
+        isEnabled: row.is_enabled === 1
     }));
 };
 
 export const addAutomationRule = async (rule: Omit<AutomationRule, 'id'>) => {
-    const database = ensureDb();
+    const database = getDb();
     const result = await database.runAsync(
-        'INSERT INTO automation_rules (name, type, conditions, action, isEnabled) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO automation_rules (name, type, conditions, action, is_enabled) VALUES (?, ?, ?, ?, ?)',
         [
             rule.name,
             rule.type,
@@ -455,171 +364,140 @@ export const addAutomationRule = async (rule: Omit<AutomationRule, 'id'>) => {
             rule.isEnabled ? 1 : 0
         ]
     );
+    notifyListenersImmediate('TRANSACTIONS');
     return result.lastInsertRowId;
 };
 
 export const deleteAutomationRule = async (id: number) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync('DELETE FROM automation_rules WHERE id = ?', [id]);
 };
 
 export const toggleAutomationRule = async (id: number, isEnabled: boolean) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync(
-        'UPDATE automation_rules SET isEnabled = ? WHERE id = ?',
+        'UPDATE automation_rules SET is_enabled = ? WHERE id = ?',
         [isEnabled ? 1 : 0, id]
     );
 };
 
 export const applyRuleToExistingTransactions = async (rule: AutomationRule): Promise<number> => {
-    const database = ensureDb();
+    const database = getDb();
     const allTransactions = await getTransactions();
     let updatedCount = 0;
 
-    await database.withTransactionAsync(async () => {
-        for (const tx of allTransactions) {
-            // Check if rule applies to this transaction (ignoring the enabled flag within evaluate, using the rule passed)
-            // We reuse evaluateTransaction logic but force check against this specific rule
-            // Note: evaluateTransaction expects an array of rules, so we pass just this one
-            const matchedRule = evaluateTransaction(tx, [rule]);
-
-            if (matchedRule) {
-                // Determine if we should overwrite? 
-                // User said "ensure all transaction falling under rule gets updated". 
-                // We will overwrite even if it has a category, to strictly enforce the new rule.
-
-                // Only update if category is different to avoid unnecessary writes
-                if (tx.categoryId !== rule.action.categoryId) {
-                    await database.runAsync(
-                        'UPDATE transactions SET categoryId = ? WHERE id = ?',
-                        [rule.action.categoryId, tx.id]
-                    );
-
-                    // Also update recipient mapping so future manual entries might default correctly (optional but good consistency)
-                    if (tx.recipientId) {
-                        await database.runAsync(
-                            'INSERT OR REPLACE INTO recipients (id, type, categoryId, lastSeen) VALUES (?, ?, ?, ?)',
-                            [tx.recipientId, tx.type, rule.action.categoryId, new Date().toISOString()]
-                        );
-                    }
-
-                    updatedCount++;
-                }
+    for (const tx of allTransactions) {
+        if (evaluateTransaction(tx, [rule])) {
+            if (tx.categoryId !== rule.action.categoryId) {
+                await database.runAsync(
+                    'UPDATE transactions SET category_id = ? WHERE id = ?',
+                    [rule.action.categoryId, tx.id]
+                );
+                updatedCount++;
             }
         }
-    });
+    }
 
+    if (updatedCount > 0) notifyListenersImmediate('TRANSACTIONS');
     return updatedCount;
 };
 
 export const revertRuleEffects = async (rule: AutomationRule): Promise<number> => {
-    const database = ensureDb();
+    const database = getDb();
     const allTransactions = await getTransactions();
     let revertedCount = 0;
 
-    await database.withTransactionAsync(async () => {
-        for (const tx of allTransactions) {
-            // Check if rule applied to this transaction
-            const matchedRule = evaluateTransaction(tx, [rule]);
-
-            // We only revert IF:
-            // 1. The transaction matches the rule criteria (so it WAS likely targeted by this)
-            // 2. The transaction's CURRENT category matches what this rule would have applied (so we don't undo manual overrides)
-            if (matchedRule && tx.categoryId === rule.action.categoryId) {
-                await database.runAsync(
-                    'UPDATE transactions SET categoryId = NULL WHERE id = ?',
-                    [tx.id]
-                );
-                revertedCount++;
-            }
+    for (const tx of allTransactions) {
+        if (evaluateTransaction(tx, [rule]) && tx.categoryId === rule.action.categoryId) {
+            await database.runAsync(
+                'UPDATE transactions SET category_id = NULL WHERE id = ?',
+                [tx.id]
+            );
+            revertedCount++;
         }
-    });
-
-    if (revertedCount > 0) {
-        notifyListeners('TRANSACTIONS');
     }
+
+    if (revertedCount > 0) notifyListenersImmediate('TRANSACTIONS');
     return revertedCount;
 };
 
-// Budget Management
-
 export const getMonthlyBudget = async (month: string) => {
-    const database = ensureDb();
+    const database = getDb();
 
-    // Get total income for the month
-    const budgetResult = await database.getFirstAsync<{ totalIncome: number }>(
-        'SELECT totalIncome FROM monthly_budgets WHERE month = ?',
+    const budgetResult = await database.getFirstAsync<{ total_income: number }>(
+        'SELECT total_income FROM monthly_budgets WHERE month = ?',
         [month]
     );
 
-    // Get category allocations
-    const allocations = await database.getAllAsync<{ categoryId: number, budgetAmount: number }>(
-        'SELECT categoryId, budgetAmount FROM category_budgets WHERE month = ?',
+    const allocations = await database.getAllAsync<{ category_id: number, budget_amount: number }>(
+        'SELECT category_id, budget_amount FROM category_budgets WHERE month = ?',
         [month]
     );
 
     return {
-        totalIncome: budgetResult?.totalIncome || 0,
-        allocations: allocations || []
+        totalIncome: budgetResult?.total_income || 0,
+        allocations: allocations.map(a => ({ categoryId: a.category_id, budgetAmount: a.budget_amount })) || []
     };
 };
 
 export const saveMonthlyBudget = async (month: string, totalIncome: number, allocations: { categoryId: number, budgetAmount: number }[]) => {
-    const database = ensureDb();
+    const database = getDb();
 
     await database.withTransactionAsync(async () => {
-        // Save total income
         await database.runAsync(
-            'INSERT OR REPLACE INTO monthly_budgets (month, totalIncome) VALUES (?, ?)',
+            'INSERT OR REPLACE INTO monthly_budgets (month, total_income) VALUES (?, ?)',
             [month, totalIncome]
         );
 
-        // Save allocations
         for (const allocation of allocations) {
             await database.runAsync(
-                'INSERT OR REPLACE INTO category_budgets (month, categoryId, budgetAmount) VALUES (?, ?, ?)',
+                'INSERT OR REPLACE INTO category_budgets (month, category_id, budget_amount) VALUES (?, ?, ?)',
                 [month, allocation.categoryId, allocation.budgetAmount]
             );
         }
     });
+
     notifyListenersImmediate('BUDGETS');
 };
 
 export const getCategorySpending = async (month: string): Promise<Record<number, number>> => {
-    const database = ensureDb();
+    const database = getDb();
     const [year, monthNum] = month.split('-');
+    const startDate = `${month}-01T00:00:00.000Z`;
+    const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+    const endDate = `${month}-${lastDay}T23:59:59.999Z`;
 
-    // Calculate start and end of month based on the "YYYY-MM" string
-    // Note: JS Date month is 0-indexed, so we subtract 1 from parsed monthNum
-    const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1).toISOString();
-    const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59).toISOString(); // End of the month
-
-    const result = await database.getAllAsync<{ categoryId: number, total: number }>(
-        `SELECT categoryId, SUM(amount) as total 
-         FROM transactions 
-         WHERE date >= ? AND date <= ? AND type = 'SENT' AND categoryId IS NOT NULL
-         GROUP BY categoryId`,
+    const result = await database.getAllAsync<{ category_id: number, total: number }>(
+        "SELECT category_id, SUM(amount) as total FROM transactions WHERE date >= ? AND date <= ? AND type = 'SENT' AND category_id IS NOT NULL AND is_deleted = 0 GROUP BY category_id",
         [startDate, endDate]
     );
 
     const spending: Record<number, number> = {};
     result.forEach(row => {
-        spending[row.categoryId] = row.total;
+        spending[row.category_id] = row.total;
     });
+
     return spending;
 };
 
-export const transactionExists = async (id: string): Promise<boolean> => {
-    const database = ensureDb();
-    const result = await database.getFirstAsync<{ id: string }>(
-        'SELECT id FROM transactions WHERE id = ?',
-        [id]
-    );
-    return result !== null;
-};
-
 export const deleteTransaction = async (id: string) => {
-    const database = ensureDb();
+    const database = getDb();
     await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
     notifyListenersImmediate('TRANSACTIONS');
+};
+
+/**
+ * Periodically called during sync/launch to apply accrued interest/maintenance
+ * fees for any active overdraft debts.
+ */
+export const updateFulizaFees = async () => {
+    try {
+        const fulizaDebt = await debtService.getOrCreateFulizaDebt();
+        if (fulizaDebt && fulizaDebt.status === 'ACTIVE' && fulizaDebt.currentBalance > 0) {
+            // Reconcile will internally check latest SMS balance if available
+            await debtService.reconcileFulizaBalance();
+        }
+    } catch (e) {
+        console.error('Error updating Fuliza fees:', e);
+    }
 };

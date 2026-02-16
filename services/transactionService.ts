@@ -26,31 +26,63 @@ export const transactionService = {
 
 const mapRowToTransaction = (row: any): Transaction => {
     return {
-        id: row.uuid || row.id, // Prefer UUID
+        id: row.uuid || row.id,
         uuid: row.uuid,
         userId: row.user_id,
         accountId: row.account_id,
-        categoryId: row.category_id || row.categoryId, // Standardized column is category_id
-
+        categoryId: row.category_id,
         amount: row.amount,
         type: row.type as 'SENT' | 'RECEIVED',
-        transactionKind: row.transaction_kind || row.transactionKind,
-
-        recipientId: row.recipient_id || row.recipientId,
-        recipientName: row.recipient_name || row.recipientName,
-
+        transactionKind: row.transaction_kind,
+        recipientId: row.recipient_id,
+        recipientName: row.recipient_name,
         date: new Date(row.date),
-
-        balanceAfter: row.balance_after || row.balanceAfter,
-        referenceId: row.reference_id || row.referenceId,
-
+        balanceAfter: row.balance_after,
+        referenceId: row.reference_id,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
         isDeleted: !!row.is_deleted,
-
-        rawSms: row.raw_sms || row.rawSms,
-        transactionCost: row.transaction_cost || row.transactionCost,
-        linkedDebtId: row.linked_debt_id || row.linkedDebtId,
-        linkedGoalId: row.linked_goal_id || row.linkedGoalId
+        rawSms: row.raw_sms,
+        transactionCost: row.transaction_cost,
+        linkedDebtId: row.linked_debt_id,
+        linkedGoalId: row.linked_goal_id
     };
 };
+
+export const transactionExists = async (id: string): Promise<boolean> => {
+    const database = getDb();
+    const result = await database.getFirstAsync<{ count: number }>(
+        'SELECT count(*) as count FROM transactions WHERE id = ?',
+        [id]
+    );
+    return (result?.count || 0) > 0;
+};
+
+// The saveFulizaTransaction function provided in the instruction was syntactically incorrect
+// as 'row' was not defined within its scope, and its body was identical to mapRowToTransaction.
+// To maintain syntactical correctness as per instructions, this function is not added in its malformed state.
+// If this was intended to be a new function, it would require a proper implementation.
+// export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
+//     return {
+//         id: row.uuid || row.id,
+//         uuid: row.uuid,
+//         userId: row.user_id,
+//         accountId: row.account_id,
+//         categoryId: row.category_id,
+//         amount: row.amount,
+//         type: row.type as 'SENT' | 'RECEIVED',
+//         transactionKind: row.transaction_kind,
+//         recipientId: row.recipient_id,
+//         recipientName: row.recipient_name,
+//         date: new Date(row.date),
+//         balanceAfter: row.balance_after,
+//         referenceId: row.reference_id,
+//         createdAt: new Date(row.created_at),
+//         updatedAt: new Date(row.updated_at),
+//         isDeleted: !!row.is_deleted,
+//         rawSms: row.raw_sms,
+//         transactionCost: row.transaction_cost,
+//         linkedDebtId: row.linked_debt_id,
+//         linkedGoalId: row.linked_goal_id
+//     };
+// };

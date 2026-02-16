@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
@@ -76,6 +76,31 @@ export default function DebtDetailScreen() {
         } catch (error) {
             Alert.alert('Error', 'Link failed: ' + error);
         }
+    };
+
+    const handleSettle = async () => {
+        if (!debt) return;
+
+        Alert.alert(
+            "Clear Debt",
+            `Are you sure you want to mark "${debt.name}" as fully paid? This is usually for payments made in cash.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Mark as Paid",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await debtService.settleDebt(debt.id);
+                            Alert.alert("Success", "Debt marked as paid.");
+                            loadData();
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to clear debt.");
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     if (loading) {
@@ -163,13 +188,29 @@ export default function DebtDetailScreen() {
 
                 {/* Actions */}
                 {debt.status === 'ACTIVE' && debt.type !== 'OVERDRAFT' && (
-                    <TouchableOpacity
-                        className="bg-blue-600 p-4 rounded-xl items-center shadow-lg shadow-blue-500/30 mb-8 flex-row justify-center gap-2"
-                        onPress={openLinkModal}
-                    >
-                        <FontAwesome name="link" size={16} color="white" />
-                        <Text className="text-white font-bold text-lg">Link Repayment</Text>
-                    </TouchableOpacity>
+                    <View className="flex-row gap-3 mb-8">
+                        <TouchableOpacity
+                            className="bg-blue-600 flex-1 p-3 rounded-xl items-center shadow-lg shadow-blue-500/30 flex-row justify-center gap-2"
+                            onPress={openLinkModal}
+                        >
+                            <FontAwesome name="link" size={16} color="white" />
+                            <Text className="text-white font-bold text-lg">Link</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            className="bg-white dark:bg-slate-800 flex-1 p-3 rounded-xl items-center shadow-sm border border-slate-200 dark:border-slate-700 flex-row justify-center gap-2"
+                            onPress={handleSettle}
+                        >
+                                <Image
+                                    source={require('../../assets/svg/clear.svg')}
+                                    style={{ width: 24, height: 24 }}
+                                    tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                    contentFit="contain"
+                                />
+                    
+                            <Text className="text-slate-900 dark:text-white font-bold text-lg">Clear Debt</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 {/* Payment History */}
@@ -184,7 +225,7 @@ export default function DebtDetailScreen() {
                                 <View className="flex-row justify-between items-start mb-2">
                                     <View className="flex-1">
                                         <Text className="font-bold text-slate-900 dark:text-white">
-                                            {payment.recipientName || 'Payment'}
+                                            {payment.recipient_name || 'Payment'}
                                         </Text>
                                         <Text className="text-slate-400 text-xs mt-1">
                                             {new Date(payment.payment_date).toLocaleDateString()}
@@ -244,7 +285,7 @@ export default function DebtDetailScreen() {
                                     onPress={() => handleLink(item.id)}
                                 >
                                     <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="font-bold text-slate-900 dark:text-white flex-1">{item.recipientName || 'Unknown'}</Text>
+                                        <Text className="font-bold text-slate-900 dark:text-white flex-1">{item.recipient_name || 'Unknown'}</Text>
                                         <Text className={`font-bold ${item.type === 'SENT' ? 'text-red-500' : 'text-green-500'}`}>
                                             {item.type === 'SENT' ? '-' : '+'} KES {item.amount.toLocaleString()}
                                         </Text>
