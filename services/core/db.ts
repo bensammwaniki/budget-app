@@ -112,6 +112,22 @@ async function performInitialization() {
             );
         `);
 
+        // 6. Savings Goals Table
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS savings_goals (
+                id TEXT PRIMARY KEY,
+                user_id TEXT DEFAULT 'local_user',
+                name TEXT NOT NULL,
+                target_amount REAL NOT NULL,
+                current_amount REAL DEFAULT 0,
+                target_date TEXT,
+                color TEXT,
+                status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'PAUSED')),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         console.log('🔄 Running Table Migrations...');
 
         // Defensive check for missing columns and renames

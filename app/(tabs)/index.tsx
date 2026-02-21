@@ -46,14 +46,12 @@ export default function HomeScreen() {
   const [displayLimit, setDisplayLimit] = useState(20); // Smaller initial limit for better fast-load
   const [loadingMore, setLoadingMore] = useState(false);
   const [appIsLaunching, setAppIsLaunching] = useState(true);
-  const [isCategorizationSuppressed, setIsCategorizationSuppressed] = useState(false);
   const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
 
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
-  const [uncategorizedQueue, setUncategorizedQueue] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [debtSummary, setDebtSummary] = useState<{
     totalLiabilities: number;
@@ -64,7 +62,7 @@ export default function HomeScreen() {
   const [dbReady, setDbReady] = useState(false);
 
   const { showAlert } = useAlert();
-  const activeTransaction = selectedTransaction || (uncategorizedQueue.length > 0 ? uncategorizedQueue[0] : null);
+  const activeTransaction = selectedTransaction;
 
   // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
   const initialLoading = appIsLaunching && !hasPerformedSyncOnce;
@@ -163,16 +161,6 @@ export default function HomeScreen() {
     runProgressiveSync();
   }, []);
 
-  useEffect(() => {
-    // Check for ALL uncategorized transactions (both SENT and RECEIVED)
-    const uncategorized = allTransactions.filter(t => !t.categoryId);
-
-    // Only auto-trigger if not suppressed and not already in an edit mode
-    if (uncategorized.length > 0 && !modalVisible && !selectedTransaction && !isCategorizationSuppressed) {
-      setUncategorizedQueue(uncategorized);
-      setModalVisible(true);
-    }
-  }, [allTransactions, isCategorizationSuppressed]);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -272,16 +260,8 @@ export default function HomeScreen() {
 
   const handleCategorySelect = async (category: Category) => {
     if (activeTransaction) {
-      if (selectedTransaction) {
-        setModalVisible(false);
-        setSelectedTransaction(null);
-      } else {
-        const newQueue = uncategorizedQueue.slice(1);
-        setUncategorizedQueue(newQueue);
-        if (newQueue.length === 0) {
-          setModalVisible(false);
-        }
-      }
+      setModalVisible(false);
+      setSelectedTransaction(null);
 
       try {
         if (activeTransaction.recipientId) {
@@ -342,8 +322,6 @@ export default function HomeScreen() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedTransaction(null);
-    // If the user manually closes the modal, suppress auto-triggers for this session
-    setIsCategorizationSuppressed(true);
   };
 
   const handleEndReached = () => {

@@ -67,14 +67,23 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="savings"
+        options={{
+          title: 'Savings',
+          tabBarIcon: ({ color }) => (
+            <FontAwesome name="bank" size={24} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <View
-              className={`rounded-full overflow-hidden border-2 ${
-                focused ? 'border-blue-500' : 'border-transparent'
-              }`}
+              className={`rounded-full overflow-hidden border-2 ${focused ? 'border-blue-500' : 'border-transparent'
+                }`}
               style={{ padding: 1 }}
             >
               {user?.photoURL ? (

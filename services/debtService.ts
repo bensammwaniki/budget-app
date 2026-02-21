@@ -143,6 +143,34 @@ export const debtService = {
         });
     },
 
+    /**
+     * Records a payment linkage without adjusting the debt's current_balance.
+     * Useful when the balance has already been reconciled from a source of truth (like an SMS).
+     */
+    async recordDebtPayment(payload: {
+        debtId: string;
+        transactionId: string;
+        amount: number;
+        date: string;
+    }): Promise<void> {
+        const db = getDb();
+        const now = new Date().toISOString();
+
+        await db.withTransactionAsync(async () => {
+            const paymentId = generateUUID();
+            await db.runAsync(`
+                INSERT INTO debt_payments (id, debt_id, transaction_id, amount, date, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, [paymentId, payload.debtId, payload.transactionId, Math.abs(payload.amount), payload.date, now]);
+
+            await db.runAsync(`
+                UPDATE transactions
+                SET transaction_kind = 'DEBT_REPAYMENT', linked_debt_id = ?
+                WHERE id = ?
+            `, [payload.debtId, payload.transactionId]);
+        });
+    },
+
     async unlinkTransaction(transactionId: string): Promise<void> {
         await initDatabase();
         const db = getDb();

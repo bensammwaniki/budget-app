@@ -147,9 +147,10 @@ export const syncMessages = async (days: number = 30) => {
                             }
 
                             if (fulizaRepayment.accountBalance !== undefined) {
+                                const mpesaTxId = fulizaRepayment.id;
                                 await saveTransaction({
-                                    id: fulizaRepayment.id,
-                                    uuid: fulizaRepayment.id,
+                                    id: mpesaTxId,
+                                    uuid: mpesaTxId,
                                     userId: 'local_user',
                                     accountId: 'ACC-MPESA-DEFAULT', // Fuliza affects M-PESA balance
                                     amount: fulizaRepayment.amount,
@@ -167,6 +168,14 @@ export const syncMessages = async (days: number = 30) => {
                                     isDeleted: false,
                                     linkedDebtId: fulizaDebt.id
                                 }, false);
+
+                                // Record history entry in debt_payments so it shows in Detail screen
+                                await debtService.recordDebtPayment({
+                                    debtId: fulizaDebt.id,
+                                    transactionId: mpesaTxId,
+                                    amount: fulizaRepayment.amount,
+                                    date: new Date(fulizaRepayment.date).toISOString()
+                                });
                             }
                         }
                         continue;

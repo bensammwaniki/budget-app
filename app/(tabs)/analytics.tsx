@@ -3,11 +3,13 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { BarChart, PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
-import { useScrollVisibility } from '../../services/ScrollContext';
-import { PieChart } from "react-native-gifted-charts";
 import { getTransactions } from '../../services/database';
+import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
+
+type SpendingPeriod = 'Today' | 'This Week' | '2 Weeks' | '3 Weeks' | 'This Month' | 'This Year';
 
 type Period = 'THIS_MONTH' | 'LAST_MONTH';
 
@@ -19,6 +21,7 @@ export default function AnalyticsScreen() {
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Month');
 
   const { showTabBar, hideTabBar } = useScrollVisibility();
   const lastScrollY = useSharedValue(0);
@@ -161,6 +164,83 @@ export default function AnalyticsScreen() {
     };
   }, [transactions, currentYear]);
 
+  const spendingChartData = useMemo(() => {
+    const expenses = transactions.filter(t => t.type === 'SENT');
+    const now = new Date();
+
+    const resultMap: Record<string, number> = {};
+    let labels: string[] = [];
+
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (spendingFilter === 'Today') {
+      labels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
+      labels.forEach(l => resultMap[l] = 0);
+
+      expenses.forEach(t => {
+        const d = new Date(t.date);
+        if (d >= todayStart) {
+          const hour = `${d.getHours().toString().padStart(2, '0')}:00`;
+          if (resultMap[hour] !== undefined) resultMap[hour] += t.amount;
+        }
+      });
+    } else if (spendingFilter === 'This Month') {
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString().padStart(2, '0'));
+      labels.forEach(l => resultMap[l] = 0);
+
+      expenses.forEach(t => {
+        const d = new Date(t.date);
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const day = d.getDate().toString().padStart(2, '0');
+          if (resultMap[day] !== undefined) resultMap[day] += t.amount;
+        }
+      });
+    } else if (spendingFilter === 'This Year') {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      labels = monthNames;
+      labels.forEach(l => resultMap[l] = 0);
+
+      expenses.forEach(t => {
+        const d = new Date(t.date);
+        if (d.getFullYear() === now.getFullYear()) {
+          const month = monthNames[d.getMonth()];
+          if (resultMap[month] !== undefined) resultMap[month] += t.amount;
+        }
+      });
+    } else {
+      let daysBack = 7;
+      if (spendingFilter === '2 Weeks') daysBack = 14;
+      if (spendingFilter === '3 Weeks') daysBack = 21;
+
+      const startDate = new Date(todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60 * 1000);
+
+      for (let i = 0; i < daysBack; i++) {
+        const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+        const label = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        labels.push(label);
+        resultMap[label] = 0;
+      }
+
+      expenses.forEach(t => {
+        const d = new Date(t.date);
+        if (d >= startDate && d <= now) {
+          const label = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+          if (resultMap[label] !== undefined) {
+            resultMap[label] += t.amount;
+          }
+        }
+      });
+    }
+
+    return labels.map(label => ({
+      value: resultMap[label],
+      label: label,
+      frontColor: '#f472b6',
+    }));
+
+  }, [transactions, spendingFilter]);
+
   const renderLegend = (data: any[]) => {
     return (
       <View className="flex-row flex-wrap gap-2 mt-4 justify-center">
@@ -267,11 +347,63 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
+      {/* Spending Over Time Chart */}
+      <View className="px-1 mt-8">
+        <Text className="text-slate-900 dark:text-white text-lg font-bold px-2 mb-4">Spending Over Time</Text>
+        <View className="bg-white dark:bg-[#1e293b] py-6 px-4 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          {/* Pills */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 flex-row" contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+            {(['This Month', 'This Year', 'This Week', '2 Weeks', '3 Weeks', 'Today'] as SpendingPeriod[]).map(filter => {
+              const isActive = spendingFilter === filter;
+              return (
+                <TouchableOpacity
+                  key={filter}
+                  onPress={() => setSpendingFilter(filter)}
+                  className={`px-2 py-1 rounded-full ${isActive ? 'bg-slate-900 dark:bg-white' : 'bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700'}`}
+                >
+                  <Text className={`font-bold text-[10px] ${isActive ? 'text-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
+                    {filter}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+
+          {/* Chart */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View>
+              <BarChart
+                data={spendingChartData}
+                barWidth={10}
+                spacing={10}
+                roundedTop
+                roundedBottom
+                hideRules
+                xAxisThickness={0}
+                yAxisThickness={0}
+                yAxisTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 8 }}
+                noOfSections={4}
+                maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.2}
+                frontColor="#f472b6"
+                isAnimated
+                initialSpacing={10}
+                formatYLabel={(label: string) => {
+                  const val = parseInt(label, 10);
+                  if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+                  return label;
+                }}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+
       {/* Spending by Category */}
       <View className="px-6 mt-8">
         <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Spending by Category</Text>
         {stats.categories.length > 0 ? (
-          <View className="bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800">
+          <View className="bg-white dark:bg-[#1e293b] p-4 rounded-[10px] border border-gray-200 dark:border-slate-800">
             {stats.categories.slice(0, 8).map((cat, index) => (
               <View key={index} className="mb-4">
                 <View className="flex-row items-center justify-between mb-2">
@@ -295,7 +427,7 @@ export default function AnalyticsScreen() {
             ))}
           </View>
         ) : (
-          <View className="bg-white dark:bg-[#1e293b] p-8 rounded-2xl border border-gray-200 dark:border-slate-800 items-center">
+          <View className="bg-white dark:bg-[#1e293b] p-8 rounded-[10px] border border-gray-200 dark:border-slate-800 items-center">
             <FontAwesome name="pie-chart" size={48} color="#94a3b8" />
             <Text className="text-slate-500 dark:text-slate-400 mt-4">No expense data for this period</Text>
           </View>
