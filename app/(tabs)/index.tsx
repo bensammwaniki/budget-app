@@ -21,6 +21,7 @@ import {
   updateTransactionDate
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
+import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
 import { Category, Transaction } from '../../types/transaction';
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const firstName = user?.displayName?.split(' ')[0] || 'User';
   const { showTabBar, hideTabBar } = useScrollVisibility();
   const lastScrollY = useSharedValue(0);
@@ -60,6 +62,11 @@ export default function HomeScreen() {
     activeDebts: number;
   } | null>(null);
   const [dbReady, setDbReady] = useState(false);
+
+  // Linking to Savings State
+  const [savingsModalVisible, setSavingsModalVisible] = useState(false);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [linkingGoal, setLinkingGoal] = useState<string | null>(null);
 
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
@@ -319,6 +326,38 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLinkToGoalRequest = async (tx: Transaction) => {
+    setModalVisible(false);
+    try {
+      const goals = await savingsService.getGoals();
+      setSavingsGoals(goals.filter(g => g.status !== 'COMPLETED'));
+      if (goals.length === 0) {
+        showAlert({ title: 'No Goals', message: 'You have no active savings goals setup.', type: 'info' });
+        return;
+      }
+      setSavingsModalVisible(true);
+    } catch (e) {
+      console.error(e);
+      showAlert({ title: 'Error', message: 'Failed to fetch goals.', type: 'error' });
+    }
+  };
+
+  const handleConfirmLinkToGoal = async (goalId: string) => {
+    if (!activeTransaction) return;
+    setLinkingGoal(goalId);
+    try {
+      await savingsService.linkTransactionToGoal(goalId, activeTransaction.id);
+      setSavingsModalVisible(false);
+      setSelectedTransaction(null);
+      showAlert({ title: 'Success', message: 'Transaction successfully linked to savings goal!', type: 'success' });
+    } catch (e: any) {
+      console.error(e);
+      showAlert({ title: 'Error', message: e.message || 'Failed to link transaction.', type: 'error' });
+    } finally {
+      setLinkingGoal(null);
+    }
+  };
+
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedTransaction(null);
@@ -525,6 +564,7 @@ export default function HomeScreen() {
         onCategorySelect={handleCategorySelect}
         onDateChange={handleDateChange}
         onDelete={handleDeleteTransaction}
+        onLinkToGoal={handleLinkToGoalRequest}
         onClose={handleCloseModal}
       />
 
@@ -562,6 +602,55 @@ export default function HomeScreen() {
         }
         contentContainerStyle={{ paddingBottom: 100 }}
       />
+
+      {/* Select Savings Goal Modal */}
+      {savingsModalVisible && (
+        <View className="absolute z-50 top-0 left-0 right-0 bottom-0 bg-black/40 justify-end">
+          <View className="bg-white dark:bg-[#0f172a] rounded-t-[32px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
+            <View className="flex-row justify-between flex-wrap gap-y-3 items-center mb-6">
+              <Text className="text-xl font-bold text-slate-900 dark:text-white">Select a Savings Goal</Text>
+              <TouchableOpacity onPress={() => { setSavingsModalVisible(false); setSelectedTransaction(null); }}>
+                <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
+              </TouchableOpacity>
+            </View>
+            <Text className="text-slate-500 dark:text-slate-400 mb-4">
+              Where would you like to transfer KES {activeTransaction?.amount?.toLocaleString()}?
+            </Text>
+
+            {savingsGoals.length === 0 ? (
+              <Text className="text-center text-slate-500 mt-4 mb-8">No active goals available.</Text>
+            ) : (
+              <View className="space-y-3">
+                {savingsGoals.map(goal => (
+                  <TouchableOpacity
+                    key={goal.id}
+                    onPress={() => handleConfirmLinkToGoal(goal.id)}
+                    disabled={linkingGoal === goal.id}
+                    className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-2xl flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${goal.color || '#3b82f6'}20` }}>
+                        <FontAwesome name="flag" size={16} color={goal.color || '#3b82f6'} />
+                      </View>
+                      <View>
+                        <Text className="font-bold text-slate-900 dark:text-white">{goal.name}</Text>
+                        <Text className="text-xs text-slate-500 mt-1">
+                          KES {goal.currentAmount.toLocaleString()} / {goal.targetAmount.toLocaleString()}
+                        </Text>
+                      </View>
+                    </View>
+                    {linkingGoal === goal.id ? (
+                      <ActivityIndicator size="small" color={goal.color || '#3b82f6'} />
+                    ) : (
+                      <FontAwesome name="chevron-right" size={12} color="#94a3b8" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      )}
     </View>
   );
 }

@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
@@ -111,9 +112,14 @@ export default function SavingsScreen() {
                 <Text className="text-3xl font-bold text-slate-900 dark:text-white">Savings</Text>
                 <TouchableOpacity
                     onPress={() => router.push('/savings/add')}
-                    className="w-10 h-10 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-500/30"
-                >
-                    <FontAwesome name="plus" size={16} color="white" />
+                    className="p-4 -ml-2 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center"
+                    >
+                    <Image
+                        source={require('../../assets/svg/plus.svg')}
+                        style={{ width: 18, height: 18 }}
+                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                        contentFit="contain"
+                    />
                 </TouchableOpacity>
             </View>
 

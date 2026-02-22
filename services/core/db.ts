@@ -128,6 +128,40 @@ async function performInitialization() {
             );
         `);
 
+        // 7. Income Sources Table
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS income_sources (
+                id TEXT PRIMARY KEY,
+                user_id TEXT DEFAULT 'local_user',
+                name TEXT NOT NULL,
+                category_id INTEGER,
+                is_recurring INTEGER DEFAULT 1,
+                expected_amount REAL,
+                frequency TEXT DEFAULT 'MONTHLY' CHECK (frequency IN ('WEEKLY', 'BI_WEEKLY', 'MONTHLY', 'IRREGULAR')),
+                color TEXT,
+                status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+                last_received TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories(id)
+            );
+        `);
+
+        // 8. Income Logs Table
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS income_logs (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                transaction_id TEXT,
+                amount REAL NOT NULL,
+                received_at TEXT NOT NULL,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (source_id) REFERENCES income_sources(id) ON DELETE CASCADE,
+                FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+            );
+        `);
+
         console.log('🔄 Running Table Migrations...');
 
         // Defensive check for missing columns and renames

@@ -15,10 +15,11 @@ interface CategorizationModalProps {
     onCategorySelect: (category: Category) => void;
     onDateChange?: (newDate: Date) => void;
     onDelete?: (transaction: Transaction) => void;
+    onLinkToGoal?: (transaction: Transaction) => void;
     onClose: () => void;
 }
 
-export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onClose }: CategorizationModalProps) {
+export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onClose }: CategorizationModalProps) {
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -160,10 +161,21 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 ))}
                         </View>
 
+                        {/* Link to Savings Button */}
+                        {transaction.type === 'SENT' && (
+                            <TouchableOpacity
+                                onPress={() => onLinkToGoal?.(transaction)}
+                                className="mt-8 mb-2 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl items-center border border-purple-100 dark:border-purple-900/50 flex-row justify-center gap-2"
+                            >
+                                <FontAwesome name="bank" size={16} color="#8b5cf6" />
+                                <Text className="text-purple-600 dark:text-purple-400 font-semibold">Transfer to Savings Goal</Text>
+                            </TouchableOpacity>
+                        )}
+
                         {/* Delete Button */}
                         <TouchableOpacity
                             onPress={handleDeletePress}
-                            className="mt-8 mb-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50"
+                            className={`${transaction.type === 'SENT' ? 'mt-3 mb-4' : 'mt-8 mb-4'} bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50`}
                         >
                             <Text className="text-red-600 dark:text-red-400 font-semibold">Delete Transaction</Text>
                         </TouchableOpacity>

@@ -71,7 +71,12 @@ export default function TabLayout() {
         options={{
           title: 'Savings',
           tabBarIcon: ({ color }) => (
-            <FontAwesome name="bank" size={24} color={color} />
+            <Image
+              source={require('../../assets/svg/goal.svg')}
+              style={{ width: 24, height: 24 }}
+              tintColor={color}
+              contentFit="contain"
+            />
           ),
         }}
       />

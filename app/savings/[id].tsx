@@ -285,20 +285,14 @@ export default function GoalDetailScreen() {
 
                     <View className="flex-row gap-3 mb-8">
                         {goal.status !== 'COMPLETED' && (
-                            <TouchableOpacity
-                                className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
-                                style={{ backgroundColor: themeColor, shadowColor: themeColor }}
-                                onPress={handleDeposit}>
-                                <FontAwesome name="plus" size={16} color="white" />
-                                <Text className="text-white font-bold text-lg">Deposit</Text>
-                            </TouchableOpacity>
-                        )}
                         <TouchableOpacity
-                            className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl items-center border border-slate-200 dark:border-slate-700 flex-row justify-center gap-2"
+                            className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
+                                style={{ backgroundColor: themeColor, shadowColor: themeColor }}
                             onPress={fetchLinkableTransactions}>
-                            <FontAwesome name="link" size={16} color={isDark ? '#cbd5e1' : '#64748b'} />
-                            <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg">Link Record</Text>
+                            <FontAwesome name="link" size={16} color={isDark ? '#64748b' : '#cbd5e1'} />
+                            <Text className="text-white font-bold text-lg">Link Record</Text>
                         </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* History */}
