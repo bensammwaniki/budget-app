@@ -1,11 +1,12 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
@@ -182,7 +183,7 @@ export default function ProfileScreen() {
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
-            <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
+            <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[24px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
                 <View className="w-24 h-24 bg-gray-100 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {user?.photoURL ? (
                         <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
@@ -215,20 +216,26 @@ export default function ProfileScreen() {
                     </View>
 
                     {[
-                        { icon: 'user', label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
-                        { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
-                        { icon: 'calculator', label: 'Personal Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
-                        { icon: 'bank', label: 'My Banks', color: '#2563eb', action: () => router.push('/banks') },
-                        { icon: 'arrow-down', label: 'Income Sources', color: '#10b981', action: () => router.push('/income') },
-                        { icon: 'shield', label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
-                    ].map((item, index, arr) => (
+                        { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/income') },
+                        { icon: require('../../assets/svg/budget.svg'), label: 'Create Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
+                        { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
+                        { icon: require('../../assets/svg/automation.svg'), label: 'Create An Automation Rule', color: '#8b5cf6', action: () => router.push('/automation') },
+                        { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
+                        { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
+                        ].map((item, index, arr) => (
                         <TouchableOpacity
                             key={index}
                             onPress={item.action ? item.action : undefined}
                             className={`flex-row items-center p-4 ${index !== arr.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}
                         >
                             <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700">
-                                <FontAwesome name={item.icon as any} size={18} color={item.color} />
+                                {/* <FontAwesome name={item.icon as any} size={18} color={item.color} /> */}
+                                <Image
+                                    source={item.icon as any}
+                                    style={{ width: 20, height: 20 }}
+                                    tintColor={item.color}
+                                    resizeMode="contain"
+                                />
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-800 dark:text-white font-semibold text-base">{item.label}</Text>

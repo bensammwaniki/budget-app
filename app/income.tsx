@@ -1,5 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
@@ -69,7 +70,12 @@ export default function IncomeScreen() {
 
                 <View className="flex-row items-center mb-3">
                     <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${themeColor}20` }}>
-                        <FontAwesome name="arrow-down" size={16} color={themeColor} />
+                            <Image
+                                source={require('../assets/svg/income.svg')}
+                                style={{ width: 18, height: 18 }}
+                                tintColor={themeColor}
+                                contentFit="contain"
+                            />
                     </View>
                     <View className="flex-1">
                         <Text className="text-slate-900 dark:text-white font-bold text-base" numberOfLines={1}>{item.name}</Text>
@@ -131,7 +137,12 @@ export default function IncomeScreen() {
                         onPress={() => router.push('/income/add')}
                         className="w-10 h-10 bg-emerald-600 rounded-full items-center justify-center shadow-lg shadow-emerald-500/30"
                     >
-                        <FontAwesome name="plus" size={16} color="white" />
+                            <Image
+                                source={require('../assets/svg/plus.svg')}
+                                style={{ width: 18, height: 18 }}
+                                tintColor={"white"}
+                                contentFit="contain"
+                            />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -145,7 +156,22 @@ export default function IncomeScreen() {
                 <Text className="text-white text-4xl font-bold mb-3">KES {thisMonthTotal.toLocaleString()}</Text>
                 <View className="flex-row items-center gap-2">
                     <View className={`flex-row items-center px-3 py-1 rounded-full gap-1 ${trendUp ? 'bg-white/20' : 'bg-red-400/30'}`}>
-                        <FontAwesome name={trendUp ? 'arrow-up' : 'arrow-down'} size={10} color="white" />
+                            {trendUp ? 
+                            <Image
+                                source={require(`../assets/svg/trend-up.svg`)}
+                                style={{ width: 18, height: 18 }}
+                                tintColor={"white"}
+                                contentFit="contain"
+                            />
+                            : 
+                            <Image
+                                source={require(`../assets/svg/trend-down.svg`)}
+                                style={{ width: 18, height: 18 }}
+                                tintColor={"white"}
+                                contentFit="contain"
+                            />
+                            }
+   
                         <Text className="text-white text-xs font-bold">{Math.abs(trend).toFixed(1)}%</Text>
                     </View>
                     <Text className="text-emerald-200 text-xs">vs last month (KES {lastMonthTotal.toLocaleString()})</Text>
