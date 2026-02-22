@@ -162,6 +162,45 @@ async function performInitialization() {
             );
         `);
 
+        // 9. Monthly Summaries Table (Phase 5 - Financial Intelligence)
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS monthly_summaries (
+                id TEXT PRIMARY KEY,
+                month TEXT NOT NULL UNIQUE,
+                user_id TEXT DEFAULT 'local_user',
+                total_income REAL DEFAULT 0,
+                total_expenses REAL DEFAULT 0,
+                total_savings REAL DEFAULT 0,
+                net_worth_snapshot REAL DEFAULT 0,
+                generated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 10. Category Trends Table
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS category_trends (
+                id TEXT PRIMARY KEY,
+                month TEXT NOT NULL,
+                category_id INTEGER,
+                category_name TEXT,
+                total REAL DEFAULT 0,
+                transaction_count INTEGER DEFAULT 0,
+                pct_of_expenses REAL DEFAULT 0,
+                UNIQUE(month, category_id)
+            );
+        `);
+
+        // 11. Net Worth History Table
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS net_worth_history (
+                id TEXT PRIMARY KEY,
+                snapshot_date TEXT NOT NULL UNIQUE,
+                total_assets REAL DEFAULT 0,
+                total_liabilities REAL DEFAULT 0,
+                net_worth REAL DEFAULT 0
+            );
+        `);
+
         console.log('🔄 Running Table Migrations...');
 
         // Defensive check for missing columns and renames

@@ -16,10 +16,11 @@ interface CategorizationModalProps {
     onDateChange?: (newDate: Date) => void;
     onDelete?: (transaction: Transaction) => void;
     onLinkToGoal?: (transaction: Transaction) => void;
+    onLinkToIncome?: (transaction: Transaction) => void;
     onClose: () => void;
 }
 
-export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onClose }: CategorizationModalProps) {
+export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onLinkToIncome, onClose }: CategorizationModalProps) {
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -161,7 +162,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 ))}
                         </View>
 
-                        {/* Link to Savings Button */}
+                        {/* Link to Savings Button (expenses only) */}
                         {transaction.type === 'SENT' && (
                             <TouchableOpacity
                                 onPress={() => onLinkToGoal?.(transaction)}
@@ -172,10 +173,21 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                             </TouchableOpacity>
                         )}
 
+                        {/* Link to Income Source (income only) */}
+                        {transaction.type === 'RECEIVED' && (
+                            <TouchableOpacity
+                                onPress={() => onLinkToIncome?.(transaction)}
+                                className="mt-8 mb-2 bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl items-center border border-emerald-100 dark:border-emerald-900/50 flex-row justify-center gap-2"
+                            >
+                                <FontAwesome name="arrow-down" size={16} color="#10b981" />
+                                <Text className="text-emerald-600 dark:text-emerald-400 font-semibold">Link to Income Source</Text>
+                            </TouchableOpacity>
+                        )}
+
                         {/* Delete Button */}
                         <TouchableOpacity
                             onPress={handleDeletePress}
-                            className={`${transaction.type === 'SENT' ? 'mt-3 mb-4' : 'mt-8 mb-4'} bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50`}
+                            className={`${transaction.type !== undefined ? 'mt-3 mb-4' : 'mt-8 mb-4'} bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50`}
                         >
                             <Text className="text-red-600 dark:text-red-400 font-semibold">Delete Transaction</Text>
                         </TouchableOpacity>

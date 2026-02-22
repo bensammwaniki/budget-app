@@ -1,6 +1,6 @@
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useScrollVisibility } from '../services/ScrollContext';
@@ -15,7 +15,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
         return {
             transform: [
                 {
-                    translateY: (1 - tabBarVisible.value) * (65 + insets.bottom + 20), // Height + Padding + Margin
+                    translateY: (1 - tabBarVisible.value) * (75 + insets.bottom + 20),
                 },
             ],
             opacity: tabBarVisible.value,
@@ -33,7 +33,11 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             ]}>
                 {/* Tab Items */}
                 <View style={styles.tabsContainer}>
-                    {state.routes.map((route, index) => {
+                    {state.routes.filter((route) => {
+                        // Tabs accessed via other navigation (e.g. Profile) should not appear here
+                        const HIDDEN_TABS = ['income'];
+                        return !HIDDEN_TABS.includes(route.name);
+                    }).map((route, index) => {
                         const { options } = descriptors[route.key];
                         const isFocused = state.index === index;
 
@@ -67,14 +71,21 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                                 onLongPress={onLongPress}
                                 style={styles.tabItem}
                             >
-                                {/* Icon Only */}
+                                {/* Icon */}
                                 <View style={styles.iconContainer}>
                                     {options.tabBarIcon?.({
                                         focused: isFocused,
-                                        color: isFocused ? '#3b82f6' : '#64748b',
-                                        size: 26,
+                                        color: isFocused ? '#3b82f6' : (isDark ? '#64748b' : '#94a3b8'),
+                                        size: 22,
                                     })}
                                 </View>
+                                {/* Label */}
+                                <Text style={[
+                                    styles.label,
+                                    { color: isFocused ? '#3b82f6' : (isDark ? '#64748b' : '#94a3b8') }
+                                ]}>
+                                    {options.title ?? route.name}
+                                </Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -94,7 +105,7 @@ const styles = StyleSheet.create({
     },
     innerContainer: {
         width: '100%',
-        height: 65,
+        height: 75,
         borderTopWidth: 1,
         flexDirection: 'row',
         alignItems: 'center',
@@ -120,11 +131,17 @@ const styles = StyleSheet.create({
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
+        gap: 3,
     },
     iconContainer: {
-        width: 32,
-        height: 32,
+        width: 26,
+        height: 26,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    label: {
+        fontSize: 10,
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

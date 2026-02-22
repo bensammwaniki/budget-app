@@ -6,6 +6,8 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { getTransactions } from '../../services/database';
+import { ForecastResult, forecastService } from '../../services/forecastService';
+import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
 
@@ -22,6 +24,12 @@ export default function AnalyticsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Month');
+
+  // Phase 5 intelligence state
+  const [metrics, setMetrics] = useState<KeyMetrics | null>(null);
+  const [trends, setTrends] = useState<CategoryTrend[]>([]);
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [insightsTab, setInsightsTab] = useState<'overview' | 'trends' | 'forecast'>('overview');
 
   const { showTabBar, hideTabBar } = useScrollVisibility();
   const lastScrollY = useSharedValue(0);
@@ -43,6 +51,20 @@ export default function AnalyticsScreen() {
   const loadData = useCallback(async () => {
     const allTransactions = await getTransactions();
     setTransactions(allTransactions);
+
+    // Load intelligence data in parallel
+    try {
+      const [kMetrics, kTrends, kForecast] = await Promise.all([
+        insightsService.getKeyMetrics(),
+        insightsService.getCategoryTrends(),
+        forecastService.forecast(),
+      ]);
+      setMetrics(kMetrics);
+      setTrends(kTrends);
+      setForecast(kForecast);
+    } catch (e) {
+      console.warn('Insights load failed:', e);
+    }
   }, []);
 
   useFocusEffect(
@@ -266,6 +288,30 @@ export default function AnalyticsScreen() {
     return date.toLocaleDateString('en-US', { month: 'short' });
   };
 
+  const getSavingsRateColor = (rate: number) => {
+    if (rate >= 30) return '#10b981';
+    if (rate >= 15) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  const getDTIColor = (dti: number) => {
+    if (dti <= 30) return '#10b981';
+    if (dti <= 50) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  const getConfidenceColor = (c: string) => {
+    if (c === 'HIGH') return '#10b981';
+    if (c === 'MEDIUM') return '#f59e0b';
+    return '#ef4444';
+  };
+
+  const INSIGHTS_TABS = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'trends', label: 'Trends' },
+    { key: 'forecast', label: 'Forecast' },
+  ] as const;
+
   return (
     <Animated.ScrollView
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
@@ -274,6 +320,238 @@ export default function AnalyticsScreen() {
       scrollEventThrottle={16}
     >
       <StatusBar style="light" />
+
+      {/* ── INTELLIGENCE INSIGHTS SECTION ── */}
+      {metrics && (
+        <View className="mx-4 mt-16 mb-6">
+          {/* Section header */}
+          <View className="flex-row justify-between items-center mb-4">
+            <View>
+              <Text className="text-2xl font-bold text-slate-900 dark:text-white">Insights</Text>
+              <Text className="text-slate-400 text-xs mt-0.5">Your financial picture</Text>
+            </View>
+            <View className="flex-row bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+              {INSIGHTS_TABS.map(t => (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setInsightsTab(t.key)}
+                  className={`px-3 py-1.5 rounded-lg ${insightsTab === t.key ? 'bg-white dark:bg-slate-700 shadow-sm' : ''}`}
+                >
+                  <Text className={`text-xs font-bold ${insightsTab === t.key ? 'text-slate-900 dark:text-white' : 'text-slate-400'
+                    }`}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* ── OVERVIEW TAB ── */}
+          {insightsTab === 'overview' && (
+            <View>
+              {/* Key metric cards */}
+              <View className="flex-row gap-3 mb-3">
+                {/* Savings Rate */}
+                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
+                  <View className="flex-row justify-between items-start mb-2">
+                    <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getSavingsRateColor(metrics.savingsRate)}20` }}>
+                      <FontAwesome name="leaf" size={12} color={getSavingsRateColor(metrics.savingsRate)} />
+                    </View>
+                    <FontAwesome name={metrics.savingsRate >= 15 ? 'arrow-up' : 'arrow-down'} size={10} color={getSavingsRateColor(metrics.savingsRate)} />
+                  </View>
+                  <Text className="text-2xl font-bold text-slate-900 dark:text-white">{metrics.savingsRate.toFixed(1)}%</Text>
+                  <Text className="text-slate-400 text-xs mt-0.5">Savings Rate</Text>
+                </View>
+
+                {/* Debt-to-Income */}
+                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
+                  <View className="flex-row justify-between items-start mb-2">
+                    <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getDTIColor(metrics.debtToIncomeRatio)}20` }}>
+                      <FontAwesome name="balance-scale" size={12} color={getDTIColor(metrics.debtToIncomeRatio)} />
+                    </View>
+                    <FontAwesome name={metrics.debtToIncomeRatio <= 30 ? 'arrow-down' : 'arrow-up'} size={10} color={getDTIColor(metrics.debtToIncomeRatio)} />
+                  </View>
+                  <Text className="text-2xl font-bold text-slate-900 dark:text-white">{metrics.debtToIncomeRatio.toFixed(0)}%</Text>
+                  <Text className="text-slate-400 text-xs mt-0.5">Debt-to-Income</Text>
+                </View>
+
+                {/* Spending Velocity */}
+                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
+                  <View className="flex-row justify-between items-start mb-2">
+                    <View className="w-8 h-8 rounded-xl items-center justify-center bg-orange-50 dark:bg-orange-900/20">
+                      <FontAwesome name="bolt" size={12} color="#f97316" />
+                    </View>
+                    <FontAwesome name={metrics.spendingVelocity <= metrics.lastMonthVelocity ? 'arrow-down' : 'arrow-up'} size={10} color={metrics.spendingVelocity <= metrics.lastMonthVelocity ? '#10b981' : '#ef4444'} />
+                  </View>
+                  <Text className="text-xl font-bold text-slate-900 dark:text-white">{Math.round(metrics.spendingVelocity / 1000).toFixed(0)}K</Text>
+                  <Text className="text-slate-400 text-xs mt-0.5">KES/day</Text>
+                </View>
+              </View>
+
+              {/* Net Worth Card */}
+              <View className={`p-5 rounded-3xl mb-3 overflow-hidden relative border ${metrics.netWorth >= 0
+                  ? 'bg-emerald-600 border-emerald-500'
+                  : 'bg-red-600 border-red-500'
+                }`}>
+                <View className="absolute right-3 top-3 opacity-10">
+                  <FontAwesome name="line-chart" size={80} color="white" />
+                </View>
+                <Text className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Net Worth</Text>
+                <Text className="text-white text-3xl font-bold mb-2">
+                  {metrics.netWorth >= 0 ? '' : '-'}KES {Math.abs(metrics.netWorth).toLocaleString()}
+                </Text>
+                <View className="flex-row gap-4">
+                  <View>
+                    <Text className="text-white/60 text-xs">Assets</Text>
+                    <Text className="text-white font-bold text-sm">KES {metrics.totalAssets.toLocaleString()}</Text>
+                  </View>
+                  <View>
+                    <Text className="text-white/60 text-xs">Liabilities</Text>
+                    <Text className="text-white font-bold text-sm">KES {metrics.totalLiabilities.toLocaleString()}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Savings Progress */}
+              {metrics.totalSavingsTarget > 0 && (
+                <View className="bg-white dark:bg-[#0f172a] p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+                  <View className="flex-row justify-between items-center mb-3">
+                    <Text className="font-bold text-slate-900 dark:text-white">Savings Goals</Text>
+                    <Text className="text-slate-400 text-xs">{metrics.savingsProgress.toFixed(0)}% achieved</Text>
+                  </View>
+                  <View className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <View
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.min(100, metrics.savingsProgress)}%`, backgroundColor: '#10b981' }}
+                    />
+                  </View>
+                  <View className="flex-row justify-between mt-2">
+                    <Text className="text-slate-400 text-xs">KES {metrics.totalSaved.toLocaleString()} saved</Text>
+                    <Text className="text-slate-400 text-xs">of KES {metrics.totalSavingsTarget.toLocaleString()}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── TRENDS TAB ── */}
+          {insightsTab === 'trends' && (
+            <View className="bg-white dark:bg-[#0f172a] p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+              <Text className="text-slate-900 dark:text-white font-bold mb-1">Spending by Category</Text>
+              <Text className="text-slate-400 text-xs mb-5">This month vs last month</Text>
+
+              {trends.length === 0 ? (
+                <View className="items-center py-6">
+                  <FontAwesome name="bar-chart" size={40} color="#cbd5e1" />
+                  <Text className="text-slate-400 mt-3 text-center text-sm">Not enough categorized data yet.</Text>
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {trends.map((t, i) => {
+                    const maxAmount = Math.max(...trends.map(x => Math.max(x.thisMonth, x.lastMonth)), 1);
+                    const color = t.categoryColor || '#64748b';
+                    return (
+                      <View key={i}>
+                        <View className="flex-row justify-between items-center mb-1">
+                          <Text className="text-slate-700 dark:text-slate-300 font-medium text-xs flex-1" numberOfLines={1}>{t.categoryName}</Text>
+                          <View className="flex-row gap-2 items-center">
+                            {t.trend !== 0 && (
+                              <FontAwesome
+                                name={t.trend > 0 ? 'arrow-up' : 'arrow-down'}
+                                size={8}
+                                color={t.trend > 0 ? '#ef4444' : '#10b981'}
+                              />
+                            )}
+                            <Text className="text-slate-900 dark:text-white font-bold text-xs">KES {t.thisMonth.toLocaleString()}</Text>
+                          </View>
+                        </View>
+                        {/* This month bar */}
+                        <View className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-1">
+                          <View className="h-full rounded-full" style={{ width: `${(t.thisMonth / maxAmount) * 100}%`, backgroundColor: color }} />
+                        </View>
+                        {/* Last month bar */}
+                        <View className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <View className="h-full rounded-full opacity-30" style={{ width: `${(t.lastMonth / maxAmount) * 100}%`, backgroundColor: color }} />
+                        </View>
+                        <Text className="text-slate-300 dark:text-slate-600 text-[10px] mt-0.5">
+                          Last month: KES {t.lastMonth.toLocaleString()}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  {/* Legend */}
+                  <View className="flex-row gap-4 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <View className="flex-row items-center gap-1">
+                      <View className="w-4 h-3 rounded bg-slate-400" />
+                      <Text className="text-slate-400 text-xs">This month</Text>
+                    </View>
+                    <View className="flex-row items-center gap-1">
+                      <View className="w-4 h-2 rounded bg-slate-300 opacity-40" />
+                      <Text className="text-slate-400 text-xs">Last month</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── FORECAST TAB ── */}
+          {insightsTab === 'forecast' && forecast && (
+            <View className="gap-3">
+              {/* Main forecast card */}
+              <View className="bg-white dark:bg-[#0f172a] p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <View className="flex-row justify-between items-start mb-4">
+                  <View>
+                    <Text className="text-slate-400 text-xs">Projected Next Month</Text>
+                    <Text className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
+                      KES {forecast.projectedExpenses.toLocaleString()}
+                    </Text>
+                  </View>
+                  <View className="px-3 py-1.5 rounded-full" style={{ backgroundColor: `${getConfidenceColor(forecast.confidence)}20` }}>
+                    <Text className="text-xs font-bold" style={{ color: getConfidenceColor(forecast.confidence) }}>
+                      {forecast.confidence} confidence
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 gap-3">
+                  <View className="flex-row justify-between">
+                    <Text className="text-slate-500 text-xs">Projected Income</Text>
+                    <Text className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">KES {forecast.projectedIncome.toLocaleString()}</Text>
+                  </View>
+                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-700 pt-2">
+                    <Text className="text-slate-500 text-xs">Projected Savings</Text>
+                    <Text className={`font-bold text-xs ${forecast.projectedSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                      {forecast.projectedSavings >= 0 ? '+' : ''}KES {forecast.projectedSavings.toLocaleString()}
+                    </Text>
+                  </View>
+                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-700 pt-2">
+                    <Text className="text-slate-500 text-xs">Based on</Text>
+                    <Text className="text-slate-700 dark:text-slate-300 font-bold text-xs">{forecast.monthlyDataPoints} months of data</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Days until exhaustion */}
+              {forecast.daysUntilExhaustion !== null && (
+                <View className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-3xl border border-amber-200 dark:border-amber-800/50">
+                  <View className="flex-row items-center gap-3">
+                    <View className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 items-center justify-center">
+                      <FontAwesome name="clock-o" size={18} color="#f59e0b" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="font-bold text-amber-900 dark:text-amber-200">
+                        ~{forecast.daysUntilExhaustion} days remaining
+                      </Text>
+                      <Text className="text-amber-600 dark:text-amber-400 text-xs mt-0.5">
+                        At your current spend rate, you'll reach this month's projected budget in {forecast.daysUntilExhaustion} days
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Header */}
       <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">

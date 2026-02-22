@@ -7,10 +7,10 @@ import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
-import { useScrollVisibility } from '../../services/ScrollContext';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories } from '../../services/database';
+import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
 
 export default function ProfileScreen() {
@@ -219,12 +219,13 @@ export default function ProfileScreen() {
                         { icon: 'magic', label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                         { icon: 'calculator', label: 'Personal Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                         { icon: 'bank', label: 'My Banks', color: '#2563eb', action: () => router.push('/banks') },
+                        { icon: 'arrow-down', label: 'Income Sources', color: '#10b981', action: () => router.push('/income') },
                         { icon: 'shield', label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
-                    ].map((item, index) => (
+                    ].map((item, index, arr) => (
                         <TouchableOpacity
                             key={index}
                             onPress={item.action ? item.action : undefined}
-                            className={`flex-row items-center p-4 ${index !== 3 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}
+                            className={`flex-row items-center p-4 ${index !== arr.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}
                         >
                             <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700">
                                 <FontAwesome name={item.icon as any} size={18} color={item.color} />
@@ -232,7 +233,7 @@ export default function ProfileScreen() {
                             <View className="flex-1">
                                 <Text className="text-slate-800 dark:text-white font-semibold text-base">{item.label}</Text>
                             </View>
-                            <FontAwesome name={item.icon === 'question-circle' ? 'question-circle' : 'angle-right'} size={20} color="#94a3b8" />
+                            <FontAwesome name="angle-right" size={20} color="#94a3b8" />
                         </TouchableOpacity>
                     ))}
                 </View>

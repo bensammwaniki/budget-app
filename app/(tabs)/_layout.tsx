@@ -28,7 +28,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={require('../../assets/svg/home.svg')}
-              style={{ width: 24, height: 24 }}
+              style={{ width: 26, height: 26 }}
               tintColor={color}
               contentFit="contain"
             />
@@ -42,8 +42,8 @@ export default function TabLayout() {
           title: 'Analytics',
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('../../assets/svg/graph.svg')}
-              style={{ width: 24, height: 24 }}
+              source={require('../../assets/svg/analytics.svg')}
+              style={{ width: 22, height: 22 }}
               tintColor={color}
               contentFit="contain"
             />
@@ -57,8 +57,8 @@ export default function TabLayout() {
           title: 'Debts',
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('../../assets/svg/debt.svg')}
-              style={{ width: 24, height: 24 }}
+              source={require('../../assets/svg/debts.svg')}
+              style={{ width: 28, height: 28 }}
               tintColor={color}
               contentFit="contain"
             />

@@ -21,6 +21,7 @@ import {
   updateTransactionDate
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
+import { IncomeSource, incomeService } from '../../services/incomeService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
@@ -67,6 +68,11 @@ export default function HomeScreen() {
   const [savingsModalVisible, setSavingsModalVisible] = useState(false);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [linkingGoal, setLinkingGoal] = useState<string | null>(null);
+
+  // Linking to Income State
+  const [incomeModalVisible, setIncomeModalVisible] = useState(false);
+  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
+  const [linkingIncome, setLinkingIncome] = useState<string | null>(null);
 
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
@@ -342,6 +348,38 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLinkToIncomeRequest = async (tx: Transaction) => {
+    setModalVisible(false);
+    try {
+      const sources = await incomeService.getSources();
+      const active = sources.filter(s => s.status === 'ACTIVE');
+      if (active.length === 0) {
+        showAlert({ title: 'No Sources', message: 'Create an income source first from the Income tab.', type: 'info' });
+        return;
+      }
+      setIncomeSources(active);
+      setIncomeModalVisible(true);
+    } catch (e) {
+      console.error(e);
+      showAlert({ title: 'Error', message: 'Failed to fetch income sources.', type: 'error' });
+    }
+  };
+
+  const handleConfirmLinkToIncome = async (sourceId: string) => {
+    if (!activeTransaction) return;
+    setLinkingIncome(sourceId);
+    try {
+      await incomeService.linkTransactionToSource(sourceId, activeTransaction.id);
+      setIncomeModalVisible(false);
+      setSelectedTransaction(null);
+      showAlert({ title: 'Linked!', message: 'Income successfully linked to source!', type: 'success' });
+    } catch (e: any) {
+      showAlert({ title: 'Error', message: e.message || 'Failed to link transaction.', type: 'error' });
+    } finally {
+      setLinkingIncome(null);
+    }
+  };
+
   const handleConfirmLinkToGoal = async (goalId: string) => {
     if (!activeTransaction) return;
     setLinkingGoal(goalId);
@@ -565,6 +603,7 @@ export default function HomeScreen() {
         onDateChange={handleDateChange}
         onDelete={handleDeleteTransaction}
         onLinkToGoal={handleLinkToGoalRequest}
+        onLinkToIncome={handleLinkToIncomeRequest}
         onClose={handleCloseModal}
       />
 
@@ -648,6 +687,47 @@ export default function HomeScreen() {
                 ))}
               </View>
             )}
+          </View>
+        </View>
+      )}
+
+      {/* Select Income Source Modal */}
+      {incomeModalVisible && (
+        <View className="absolute z-50 top-0 left-0 right-0 bottom-0 bg-black/40 justify-end">
+          <View className="bg-white dark:bg-[#0f172a] rounded-t-[32px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-xl font-bold text-slate-900 dark:text-white">Select Income Source</Text>
+              <TouchableOpacity onPress={() => { setIncomeModalVisible(false); setSelectedTransaction(null); }}>
+                <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
+              </TouchableOpacity>
+            </View>
+            <Text className="text-slate-500 dark:text-slate-400 mb-5">
+              Link KES {activeTransaction?.amount?.toLocaleString()} to which income source?
+            </Text>
+            <View className="space-y-3">
+              {incomeSources.map(src => (
+                <TouchableOpacity
+                  key={src.id}
+                  onPress={() => handleConfirmLinkToIncome(src.id)}
+                  disabled={linkingIncome === src.id}
+                  className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-2xl flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
+                >
+                  <View className="flex-row items-center">
+                    <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${src.color || '#10b981'}20` }}>
+                      <FontAwesome name="arrow-down" size={16} color={src.color || '#10b981'} />
+                    </View>
+                    <View>
+                      <Text className="font-bold text-slate-900 dark:text-white">{src.name}</Text>
+                      <Text className="text-xs text-slate-500 mt-0.5">{src.frequency}</Text>
+                    </View>
+                  </View>
+                  {linkingIncome === src.id
+                    ? <ActivityIndicator size="small" color={src.color || '#10b981'} />
+                    : <FontAwesome name="chevron-right" size={12} color="#94a3b8" />
+                  }
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
       )}

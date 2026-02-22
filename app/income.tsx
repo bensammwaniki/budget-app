@@ -5,7 +5,7 @@ import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
+import { IncomeLog, IncomeSource, incomeService } from '../services/incomeService';
 
 export default function IncomeScreen() {
     const [sources, setSources] = useState<IncomeSource[]>([]);
