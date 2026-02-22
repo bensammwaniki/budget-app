@@ -289,8 +289,13 @@ export default function GoalDetailScreen() {
                             className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
                                 style={{ backgroundColor: themeColor, shadowColor: themeColor }}
                             onPress={fetchLinkableTransactions}>
-                            <FontAwesome name="link" size={16} color={isDark ? '#64748b' : '#cbd5e1'} />
-                            <Text className="text-white font-bold text-lg">Link Record</Text>
+                            <Image
+                                source={require(`../../assets/svg/link-sms.svg`)}
+                                style={{ width: 22, height: 22 }}
+                                tintColor={"white"}
+                                contentFit="contain"
+                            />
+                            <Text className="text-white font-bold text-lg">Link SMS</Text>
                         </TouchableOpacity>
                         )}
                     </View>
@@ -305,11 +310,17 @@ export default function GoalDetailScreen() {
                                     className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex-row justify-between items-center">
                                     <View className="flex-row items-center flex-1">
                                         <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">
-                                            <FontAwesome name={tx.transactionKind === 'SAVINGS_TRANSFER' ? 'arrow-down' : 'link'} size={14} color={themeColor} />
+                                            {/* <FontAwesome name={tx.transactionKind === 'SAVINGS_TRANSFER' ? 'arrow-down' : 'link'} size={14} color={themeColor} /> */}
+                                            <Image
+                                                source={require(`../../assets/svg/savings-piggy.svg`)}
+                                                style={{ width: 22, height: 22 }}
+                                                tintColor={themeColor}
+                                                contentFit="contain"
+                                            />
                                         </View>
                                         <View className="flex-1">
                                             <Text className="font-bold text-slate-900 dark:text-white text-base">
-                                                {tx.transactionKind === 'SAVINGS_TRANSFER' ? 'Deposit' : (tx.recipientName || 'Linked Expense')}
+                                                {tx.transactionKind === 'SAVINGS_TRANSFER' ? 'Deposit' : (tx.recipientName.toUpperCase().slice(0, 22) + ' ...' || 'Linked Expense')}
                                             </Text>
                                             <Text className="text-slate-400 text-xs mt-0.5">
                                                 {new Date(tx.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
@@ -344,11 +355,16 @@ export default function GoalDetailScreen() {
                 presentationStyle="pageSheet"
                 onRequestClose={() => setShowLinkModal(false)}
             >
-                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6">
+                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6 mt-8">
                     <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
                         <TouchableOpacity onPress={() => setShowLinkModal(false)} className="p-2 -mr-2">
-                            <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
+                            <Image
+                                source={require(`../../assets/svg/close.svg`)}
+                                style={{ width: 20, height: 20}}
+                                tintColor={isDark ? '#94a3b8' : themeColor}
+                                contentFit="contain"
+                            />
                         </TouchableOpacity>
                     </View>
 
@@ -369,7 +385,12 @@ export default function GoalDetailScreen() {
                                 >
                                     <View className="flex-row items-center flex-1 pr-4">
                                         <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">
-                                            <FontAwesome name="exchange" size={14} color={isDark ? '#94a3b8' : '#64748b'} />
+                                            <Image
+                                                source={require(`../../assets/svg/savings.svg`)}
+                                                style={{ width: 20, height: 20 }}
+                                                tintColor={isDark ? '#94a3b8' :themeColor }
+                                                contentFit="contain"
+                                            />
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>
@@ -388,7 +409,12 @@ export default function GoalDetailScreen() {
                                         {linking === tx.id ? (
                                             <ActivityIndicator size="small" color={themeColor} />
                                         ) : (
-                                            <FontAwesome name="link" size={16} color={themeColor} />
+                                            <Image
+                                                source={require(`../../assets/svg/link-sms.svg`)}
+                                                style={{ width: 28, height: 28}}
+                                                tintColor={themeColor}
+                                                contentFit="contain"
+                                            />
                                         )}
                                     </View>
                                 </TouchableOpacity>

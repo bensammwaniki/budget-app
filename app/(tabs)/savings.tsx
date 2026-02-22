@@ -50,7 +50,12 @@ export default function SavingsScreen() {
                 <View className="flex-row justify-between items-start mb-4">
                     <View className="flex-row items-center flex-1 pr-4">
                         <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${item.color || '#3b82f6'}20` }}>
-                            <FontAwesome name="flag" size={16} color={item.color || '#3b82f6'} />
+                            <Image
+                                source={require('../../assets/svg/savings-piggy.svg')}
+                                style={{ width: 26, height: 26 }}
+                                tintColor={item.color || '#3b82f6'}
+                                contentFit="contain"
+                            />
                         </View>
                         <Text className="text-lg font-bold text-slate-900 dark:text-white" numberOfLines={1}>{item.name}</Text>
                     </View>

@@ -4,14 +4,14 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IncomeFrequency, incomeService } from '../../services/incomeService';
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#ef4444', '#14b8a6', '#06b6d4'];
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#ef4444', '#06b6d4'];
 const FREQUENCIES: { value: IncomeFrequency; label: string; icon: string }[] = [
     { value: 'MONTHLY', label: 'Monthly', icon: 'calendar' },
-    { value: 'BI_WEEKLY', label: 'Bi-weekly', icon: 'calendar-o' },
+    // { value: 'BI_WEEKLY', label: 'Bi-weekly', icon: 'calendar-o' },
     { value: 'WEEKLY', label: 'Weekly', icon: 'refresh' },
     { value: 'IRREGULAR', label: 'Irregular', icon: 'random' },
 ];
@@ -76,15 +76,15 @@ export default function AddIncomeSourceScreen() {
             </View>
 
             <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
-                <View className="bg-white dark:bg-[#0f172a] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+                <View className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
 
                     {/* Name */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Source Name</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                        <FontAwesome name="tag" size={16} color="#94a3b8" />
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Money from</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-2  mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-2">From</Text>
                         <TextInput
-                            className="flex-1 ml-3 text-slate-900 dark:text-white font-semibold text-lg"
-                            placeholder="e.g. Salary, Freelance, Rental"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-md"
+                            placeholder="Salary, Freelance, Rental"
                             placeholderTextColor="#94a3b8"
                             value={name}
                             onChangeText={setName}
@@ -93,12 +93,12 @@ export default function AddIncomeSourceScreen() {
                     </View>
 
                     {/* Expected Amount */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Expected Amount (optional)</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                        <Text className="text-slate-400 font-bold mr-2">KES</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Expected Amount</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-2 mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-2">KES </Text>
                         <TextInput
-                            className="flex-1 text-slate-900 dark:text-white font-bold text-2xl"
-                            placeholder="0"
+                            className="flex-1 text-slate-900 dark:text-white font-bold text-md"
+                            placeholder="30000"
                             placeholderTextColor="#94a3b8"
                             value={expectedAmount}
                             onChangeText={setExpectedAmount}
@@ -113,14 +113,14 @@ export default function AddIncomeSourceScreen() {
                             <TouchableOpacity
                                 key={f.value}
                                 onPress={() => setFrequency(f.value)}
-                                className={`flex-row items-center px-4 py-2.5 rounded-full border gap-2 ${frequency === f.value
+                                className={`flex-row items-center px-4 py-1 rounded-full border gap-1 ${frequency === f.value
                                         ? 'border-emerald-600'
                                         : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
                                     }`}
                                 style={frequency === f.value ? { backgroundColor: `${selectedColor}20`, borderColor: selectedColor } : {}}
                             >
-                                <FontAwesome name={f.icon as any} size={12} color={frequency === f.value ? selectedColor : '#94a3b8'} />
-                                <Text className={`font-semibold text-sm ${frequency === f.value ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}
+                                <FontAwesome name={f.icon as any} size={10} color={frequency === f.value ? selectedColor : '#94a3b8'} />
+                                <Text className={`font-semibold text-[10px] ${frequency === f.value ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}
                                     style={frequency === f.value ? { color: selectedColor } : {}}
                                 >{f.label}</Text>
                             </TouchableOpacity>
@@ -133,13 +133,15 @@ export default function AddIncomeSourceScreen() {
                             <Text className="font-bold text-slate-900 dark:text-white">Recurring Income</Text>
                             <Text className="text-slate-400 text-xs mt-0.5">Track this as a regular income stream</Text>
                         </View>
-                        <TouchableOpacity
-                            onPress={() => setIsRecurring(!isRecurring)}
-                            className={`w-12 h-7 rounded-full px-0.5 items-center justify-center flex-row ${isRecurring ? 'justify-end' : 'justify-start'}`}
-                            style={{ backgroundColor: isRecurring ? selectedColor : '#cbd5e1' }}
-                        >
-                            <View className="w-6 h-6 bg-white rounded-full shadow-sm" />
-                        </TouchableOpacity>
+                            <Switch
+                                value={isRecurring}
+                                onValueChange={setIsRecurring}
+                                trackColor={{
+                                    false: '#cbd5e1',
+                                    true: selectedColor,
+                                }}
+                                thumbColor="#ffffff"
+                            />
                     </View>
 
                     {/* Color */}
@@ -149,13 +151,13 @@ export default function AddIncomeSourceScreen() {
                             <TouchableOpacity
                                 key={color}
                                 onPress={() => setSelectedColor(color)}
-                                className="w-10 h-10 rounded-full items-center justify-center border-2"
+                                className="w-8 h-8 rounded-full items-center justify-center border-2"
                                 style={{
                                     backgroundColor: color,
                                     borderColor: selectedColor === color ? (isDark ? 'white' : 'black') : 'transparent'
                                 }}
                             >
-                                {selectedColor === color && <FontAwesome name="check" size={12} color="white" />}
+                                {selectedColor === color && <FontAwesome name="check" size={10} color="white" />}
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -171,8 +173,13 @@ export default function AddIncomeSourceScreen() {
                             <ActivityIndicator color="white" />
                         ) : (
                             <>
-                                <FontAwesome name="check" size={16} color="white" />
-                                <Text className="text-white font-bold text-lg">Create Source</Text>
+                                <Image
+                                    source={require(`../../assets/svg/income.svg`)}
+                                    style={{ width: 18, height: 18 }}
+                                    tintColor={"white"}
+                                    contentFit="contain"
+                                />
+                                <Text className="text-white font-bold text-sm uppercase">Add An Income Source</Text>
                             </>
                         )}
                     </TouchableOpacity>

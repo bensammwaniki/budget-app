@@ -16,7 +16,6 @@ const COLORS = [
     '#ef4444', // red
     '#8b5cf6', // purple
     '#ec4899', // pink
-    '#14b8a6', // teal
     '#06b6d4', // cyan
 ];
 
@@ -82,7 +81,7 @@ export default function AddGoalScreen() {
                         contentFit="contain"
                     />
                 </TouchableOpacity>
-                <Text className="text-xl font-bold text-slate-900 dark:text-white ml-2">New Savings Goal</Text>
+                <Text className="text-l font-bold text-slate-900 dark:text-white ml-2 uppercase">Add a New Savings Goal</Text>
             </View>
 
             <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
@@ -90,30 +89,32 @@ export default function AddGoalScreen() {
                 <View className="bg-white dark:bg-[#0f172a] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
 
                     {/* Goal Name */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Goal Name</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                        <FontAwesome name="flag" size={16} color="#94a3b8" />
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">What are you saving for ?</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-1">GOAL  </Text>
                         <TextInput
-                            className="flex-1 ml-3 text-slate-900 dark:text-white font-semibold text-lg"
-                            placeholder="e.g. Vacation, Emergency Fund"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
+                            placeholder="Vacation, Emergency Fund"
                             placeholderTextColor="#94a3b8"
                             value={name}
                             onChangeText={setName}
+                            style={{ color: selectedColor }}
                             autoFocus
                         />
                     </View>
 
                     {/* Target Amount */}
                     <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Target Amount (KES)</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                        <Text className="text-slate-400 font-bold mr-2">KES</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-2">KES    </Text>
                         <TextInput
-                            className="flex-1 text-slate-900 dark:text-white font-bold text-2xl"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[16px]"
                             placeholder="0"
                             placeholderTextColor="#94a3b8"
                             value={targetAmount}
                             onChangeText={setTargetAmount}
                             keyboardType="numeric"
+                            style={{ color: selectedColor }}
                         />
                     </View>
 
@@ -124,8 +125,8 @@ export default function AddGoalScreen() {
                         onPress={() => setShowDatePicker(true)}
                     >
                         <FontAwesome name="calendar" size={16} color="#94a3b8" />
-                        <Text className={`flex-1 ml-3 font-semibold text-lg ${targetDate ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-                            {targetDate ? targetDate.toLocaleDateString() : 'Set a deadline'}
+                        <Text className={`flex-1 ml-6 font-semibold text-[14px] ${targetDate ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}   style={{color: targetDate ? selectedColor : '#94a3b8'}}>
+                            {targetDate ? targetDate.toLocaleDateString() : '  Set a deadline'}
                         </Text>
                         {targetDate && (
                             <TouchableOpacity onPress={() => setTargetDate(null)}>
@@ -141,7 +142,7 @@ export default function AddGoalScreen() {
                             <TouchableOpacity
                                 key={color}
                                 onPress={() => setSelectedColor(color)}
-                                className="w-10 h-10 rounded-full items-center justify-center border-2"
+                                className="w-8 h-8 rounded-full items-center justify-center border-2"
                                 style={{
                                     backgroundColor: color,
                                     borderColor: selectedColor === color ? (colorScheme === 'dark' ? 'white' : 'black') : 'transparent'
@@ -165,8 +166,13 @@ export default function AddGoalScreen() {
                             <ActivityIndicator color="white" />
                         ) : (
                             <>
-                                <FontAwesome name="check" size={16} color="white" />
-                                <Text className="text-white font-bold text-lg ml-2">Create Goal</Text>
+                                <Image
+                                    source={require('../../assets/svg/confirm.svg')}
+                                    style={{ width: 20, height: 20 }}
+                                    tintColor={"white"}
+                                    contentFit="contain"
+                                />
+                                <Text className="text-white font-bold text-[12px] uppercase tracking-wider ml-2">Create a Savings Goal</Text>
                             </>
                         )}
                     </TouchableOpacity>

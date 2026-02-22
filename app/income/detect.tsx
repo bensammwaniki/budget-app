@@ -97,38 +97,48 @@ export default function DetectIncomeScreen() {
                     renderItem={({ item: p, index }) => {
                         const color = COLORS[index % COLORS.length];
                         return (
-                            <View className="bg-white dark:bg-[#0f172a] p-5 rounded-3xl mb-4 border border-slate-100 dark:border-slate-800">
+                            <View className="bg-white dark:bg-[#0f172a] px-4 py-4 rounded-2xl mb-2 border border-slate-100 dark:border-slate-800">
                                 <View className="flex-row justify-between items-start mb-3">
                                     <View className="flex-row items-center flex-1 pr-4">
-                                        <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
-                                            <FontAwesome name="arrow-down" size={16} color={color} />
+                                        <View className="w-8 h-8 rounded-[10px] items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
+                                            <Image
+                                                source={require(`../../assets/svg/income.svg`)}
+                                                style={{ width: 18, height: 18 }}
+                                                tintColor={color}
+                                                contentFit="contain"
+                                            />
                                         </View>
                                         <View className="flex-1">
-                                            <Text className="text-slate-900 dark:text-white font-bold" numberOfLines={1}>{p.name}</Text>
+                                            <Text className="text-[14px] text-slate-900 dark:text-white font-bold" numberOfLines={1}>{p.name}</Text>
                                             <Text className="text-slate-400 text-xs mt-0.5">{FREQ_LABELS[p.suggestedFrequency]} • {p.occurrences} occurrences</Text>
                                         </View>
                                     </View>
                                     <View className="px-2 py-1 rounded-full" style={{ backgroundColor: `${color}20` }}>
-                                        <Text className="text-xs font-bold" style={{ color }}>{FREQ_LABELS[p.suggestedFrequency]}</Text>
+                                        <Text className="text-xs" style={{ color }}>{FREQ_LABELS[p.suggestedFrequency]}</Text>
                                     </View>
                                 </View>
 
                                 <View className="flex-row justify-between items-end">
                                     <View>
                                         <Text className="text-slate-400 text-xs mb-1">Avg. Amount</Text>
-                                        <Text className="text-2xl font-bold text-slate-900 dark:text-white">KES {p.averageAmount.toLocaleString()}</Text>
+                                        <Text className="text-[14px] font-bold text-slate-900 dark:text-white">KES {p.averageAmount.toLocaleString()}</Text>
                                     </View>
                                     <TouchableOpacity
                                         onPress={() => handleCreateFromPattern(p, index)}
                                         disabled={creating === p.name}
-                                        className="px-6 py-3 rounded-xl flex-row items-center gap-2"
+                                        className="px-4 py-2 rounded-xl flex-row items-center gap-2"
                                         style={{ backgroundColor: color }}
                                     >
                                         {creating === p.name
                                             ? <ActivityIndicator size="small" color="white" />
                                             : <>
-                                                <FontAwesome name="plus" size={12} color="white" />
-                                                <Text className="text-white font-bold">Add</Text>
+                                                <Image
+                                                    source={require(`../../assets/svg/plus.svg`)}
+                                                    style={{ width: 14, height: 14 }}
+                                                    tintColor={'white'}
+                                                    contentFit="contain"
+                                                />
+                                                <Text className="text-[12px] text-white font-bold">Add</Text>
                                             </>
                                         }
                                     </TouchableOpacity>

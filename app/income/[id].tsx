@@ -112,7 +112,7 @@ export default function IncomeDetailScreen() {
 
     const CHANNELS = [
         { key: 'cash', label: 'Cash', icon: 'money' as const },
-        { key: 'bank', label: 'Bank Transfer', icon: 'university' as const },
+        { key: 'bank', label: 'Transfer', icon: 'university' as const },
         { key: 'cheque', label: 'Cheque', icon: 'pencil-square-o' as const },
         { key: 'mpesa', label: 'M-PESA', icon: 'mobile-phone' as const },
         { key: 'other', label: 'Other', icon: 'ellipsis-h' as const },
@@ -236,7 +236,12 @@ export default function IncomeDetailScreen() {
                         className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2 border-2"
                         style={{ borderColor: themeColor, backgroundColor: `${themeColor}15` }}
                     >
-                        <FontAwesome name="link" size={14} color={themeColor} />
+                        <Image
+                            source={require(`../../assets/svg/link-sms.svg`)}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={themeColor}
+                            contentFit="contain"
+                        />
                         <Text className="font-bold text-sm" style={{ color: themeColor }}>Link SMS</Text>
                     </TouchableOpacity>
 
@@ -245,7 +250,12 @@ export default function IncomeDetailScreen() {
                         className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2"
                         style={{ backgroundColor: themeColor }}
                     >
-                        <FontAwesome name="plus-circle" size={14} color="white" />
+                        <Image
+                            source={require(`../../assets/svg/clear.svg`)}
+                            style={{ width: 16, height: 16 }}
+                            tintColor={"white"}
+                            contentFit="contain"
+                        />
                         <Text className="font-bold text-white text-sm">Record Income</Text>
                     </TouchableOpacity>
                 </View>
@@ -334,21 +344,26 @@ export default function IncomeDetailScreen() {
             {/* Manual Income Recording Modal */}
             <Modal visible={showManualModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManualModal(false)}>
                 <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                    <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6">
+                    <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6 mt-6">
                         <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
                             <Text className="text-xl font-bold text-slate-900 dark:text-white">Record Income</Text>
                             <TouchableOpacity onPress={() => setShowManualModal(false)} className="p-2 -mr-2">
-                                <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
+                                <Image
+                                    source={require(`../../assets/svg/close.svg`)}
+                                    style={{ width: 18, height: 18 }}
+                                    tintColor={isDark ? '#94a3b8' : '#64748b'}
+                                    contentFit="contain"
+                                />
                             </TouchableOpacity>
                         </View>
 
                         <ScrollView className="flex-1 p-6" keyboardShouldPersistTaps="handled">
                             {/* Amount */}
                             <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Amount (KES)</Text>
-                            <View className="flex-row items-center bg-white dark:bg-[#1e293b] rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                            <View className="flex-row items-center bg-white dark:bg-[#1e293b] rounded-2xl py-2 px-4 mb-6 border border-slate-200 dark:border-slate-700">
                                 <Text className="text-slate-400 font-bold mr-2 text-xl">KES</Text>
                                 <TextInput
-                                    className="flex-1 text-slate-900 dark:text-white font-bold text-3xl"
+                                    className="flex-1 text-slate-900 dark:text-white font-bold text-xl"
                                     placeholder="0"
                                     placeholderTextColor="#94a3b8"
                                     keyboardType="numeric"
@@ -365,19 +380,14 @@ export default function IncomeDetailScreen() {
                                     <TouchableOpacity
                                         key={ch.key}
                                         onPress={() => setManualChannel(ch.key)}
-                                        className={`flex-row items-center px-4 py-3 rounded-2xl border gap-2 ${manualChannel === ch.key
+                                        className={`flex-row items-center px-3 py-1 rounded-2xl border gap-2 ${manualChannel === ch.key
                                                 ? 'border-transparent'
                                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1e293b]'
                                             }`}
                                         style={manualChannel === ch.key ? { backgroundColor: `${themeColor}20`, borderColor: themeColor } : {}}
                                     >
-                                        <FontAwesome
-                                            name={ch.icon}
-                                            size={16}
-                                            color={manualChannel === ch.key ? themeColor : (isDark ? '#94a3b8' : '#64748b')}
-                                        />
                                         <Text
-                                            className="font-semibold text-sm"
+                                            className="font-semibold text-[10px] uppercase"
                                             style={{ color: manualChannel === ch.key ? themeColor : (isDark ? '#94a3b8' : '#64748b') }}
                                         >
                                             {ch.label}
@@ -410,7 +420,12 @@ export default function IncomeDetailScreen() {
                                 {recordingManual
                                     ? <ActivityIndicator color="white" />
                                     : <>
-                                        <FontAwesome name="check" size={16} color="white" />
+                                        <Image
+                                            source={require(`../../assets/svg/confirm.svg`)}
+                                            style={{ width: 18, height: 18 }}
+                                            tintColor={"white"}
+                                            contentFit="contain"
+                                        />
                                         <Text className="text-white font-bold text-lg">Confirm</Text>
                                     </>
                                 }
