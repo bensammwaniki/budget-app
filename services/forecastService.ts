@@ -16,8 +16,8 @@ interface MonthlyData {
 
 export const forecastService = {
 
-    async forecast(): Promise<ForecastResult> {
-        const allTx = await getTransactions();
+    async forecast(providedTx?: any[]): Promise<ForecastResult> {
+        const allTx = providedTx || await getTransactions();
 
         // Collect last 6 months of data
         const monthlyData: Record<string, MonthlyData> = {};

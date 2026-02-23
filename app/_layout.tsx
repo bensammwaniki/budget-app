@@ -4,6 +4,7 @@ import "../global.css";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 import CustomAlert from "../components/CustomAlert";
 import PermissionGuard from "../components/PermissionGuard";
 import { AlertProvider } from "../context/AlertContext";
@@ -13,50 +14,23 @@ import { initDatabase } from "../services/core/db";
 
 function RootLayoutContent() {
   const { user, loading: authLoading } = useAuth();
-  let segments: string[] = [];
-  let router: any = null;
-
-  try {
-    // These hooks can throw if the navigation context isn't ready yet
-    segments = useSegments();
-    router = useRouter();
-  } catch (err) {
-    // No navigation context available yet — we'll skip redirects until it's ready
-    segments = [];
-    router = null;
-  }
+  const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     if (authLoading) return;
-    if (!router || !segments || segments.length === 0) return;
 
     const inAuthGroup = segments[0] === "(auth)";
 
-    try {
-      if (!user && !inAuthGroup) {
-        router.replace("/login");
-      } else if (user && inAuthGroup) {
-        router.replace("/(tabs)");
-      }
-    } catch (err) {
-      // navigation not ready — ignore and wait for context
-      console.warn('Router not ready for redirects yet');
+    if (!user && !inAuthGroup) {
+      router.replace("/login");
+    } else if (user && inAuthGroup) {
+      router.replace("/(tabs)");
     }
-  }, [user, authLoading, segments, router]);
+  }, [user, authLoading, segments]);
 
-  // IMPORTANT: Do NOT return null or a skeleton if authLoading is true 
-  // after the initial DB load, because that unmounts the Stack and 
-  // breaks navigation context for children (tabs).
-  // The children should handle their own local loading states.
-
-  if (authLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-[#0f172a]">
-        <ActivityIndicator size="large" color="#3b82f6" />
-      </View>
-    );
-  }
-
+  // ⚠️ Always render Stack.
+  // Do NOT block navigation tree.
   return (
     <PermissionGuard>
       <ScrollProvider>
@@ -71,20 +45,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     initDatabase()
-      .then(() => setDbLoading(false))
-      .catch((err) => {
-        console.error("Failed to initialize database in RootLayout:", err);
-        // We could show a fatal error screen here
-      });
+      .catch(err => console.error("DB init failed:", err))
+      .finally(() => setDbLoading(false));
   }, []);
-
-  if (dbLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-blue-600">
-        <ActivityIndicator size="large" color="#ffffff" />
-      </View>
-    );
-  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -92,9 +55,26 @@ export default function RootLayout() {
         <AlertProvider>
           <RootLayoutContent />
           <CustomAlert />
+
+          {dbLoading && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "#2563eb",
+                zIndex: 9999,
+              }}
+            >
+              <ActivityIndicator size="large" color="#ffffff" />
+            </View>
+          )}
         </AlertProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
 }
-

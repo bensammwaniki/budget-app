@@ -1,19 +1,19 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+// Removing all navigation hook imports to avoid the context render crash
+import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { getTransactions } from '../../services/database';
 import { ForecastResult, forecastService } from '../../services/forecastService';
+import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
 
 type SpendingPeriod = 'Today' | 'This Week' | '2 Weeks' | '3 Weeks' | 'This Month' | 'This Year';
-
-type Period = 'THIS_MONTH' | 'LAST_MONTH';
 
 import { useColorScheme } from "nativewind";
 
@@ -24,6 +24,7 @@ export default function AnalyticsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Month');
+  const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Phase 5 intelligence state
   const [metrics, setMetrics] = useState<KeyMetrics | null>(null);
@@ -31,47 +32,45 @@ export default function AnalyticsScreen() {
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [insightsTab, setInsightsTab] = useState<'overview' | 'trends' | 'forecast'>('overview');
 
-  const { showTabBar, hideTabBar } = useScrollVisibility();
-  const lastScrollY = useSharedValue(0);
-
-  const handleScroll = useAnimatedScrollHandler({
+  const { tabBarVisible } = useScrollVisibility();
+  const lastScrollY = useSharedValue(0); const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       const currentY = event.contentOffset.y;
       const diff = currentY - lastScrollY.value;
 
       if (currentY <= 0) {
-        hideTabBar();
+        tabBarVisible.value = 0;
       } else if (diff > 5) {
-        showTabBar();
+        tabBarVisible.value = 1;
       }
+
       lastScrollY.value = currentY;
     },
   });
-
   const loadData = useCallback(async () => {
     const allTransactions = await getTransactions();
     setTransactions(allTransactions);
 
     // Load intelligence data in parallel
     try {
-      const [kMetrics, kTrends, kForecast] = await Promise.all([
-        insightsService.getKeyMetrics(),
-        insightsService.getCategoryTrends(),
-        forecastService.forecast(),
+      const [kMetrics, kTrends, kForecast, fetchedLogs] = await Promise.all([
+        insightsService.getKeyMetrics('local_user', allTransactions),
+        insightsService.getCategoryTrends(allTransactions),
+        forecastService.forecast(allTransactions),
+        incomeService.getLogs(),
       ]);
       setMetrics(kMetrics);
       setTrends(kTrends);
       setForecast(kForecast);
+      setLogs(fetchedLogs);
     } catch (e) {
       console.warn('Insights load failed:', e);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
-  );
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Generate last 12 months
   const months = useMemo(() => {
@@ -98,14 +97,26 @@ export default function AnalyticsScreen() {
   }, [transactions, selectedDate]);
 
   // Calculate statistics
-  const stats = useMemo(() => {
-    const income = filteredTransactions
-      .filter(t => t.type === 'RECEIVED')
-      .reduce((sum, t) => sum + t.amount, 0);
+  const { thisMonthTotal, lastMonthTotal } = useMemo(() => {
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const expense = filteredTransactions
-      .filter(t => t.type === 'SENT')
-      .reduce((sum, t) => sum + t.amount, 0);
+    const thisTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth).reduce((sum, l) => sum + l.amount, 0);
+    const lastTotal = logs.filter(l => {
+      const d = new Date(l.receivedAt);
+      return d >= startOfLastMonth && d <= endOfLastMonth;
+    }).reduce((sum, l) => sum + l.amount, 0);
+
+    return { thisMonthTotal: thisTotal, lastMonthTotal: lastTotal };
+  }, [logs]);
+
+  //  old method   
+  const stats = useMemo(() => {
+    const income = filteredTransactions.filter(t => t.type === 'RECEIVED').reduce((sum, t) => sum + t.amount, 0);
+
+    const expense = filteredTransactions.filter(t => t.type === 'SENT').reduce((sum, t) => sum + t.amount, 0);
 
     // Category breakdown
     const categoryMap: Record<string, { amount: number; color: string; count: number }> = {};
@@ -316,7 +327,7 @@ export default function AnalyticsScreen() {
     <Animated.ScrollView
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
       contentContainerStyle={{ paddingBottom: 120 }}
-      onScroll={handleScroll}
+      // onScroll={handleScroll}
       scrollEventThrottle={16}
     >
       <StatusBar style="light" />
@@ -330,15 +341,28 @@ export default function AnalyticsScreen() {
               <Text className="text-2xl font-bold text-slate-900 dark:text-white">Insights</Text>
               <Text className="text-slate-400 text-xs mt-0.5">Your financial picture</Text>
             </View>
-            <View className="flex-row bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+            <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1e293b' : '#f1f5f9', padding: 4, borderRadius: 24, gap: 4 }}>
               {INSIGHTS_TABS.map(t => (
                 <TouchableOpacity
                   key={t.key}
                   onPress={() => setInsightsTab(t.key)}
-                  className={`px-3 py-1.5 rounded-lg ${insightsTab === t.key ? 'bg-white dark:bg-slate-700 shadow-sm' : ''}`}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 24,
+                    backgroundColor: insightsTab === t.key ? (isDark ? '#334155' : '#ffffff') : 'transparent',
+                    shadowColor: insightsTab === t.key ? '#000' : 'transparent',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 2,
+                    elevation: insightsTab === t.key ? 1 : 0
+                  }}
                 >
-                  <Text className={`text-xs font-bold ${insightsTab === t.key ? 'text-slate-900 dark:text-white' : 'text-slate-400'
-                    }`}>{t.label}</Text>
+                  <Text style={{
+                    fontSize: 10,
+                    fontWeight: 'bold',
+                    color: insightsTab === t.key ? (isDark ? '#ffffff' : '#0f172a') : '#94a3b8'
+                  }}>{t.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -388,8 +412,8 @@ export default function AnalyticsScreen() {
 
               {/* Net Worth Card */}
               <View className={`p-5 rounded-3xl mb-3 overflow-hidden relative border ${metrics.netWorth >= 0
-                  ? 'bg-emerald-600 border-emerald-500'
-                  : 'bg-red-600 border-red-500'
+                ? 'bg-emerald-600 border-emerald-500'
+                : 'bg-red-600 border-red-500'
                 }`}>
                 <View className="absolute right-3 top-3 opacity-10">
                   <FontAwesome name="line-chart" size={80} color="white" />
@@ -554,9 +578,9 @@ export default function AnalyticsScreen() {
       )}
 
       {/* Header */}
-      <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
+      <View className="px-6 pt-6 pb-8 bg-white dark:bg-[#0f172a] rounded-[12px] border-b border-gray-200 dark:border-slate-800 shadow-sm">
         <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Total Expense • {formatMonth(selectedDate)}</Text>
-        <Text className="text-slate-900 dark:text-white text-4xl font-bold mb-6">
+        <Text className="text-slate-900 dark:text-white text-xl font-bold mb-6">
           {formatCurrency(stats.expense)}
         </Text>
 
@@ -573,7 +597,7 @@ export default function AnalyticsScreen() {
               <TouchableOpacity
                 key={index}
                 onPress={() => setSelectedDate(date)}
-                className={`px-4 py-2 rounded-xl border ${isSelected
+                className={`px-3 py-1 rounded-[10px] border ${isSelected
                   ? 'bg-blue-600 border-blue-600'
                   : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}
@@ -584,7 +608,7 @@ export default function AnalyticsScreen() {
                   }`}>
                   {index === 0 ? 'This Month' : formatMonthShort(date)}
                 </Text>
-                <Text className={`text-[10px] text-center mt-1 ${isSelected
+                <Text className={`text-[10px] text-center ${isSelected
                   ? 'text-blue-200'
                   : 'text-slate-400 dark:text-slate-500'
                   }`}>
@@ -601,15 +625,25 @@ export default function AnalyticsScreen() {
         <View className="flex-row gap-3 mb-4">
           <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
             <View className="flex-row items-center mb-2">
-              <FontAwesome name="arrow-down" size={16} color="#10b981" />
-              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-2">Income</Text>
+              <Image
+                source={require('../../assets/svg/income.svg')}
+                style={{ width: 20, height: 20 }}
+                tintColor={"#10b981"}
+                contentFit="contain"
+              />
+              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Income</Text>
             </View>
-            <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">{formatCurrency(stats.income)}</Text>
+            <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">KES {thisMonthTotal.toLocaleString()}</Text>
           </View>
           <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
             <View className="flex-row items-center mb-2">
-              <FontAwesome name="arrow-up" size={16} color="#ef4444" />
-              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-2">Expense</Text>
+              <Image
+                source={require('../../assets/svg/expense.svg')}
+                style={{ width: 22, height: 22 }}
+                tintColor={"#ef4444"}
+                contentFit="contain"
+              />
+              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Expense</Text>
             </View>
             <Text className="text-red-600 dark:text-red-400 text-2xl font-bold">{formatCurrency(stats.expense)}</Text>
           </View>
@@ -619,7 +653,7 @@ export default function AnalyticsScreen() {
           <View className="flex-row items-center justify-between">
             <Text className="text-slate-600 dark:text-slate-400 text-sm">Net Balance</Text>
             <Text className={`text-2xl font-bold ${stats.net >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {formatCurrency(Math.abs(stats.net))}
+              {formatCurrency(thisMonthTotal - stats.expense)}
             </Text>
           </View>
         </View>

@@ -51,7 +51,7 @@ export interface MonthlySummary {
 
 export const insightsService = {
 
-    async getKeyMetrics(userId: string = 'local_user'): Promise<KeyMetrics> {
+    async getKeyMetrics(userId: string = 'local_user', providedTx?: any[]): Promise<KeyMetrics> {
         const db = getDb();
         const now = new Date();
 
@@ -63,7 +63,7 @@ export const insightsService = {
         const startOfLastMonth = lastMonthDate.toISOString();
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
-        const allTx = await getTransactions();
+        const allTx = providedTx || await getTransactions();
 
         // --- Income & Expenses ---
         const thisMonthTx = allTx.filter(t => new Date(t.date) >= new Date(startOfThisMonth));
@@ -143,13 +143,13 @@ export const insightsService = {
         };
     },
 
-    async getCategoryTrends(): Promise<CategoryTrend[]> {
+    async getCategoryTrends(providedTx?: any[]): Promise<CategoryTrend[]> {
         const now = new Date();
         const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-        const allTx = await getTransactions();
+        const allTx = providedTx || await getTransactions();
         const thisMonthExpTx = allTx.filter(t => t.type === 'SENT' && new Date(t.date) >= startOfThisMonth);
         const lastMonthExpTx = allTx.filter(t => {
             const d = new Date(t.date);
