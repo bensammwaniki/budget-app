@@ -1,6 +1,29 @@
 import * as SQLite from 'expo-sqlite';
 import { generateUUID } from '../../utils/uuid';
 
+// Reactive Subscription Logic
+export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS' | 'INCOME_LOGS' | 'DEBTS' | 'SAVINGS' | 'INCOME_SOURCES';
+type DatabaseChangeListener = (type: DatabaseChangeType) => void;
+let listeners: DatabaseChangeListener[] = [];
+
+export const subscribeToDatabaseChanges = (listener: DatabaseChangeListener) => {
+    listeners.push(listener);
+    return () => {
+        listeners = listeners.filter(l => l !== listener);
+    };
+};
+
+export const notifyListeners = (type: DatabaseChangeType) => {
+    // Basic debounce/defer to avoid rapid re-renders if multiple updates happen
+    setTimeout(() => {
+        listeners.forEach(l => l(type));
+    }, 0);
+};
+
+export const notifyListenersImmediate = (type: DatabaseChangeType) => {
+    listeners.forEach(l => l(type));
+};
+
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
 
@@ -72,6 +95,7 @@ async function performInitialization() {
                 principal_amount REAL NOT NULL,
                 current_balance REAL NOT NULL,
                 is_revolving INTEGER DEFAULT 0,
+                is_reducing_balance INTEGER DEFAULT 0,
                 interest_rate REAL,
                 status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PAID', 'DEFAULTED')),
                 start_date TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -228,6 +252,18 @@ async function performInitialization() {
                 } catch (e) {
                     console.warn(`⚠️ Failed to rename ${rename.old} in transactions:`, e);
                 }
+            }
+        }
+
+        const debtTableInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(debts)');
+        const debtColumns = debtTableInfo.map(c => c.name);
+
+        if (!debtColumns.includes('is_reducing_balance')) {
+            console.log(`🛠️ Migrating debts: Adding is_reducing_balance`);
+            try {
+                await database.execAsync(`ALTER TABLE debts ADD COLUMN is_reducing_balance INTEGER DEFAULT 0`);
+            } catch (e) {
+                console.warn(`⚠️ Failed to add is_reducing_balance in debts:`, e);
             }
         }
 
@@ -399,7 +435,9 @@ async function seedCategories(database: SQLite.SQLiteDatabase) {
         ['Salary', 'INCOME', 'money', '#22c55e', 0, 'Monthly salary'],
         ['Business', 'INCOME', 'briefcase', '#0ea5e9', 0, 'Business revenue'],
         ['Gifts', 'INCOME', 'gift', '#d946ef', 0, 'Gifts received'],
-        ['Fuliza Charges', 'EXPENSE', 'warning', '#f97316', 0, 'Fuliza access fees and interest']
+        ['Fuliza Charges', 'EXPENSE', 'warning', '#f97316', 0, 'Fuliza access fees and interest'],
+        ['Savings', 'EXPENSE', 'piggy-bank', '#6366f1', 0, 'Money moved to savings goals'],
+        ['Debt Repayment', 'EXPENSE', 'money', '#0f172a', 0, 'Payments made towards debts']
     ];
 
     for (const cat of categories) {

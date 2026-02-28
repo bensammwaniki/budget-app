@@ -138,7 +138,10 @@ export default function DebtDetailScreen() {
         );
     }
 
-    const progress = Math.min(((debt.principalAmount - debt.currentBalance) / debt.principalAmount) * 100, 100);
+    const originalAmount = debt.isReducingBalance ? debt.principalAmount : debt.principalAmount + (debt.principalAmount * (debt.interestRate || 0) / 100);
+    const balanceWithFees = debt.currentBalance + (debt.accruedFees || 0);
+    const projectedTotal = balanceWithFees + (debt.projectedInterest || 0);
+    const progress = Math.max(0, Math.min(((originalAmount - balanceWithFees) / originalAmount) * 100, 100));
 
     return (
         <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
@@ -179,11 +182,19 @@ export default function DebtDetailScreen() {
                             <View>
                                 <Text className="text-slate-500 text-sm mb-1">{debt.type === 'RECEIVABLE' ? 'Owed to You' : 'You Owe'}</Text>
                                 <Text className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-                                    KES {(debt.currentBalance + (debt.accruedFees || 0)).toLocaleString()}
+                                    KES {balanceWithFees.toLocaleString()}
                                 </Text>
+                                {(debt.projectedInterest || 0) > 0 && (
+                                    <View className="mb-4">
+                                        <Text className="text-blue-500 font-bold text-lg">
+                                            → KES {projectedTotal.toLocaleString()}
+                                        </Text>
+                                        <Text className="text-slate-400 text-[10px] uppercase font-bold">Projected by {debt.dueDate?.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</Text>
+                                    </View>
+                                )}
                                 {(debt.accruedFees || 0) > 0 && (
                                     <Text className="text-slate-400 text-xs -mt-3 mb-4 italic">
-                                        Includes KES {debt.accruedFees?.toLocaleString()} unbilled maintenance fees
+                                        Includes KES {debt.accruedFees?.toLocaleString()} accrued interest
                                     </Text>
                                 )}
                             </View>
@@ -211,9 +222,20 @@ export default function DebtDetailScreen() {
                                 <View className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
                                     <View className={`h-full ${debt.type === 'LIABILITY' ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${progress}%` }} />
                                 </View>
-                                <View className="flex-row justify-between">
-                                    <Text className="text-slate-400 text-xs">Paid: KES {(debt.principalAmount - debt.currentBalance).toLocaleString()}</Text>
-                                    <Text className="text-slate-400 text-xs">Total: KES {debt.principalAmount.toLocaleString()}</Text>
+                                <View className="flex-row justify-between mb-4">
+                                    <View>
+                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Total Paid</Text>
+                                        <Text className="text-slate-900 dark:text-white font-bold">KES {Math.max(0, originalAmount - balanceWithFees).toLocaleString()}</Text>
+                                    </View>
+                                    <View className="items-end">
+                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Total {debt.type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text>
+                                        <Text className="text-slate-900 dark:text-white font-bold">KES {originalAmount.toLocaleString()}</Text>
+                                    </View>
+                                </View>
+                                <View className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
+                                    <Text className="text-slate-500 text-xs text-center italic">
+                                        {progress.toFixed(1)}% of total clear
+                                    </Text>
                                 </View>
                             </>
                         )}

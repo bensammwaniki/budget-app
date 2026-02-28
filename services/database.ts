@@ -2,10 +2,9 @@ import * as SQLite from 'expo-sqlite';
 import { AutomationRule } from '../types/automation';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 import { evaluateTransaction } from '../utils/automationEngine';
-import { generateUUID, getDb, initDatabase } from './core/db';
-import { debtService } from './debtService';
+import { DatabaseChangeType, generateUUID, getDb, initDatabase, notifyListeners, notifyListenersImmediate, subscribeToDatabaseChanges } from './core/db';
 
-export { generateUUID, initDatabase };
+export { DatabaseChangeType, generateUUID, initDatabase, notifyListeners, notifyListenersImmediate, subscribeToDatabaseChanges };
 
 /**
  * Legacy alias for getDb to maintain backward compatibility.
@@ -14,40 +13,16 @@ export const ensureDb = (): SQLite.SQLiteDatabase => {
     return getDb();
 };
 
-// Reactive Subscription Logic
-export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS' | 'INCOME_LOGS';
-type DatabaseChangeListener = (type: DatabaseChangeType) => void;
-let listeners: DatabaseChangeListener[] = [];
-
-export const subscribeToDatabaseChanges = (listener: DatabaseChangeListener) => {
-    listeners.push(listener);
-    return () => {
-        listeners = listeners.filter(l => l !== listener);
-    };
-};
-
-const debounceTimeouts: Record<string, any> = {};
-
-export const notifyListeners = (type: DatabaseChangeType) => {
-    if (debounceTimeouts[type]) {
-        clearTimeout(debounceTimeouts[type]);
-    }
-
-    debounceTimeouts[type] = setTimeout(() => {
-        console.log(`🔔 Notifying listeners of change: ${type}`);
-        listeners.forEach(l => l(type));
-        delete debounceTimeouts[type];
-    }, 500);
-};
-
-export const notifyListenersImmediate = (type: DatabaseChangeType) => {
-    console.log(`⚡ Immediate notification of change: ${type}`);
-    listeners.forEach(l => l(type));
-};
 
 export const getCategories = async (): Promise<Category[]> => {
     const database = getDb();
     return await database.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
+};
+
+export const getCategoryIdByName = async (name: string): Promise<number | null> => {
+    const database = getDb();
+    const result = await database.getFirstAsync<{ id: number }>('SELECT id FROM categories WHERE name = ?', [name]);
+    return result?.id || null;
 };
 
 export const addCategory = async (category: Omit<Category, 'id'>) => {
@@ -486,18 +461,3 @@ export const deleteTransaction = async (id: string) => {
     notifyListenersImmediate('TRANSACTIONS');
 };
 
-/**
- * Periodically called during sync/launch to apply accrued interest/maintenance
- * fees for any active overdraft debts.
- */
-export const updateFulizaFees = async () => {
-    try {
-        const fulizaDebt = await debtService.getOrCreateFulizaDebt();
-        if (fulizaDebt && fulizaDebt.status === 'ACTIVE' && fulizaDebt.currentBalance > 0) {
-            // Reconcile will internally check latest SMS balance if available
-            await debtService.reconcileFulizaBalance();
-        }
-    } catch (e) {
-        console.error('Error updating Fuliza fees:', e);
-    }
-};

@@ -7,6 +7,7 @@ export interface Debt {
     type: 'LIABILITY' | 'RECEIVABLE' | 'OVERDRAFT';
     name: string; // e.g., "Fuliza", "HESLB"
     isRevolving: boolean; // True for overdrafts that don't have a fixed principal (like Fuliza)
+    isReducingBalance?: boolean; // True if the debt repayment reduces the original principal
 
     principalAmount: number; // Original Debt Amount
     currentBalance: number; // Remaining to be paid
@@ -19,6 +20,7 @@ export interface Debt {
     createdAt: Date;
     updatedAt: Date;
     accruedFees?: number; // Estimated unbilled fees since last update
+    projectedInterest?: number; // Estimated interest by the due date
 }
 
 export interface DebtPayment {

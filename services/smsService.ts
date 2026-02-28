@@ -3,11 +3,11 @@ import { PermissionsAndroid, Platform } from 'react-native';
 import SmsAndroid from 'react-native-get-sms-android';
 import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../utils/smsParser';
+import { notifyListeners } from './core/db';
 import {
     fulizaTransactionExists,
     getUserSettings,
     initDatabase,
-    notifyListeners,
     saveFulizaTransaction,
     saveTransaction,
     saveUserSettings,

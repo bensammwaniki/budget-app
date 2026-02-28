@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DebtBreakdownChart, { DebtItem } from '../../components/DebtBreakdownChart';
+import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { debtService } from '../../services/debtService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Debt } from '../../types/debt';
@@ -38,6 +39,7 @@ export default function DebtsScreen() {
   const loadDebts = useCallback(async () => {
     try {
       setLoading(true);
+      await initDatabase();
       const data = await debtService.getDebts('local_user', statusFilter, typeFilter);
       setDebts(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -54,14 +56,23 @@ export default function DebtsScreen() {
     showTabBar();
   }, [showTabBar]);
 
-  // Load debts when filters change
+  // Load debts when filters change or database updates
   useEffect(() => {
     loadDebts();
+
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'DEBTS' || type === 'TRANSACTIONS') {
+        loadDebts();
+      }
+    });
+
+    return unsubscribe;
   }, [loadDebts]);
 
   // Load totals for both types based on status (ACTIVE or PAID)
   const loadTotals = useCallback(async () => {
     try {
+      await initDatabase();
       const liabs = await debtService.getDebts('local_user', statusFilter, 'LIABILITY');
       const recs = await debtService.getDebts('local_user', statusFilter, 'RECEIVABLE');
 
@@ -125,10 +136,12 @@ export default function DebtsScreen() {
     const principal = Number(item.principalAmount || 0);
     const balance =
       Number(item.currentBalance || 0) + Number(item.accruedFees || 0);
+    const projectedFinal = balance + (item.projectedInterest || 0);
 
+    const originalAmount = item.isReducingBalance ? principal : principal + (principal * (item.interestRate || 0) / 100);
     const progress =
-      principal > 0
-        ? Math.min(((principal - balance) / principal) * 100, 100)
+      originalAmount > 0
+        ? Math.max(0, Math.min(((originalAmount - balance) / originalAmount) * 100, 100))
         : 0;
 
     const dueDateFormatted =
@@ -183,12 +196,17 @@ export default function DebtsScreen() {
               className="font-bold text-lg"
               style={{ color: mainColor }}
             >
-              {formatCurrency(balance)}
+              {formatCurrency(projectedFinal > balance ? projectedFinal : balance)}
             </Text>
+            {projectedFinal > balance && (
+              <Text className="text-[10px] font-bold text-blue-500 uppercase tracking-tighter -mt-1">
+                Projected Total
+              </Text>
+            )}
 
             {!item.isRevolving && (
               <Text className="text-slate-400 text-xs text-right">
-                of {formatCurrency(principal)}
+                of {formatCurrency(item.isReducingBalance ? principal : principal + (principal * (item.interestRate || 0) / 100))}
               </Text>
             )}
           </View>
@@ -238,13 +256,13 @@ export default function DebtsScreen() {
         }
         contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
-          <View className="p-6">
+          <View className="px-6 mt-4 ">
             {/* Main Tabs (Active vs Paid) */}
-            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 4, borderRadius: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 2, borderRadius: 50, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 }}>
               {(['ACTIVE', 'PAID'] as const).map((f) => (
                 <TouchableOpacity
                   key={f}
-                  style={{ flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: statusFilter === f ? '#ffffff' : 'transparent', alignItems: 'center' }}
+                  style={{ flex: 1, paddingVertical: 6, borderRadius: 50, backgroundColor: statusFilter === f ? '#ffffff' : 'transparent', alignItems: 'center' }}
                   onPress={() => setStatusFilter(f)}
                 >
                   <Text style={{ textAlign: 'center', fontWeight: '700', color: statusFilter === f ? '#0f172a' : '#94a3b8' }}>

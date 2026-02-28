@@ -1,6 +1,6 @@
 import { generateUUID } from '../utils/uuid';
-import { getDb } from './core/db';
-import { getTransactions, notifyListeners } from './database';
+import { getDb, notifyListeners } from './core/db';
+import { getTransactions } from './database';
 
 export type IncomeFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'IRREGULAR';
 
@@ -67,8 +67,8 @@ export const incomeService = {
         const now = new Date().toISOString();
 
         await db.runAsync(`
-            INSERT INTO income_sources (id, user_id, name, category_id, is_recurring, expected_amount, frequency, color, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+            INSERT INTO income_sources(id, user_id, name, category_id, is_recurring, expected_amount, frequency, color, status, created_at, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
         `, [
             id, userId, data.name, data.categoryId ?? null,
             data.isRecurring ? 1 : 0,
@@ -85,6 +85,8 @@ export const incomeService = {
             const logDate = data.initialDate || now;
             await this.logIncome(id, data.initialAmount, logDate, undefined, 'Initial backdated amount');
         }
+
+        notifyListeners('INCOME_SOURCES');
 
         return source;
     },
@@ -109,11 +111,13 @@ export const incomeService = {
         values.push(now, id);
 
         await db.runAsync(`UPDATE income_sources SET ${setClauses.join(', ')} WHERE id = ?`, values);
+        notifyListeners('INCOME_SOURCES');
     },
 
     async deleteSource(id: string): Promise<void> {
         const db = getDb();
         await db.runAsync('DELETE FROM income_sources WHERE id = ?', [id]);
+        notifyListeners('INCOME_SOURCES');
     },
 
     // ─── Logs ───────────────────────────────────────────────────────────────
@@ -133,8 +137,8 @@ export const incomeService = {
         const now = new Date().toISOString();
 
         await db.runAsync(`
-            INSERT INTO income_logs (id, source_id, transaction_id, amount, received_at, notes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO income_logs(id, source_id, transaction_id, amount, received_at, notes, created_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
         `, [id, sourceId, transactionId ?? null, amount, receivedAt, notes ?? null, now]);
 
         // Update last_received on the source

@@ -23,7 +23,7 @@ export default function AnalyticsScreen() {
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Month');
+  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('Today');
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Phase 5 intelligence state
@@ -223,63 +223,121 @@ export default function AnalyticsScreen() {
 
     const resultMap: Record<string, number> = {};
     let labels: string[] = [];
+    let lineMap: Record<string, number> = {}; // for the line graph
+
+    // Helper to add data to resultMap
+    const addData = (label: string, amount: number) => {
+      if (resultMap[label] !== undefined) {
+        resultMap[label] += amount;
+        lineMap[label] += amount;
+      }
+    };
 
     if (spendingFilter === 'Today') {
+      // Show Today in hours
       labels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-      labels.forEach(l => resultMap[l] = 0);
+      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
 
       for (let i = 0; i < expenses.length; i++) {
         const d = expenses[i].parsedDate;
         if (d >= todayStart) {
           const hour = `${d.getHours().toString().padStart(2, '0')}:00`;
-          if (resultMap[hour] !== undefined) resultMap[hour] += expenses[i].amount;
+          addData(hour, expenses[i].amount);
         }
       }
-    } else if (spendingFilter === 'This Month') {
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString().padStart(2, '0'));
-      labels.forEach(l => resultMap[l] = 0);
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
-          const day = d.getDate().toString().padStart(2, '0');
-          if (resultMap[day] !== undefined) resultMap[day] += expenses[i].amount;
-        }
-      }
-    } else if (spendingFilter === 'This Year') {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      labels = monthNames;
-      labels.forEach(l => resultMap[l] = 0);
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d.getFullYear() === now.getFullYear()) {
-          const month = monthNames[d.getMonth()];
-          if (resultMap[month] !== undefined) resultMap[month] += expenses[i].amount;
-        }
-      }
-    } else {
-      let daysBack = 7;
-      if (spendingFilter === '2 Weeks') daysBack = 14;
-      if (spendingFilter === '3 Weeks') daysBack = 21;
-
+    } else if (spendingFilter === 'This Week') {
+      // This week show in days (Last 7 days)
+      const daysBack = 7;
       const startDate = new Date(todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60 * 1000);
+
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
       for (let i = 0; i < daysBack; i++) {
         const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-        const label = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        const label = dayNames[d.getDay()];
         labels.push(label);
         resultMap[label] = 0;
+        lineMap[label] = 0;
       }
 
       for (let i = 0; i < expenses.length; i++) {
         const d = expenses[i].parsedDate;
         if (d >= startDate && d <= now) {
-          const label = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-          if (resultMap[label] !== undefined) {
-            resultMap[label] += expenses[i].amount;
+          const label = dayNames[d.getDay()];
+          addData(label, expenses[i].amount);
+        }
+      }
+    } else if (spendingFilter === '2 Weeks') {
+      // 2 Weeks show in 2 days (7 data points)
+      const startDate = new Date(todayStart.getTime() - 13 * 24 * 60 * 60 * 1000);
+
+      for (let i = 0; i < 7; i++) {
+        const d1 = new Date(startDate.getTime() + (i * 2) * 24 * 60 * 60 * 1000);
+        const d2 = new Date(startDate.getTime() + (i * 2 + 1) * 24 * 60 * 60 * 1000);
+        const label = `${d1.getDate()}-${d2.getDate()}`;
+        labels.push(label);
+        resultMap[label] = 0;
+        lineMap[label] = 0;
+      }
+
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
+        if (d >= startDate && d <= now) {
+          const diffDays = Math.floor((d.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+          const index = Math.floor(diffDays / 2);
+          if (index >= 0 && index < 7) {
+            addData(labels[index], expenses[i].amount);
           }
+        }
+      }
+    } else if (spendingFilter === '3 Weeks') {
+      // 3 Weeks show in 3 days (7 data points)
+      const startDate = new Date(todayStart.getTime() - 20 * 24 * 60 * 60 * 1000);
+
+      for (let i = 0; i < 7; i++) {
+        const d1 = new Date(startDate.getTime() + (i * 3) * 24 * 60 * 60 * 1000);
+        const d2 = new Date(startDate.getTime() + (i * 3 + 2) * 24 * 60 * 60 * 1000);
+        const label = `${d1.getDate()}-${d2.getDate()}`;
+        labels.push(label);
+        resultMap[label] = 0;
+        lineMap[label] = 0;
+      }
+
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
+        if (d >= startDate && d <= now) {
+          const diffDays = Math.floor((d.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+          const index = Math.floor(diffDays / 3);
+          if (index >= 0 && index < 7) {
+            addData(labels[index], expenses[i].amount);
+          }
+        }
+      }
+    } else if (spendingFilter === 'This Month') {
+      // This Month show in weekly (4 weeks)
+      labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
+
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const day = d.getDate();
+          let weekIndex = Math.floor((day - 1) / 7);
+          if (weekIndex > 3) weekIndex = 3; // Put remaining days in Week 4
+          addData(labels[weekIndex], expenses[i].amount);
+        }
+      }
+    } else if (spendingFilter === 'This Year') {
+      // This Year show in monthly
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      labels = monthNames;
+      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
+
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
+        if (d.getFullYear() === now.getFullYear()) {
+          const month = monthNames[d.getMonth()];
+          addData(month, expenses[i].amount);
         }
       }
     }
@@ -307,7 +365,7 @@ export default function AnalyticsScreen() {
 
   const renderLegend = (data: any[]) => {
     return (
-      <View className="flex-row flex-wrap gap-2 mt-4 justify-center">
+      <View className="flex-row flex-wrap gap-2 mt-4 justify-left">
         {data.slice(0, 5).map((item, index) => (
           <View key={index} className="flex-row items-center mr-2">
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color, marginRight: 6 }} />
@@ -695,12 +753,12 @@ export default function AnalyticsScreen() {
       </View>
 
       {/* Spending Over Time Chart */}
-      <View className="px-1 mt-8">
+      <View className="px-1 mt-8 h-auto">
         <Text className="text-slate-900 dark:text-white text-lg font-bold px-2 mb-4">Spending Over Time</Text>
-        <View className="bg-white dark:bg-[#1e293b] py-6 px-4 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <View className="bg-white  dark:bg-[#1e293b] py-4 px-4 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
           {/* Pills */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 flex-row" contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-            {(['This Month', 'This Year', 'This Week', '2 Weeks', '3 Weeks', 'Today'] as SpendingPeriod[]).map(filter => {
+            {(['Today', 'This Week', '2 Weeks', '3 Weeks', 'This Month', 'This Year'] as SpendingPeriod[]).map(filter => {
               const isActive = spendingFilter === filter;
               return (
                 <TouchableOpacity
@@ -721,20 +779,30 @@ export default function AnalyticsScreen() {
             <View>
               <BarChart
                 data={spendingChartData.length > 0 ? spendingChartData : [{ value: 0, label: '' }]}
-                barWidth={18}
-                spacing={16}
+                showLine
+                lineConfig={{
+                  color: isDark ? '#60a5fa' : '#3b82f6',
+                  thickness: 1,
+                  curved: true,
+                  hideDataPoints: false,
+                  shiftY: 0,
+                  initialSpacing: 10,
+                }}
+                lineData={spendingChartData.length > 0 ? spendingChartData : [{ value: 0 }]}
+                barWidth={15}
+                spacing={30}
                 roundedTop
                 roundedBottom
                 hideRules
                 xAxisThickness={0}
                 yAxisThickness={0}
                 yAxisTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: '600' }}
-                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: '600' }}
+                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', padding: 2, fontSize: 10, fontWeight: '600', transform: [{ rotate: '45deg' }] }}
                 noOfSections={4}
                 maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.1}
                 frontColor={isDark ? '#ec4899' : '#f472b6'}
                 isAnimated
-                initialSpacing={10}
+                initialSpacing={17}
                 formatYLabel={(label: string) => {
                   const val = parseInt(label, 10);
                   if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
@@ -757,6 +825,7 @@ export default function AnalyticsScreen() {
                   <View className="flex-row items-center flex-1">
                     <View className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: cat.color }} />
                     <Text className="text-slate-900 dark:text-slate-300 text-sm font-medium flex-1">{cat.name}</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs mr-4">{cat.percentage.toFixed(1)}% of total</Text>
                     <Text className="text-slate-600 dark:text-slate-400 text-xs">{cat.count} txns</Text>
                   </View>
                 </View>
@@ -769,7 +838,6 @@ export default function AnalyticsScreen() {
                   </View>
                   <Text className="text-slate-900 dark:text-white font-bold w-24 text-right">{formatCurrency(cat.amount)}</Text>
                 </View>
-                <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1 ml-6">{cat.percentage.toFixed(1)}% of total</Text>
               </View>
             ))}
           </View>
@@ -813,62 +881,100 @@ export default function AnalyticsScreen() {
       <View className="px-6 mt-8 mb-8">
         <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">{currentYear} Summary</Text>
 
-        <View className="flex-col gap-6">
-          {/* Income Chart */}
-          <View className="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 items-center">
-            <Text className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-4 w-full text-left">Yearly Income</Text>
+        <View className="flex-row gap-4">
+
+          {/* Income Card */}
+          <View className="flex-1 bg-white dark:bg-[#0f172a] rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+
+            <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
+              Yearly Income
+            </Text>
+
             {yearlyStats.income.length > 0 ? (
               <>
-                <PieChart
-                  data={yearlyStats.income}
-                  donut
-                  showText={false}
-                  radius={80}
-                  innerRadius={60}
-                  innerCircleColor={innerCircleColor}
-                  centerLabelComponent={() => {
-                    return (
-                      <View className="items-center justify-center">
-                        <Text className="text-slate-900 dark:text-white text-xs font-bold">Total</Text>
-                        <Text className="text-slate-500 dark:text-slate-400 text-[10px]">{formatCurrency(yearlyStats.totalIncome)}</Text>
+                <View className="items-center justify-center mb-4">
+                  <PieChart
+                    data={yearlyStats.income}
+                    donut
+                    radius={65}
+                    innerRadius={45}
+                    focusOnPress
+                    animationDuration={600}
+                    strokeWidth={3}
+                    strokeColor={isDark ? "#0f172a" : "#ffffff"}
+                    innerCircleColor={innerCircleColor}
+                    centerLabelComponent={() => (
+                      <View className="items-center">
+                        <Text className="text-[12px] font-bold text-slate-900 dark:text-white">
+                          {formatCurrency(yearlyStats.totalIncome)}
+                        </Text>
+                        <Text className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                          Total
+                        </Text>
                       </View>
-                    );
-                  }}
-                />
-                {renderLegend(yearlyStats.income)}
+                    )}
+                  />
+                </View>
+
+                <View className="mt-2 align-left">
+                  {renderLegend(yearlyStats.income)}
+                </View>
               </>
             ) : (
-              <Text className="text-slate-400 dark:text-slate-500 py-8">No income data for {currentYear}</Text>
+              <View className="py-10 items-center">
+                <Text className="text-slate-400 dark:text-slate-500 text-sm">
+                  No income data for {currentYear}
+                </Text>
+              </View>
             )}
           </View>
 
-          {/* Expenditure Chart */}
-          <View className="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 items-center">
-            <Text className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-4 w-full text-left">Yearly Expenditure</Text>
+          {/* Expense Card */}
+          <View className="flex-1 bg-white dark:bg-[#0f172a] rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+
+            <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
+              Yearly Expenditure
+            </Text>
+
             {yearlyStats.expense.length > 0 ? (
               <>
-                <PieChart
-                  data={yearlyStats.expense}
-                  donut
-                  showText={false}
-                  radius={80}
-                  innerRadius={60}
-                  innerCircleColor={innerCircleColor}
-                  centerLabelComponent={() => {
-                    return (
-                      <View className="items-center justify-center">
-                        <Text className="text-slate-900 dark:text-white text-xs font-bold">Total</Text>
-                        <Text className="text-slate-500 dark:text-slate-400 text-[10px]">{formatCurrency(yearlyStats.totalExpense)}</Text>
+                <View className="items-center justify-center mb-4">
+                  <PieChart
+                    data={yearlyStats.expense}
+                    donut
+                    radius={65}
+                    innerRadius={45}
+                    focusOnPress
+                    animationDuration={600}
+                    strokeWidth={3}
+                    strokeColor={isDark ? "#0f172a" : "#ffffff"}
+                    innerCircleColor={innerCircleColor}
+                    centerLabelComponent={() => (
+                      <View className="items-center">
+                        <Text className="text-lg font-bold text-slate-900 dark:text-white">
+                          {formatCurrency(yearlyStats.totalExpense)}
+                        </Text>
+                        <Text className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                          Total
+                        </Text>
                       </View>
-                    );
-                  }}
-                />
-                {renderLegend(yearlyStats.expense)}
+                    )}
+                  />
+                </View>
+
+                <View className="text-left">
+                  {renderLegend(yearlyStats.expense)}
+                </View>
               </>
             ) : (
-              <Text className="text-slate-400 dark:text-slate-500 py-8">No expense data for {currentYear}</Text>
+              <View className="py-10 items-center">
+                <Text className="text-slate-400 dark:text-slate-500 text-sm">
+                  No expense data for {currentYear}
+                </Text>
+              </View>
             )}
           </View>
+
         </View>
       </View>
     </Animated.ScrollView>

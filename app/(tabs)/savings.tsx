@@ -1,12 +1,12 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { initDatabase } from '../../services/database';
+import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 
 export default function SavingsScreen() {
@@ -29,11 +29,17 @@ export default function SavingsScreen() {
         }
     };
 
-    useFocusEffect(
-        useCallback(() => {
-            loadGoals();
-        }, [])
-    );
+    useEffect(() => {
+        loadGoals();
+
+        const unsubscribe = subscribeToDatabaseChanges((type) => {
+            if (type === 'SAVINGS' || type === 'TRANSACTIONS') {
+                loadGoals();
+            }
+        });
+
+        return unsubscribe;
+    }, []);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);

@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
@@ -14,9 +15,9 @@ import { useAuth } from '../../services/AuthContext';
 import {
   deleteTransaction,
   getUserSettings,
+  initDatabase,
   saveRecipientCategory,
   subscribeToDatabaseChanges,
-  updateFulizaFees,
   updateTransactionCategory,
   updateTransactionDate
 } from '../../services/database';
@@ -140,9 +141,9 @@ export default function HomeScreen() {
 
     loadDebtSummary();
 
-    // Subscribe to transaction changes to refresh debt summary
+    // Subscribe to transaction/debt/savings changes to refresh debt summary
     const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'TRANSACTIONS') {
+      if (type === 'TRANSACTIONS' || type === 'DEBTS' || type === 'SAVINGS') {
         loadDebtSummary();
       }
     });
@@ -166,7 +167,7 @@ export default function HomeScreen() {
     loadIncomeLogs();
 
     const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'INCOME_LOGS') {
+      if (type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
         loadIncomeLogs();
       }
     });
@@ -187,7 +188,7 @@ export default function HomeScreen() {
           // FIRST LAUNCH: Dual-Stage Sync
           console.log('🚀 First launch: Starting Quick Start sync (30 days)...');
           await syncMessages(30);
-          await updateFulizaFees();
+          await debtService.updateFulizaFees();
           setHasPerformedSyncOnce(true);
           setAppIsLaunching(false);
 
@@ -195,16 +196,16 @@ export default function HomeScreen() {
           // Keep isSyncing true during background sync
           syncMessages(366).then(() => {
             console.log('✅ Deep sync complete.');
-            updateFulizaFees();
+            debtService.updateFulizaFees();
             setIsSyncing(false);
           }).catch(err => {
             console.error('Deep sync error:', err);
             setIsSyncing(false);
           });
         } else {
-          // NORMAL LAUNCH: Quick refresh
-          await syncMessages(7);
-          await updateFulizaFees();
+          // Wait for DB to be really ready
+          await initDatabase();
+          await debtService.updateFulizaFees();
           setIsSyncing(false);
           setHasPerformedSyncOnce(true);
           setAppIsLaunching(false);
@@ -223,7 +224,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     try {
       await syncMessages(30); // Full monthly sync on manual refresh
-      await updateFulizaFees();
+      await debtService.updateFulizaFees();
     } finally {
       setRefreshing(false);
     }
@@ -288,13 +289,39 @@ export default function HomeScreen() {
     let income = 0;
     let expense = 0;
     let cost = 0;
-    filteredTransactions.forEach((t: Transaction) => {
-      if (t.type === 'RECEIVED') {
-        income += t.amount;
+
+    const { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months } = dateRange;
+
+    // Calculate income from explicit Income logs based on the selected period
+    logs.forEach((l) => {
+      const logDate = new Date(l.receivedAt);
+      let isInPeriod = false;
+
+      if (selectedPeriod === 'THIS_MONTH') {
+        isInPeriod = logDate >= startOfThisMonth;
+      } else if (selectedPeriod === 'LAST_MONTH') {
+        isInPeriod = logDate >= startOfLastMonth && logDate <= endOfLastMonth;
+      } else if (selectedPeriod === 'LAST 3 MONTHS') {
+        isInPeriod = logDate >= startOfLast3Months;
+      } else if (selectedPeriod === 'CURRENT YEAR') {
+        isInPeriod = logDate >= startOfCurrentYear;
       } else {
-        expense += t.amount;
+        isInPeriod = true;
       }
-      cost += t.transactionCost || 0;
+
+      if (isInPeriod) {
+        income += l.amount;
+      }
+    });
+
+    filteredTransactions.forEach((t: Transaction) => {
+      const amount = Math.abs(t.amount || 0);
+      const fee = Math.abs(t.transactionCost || 0);
+
+      if (t.type !== 'RECEIVED') {
+        expense += amount;
+      }
+      cost += fee;
     });
 
     return {
@@ -302,7 +329,7 @@ export default function HomeScreen() {
       expense,
       cost
     };
-  }, [filteredTransactions, selectedPeriod]);
+  }, [filteredTransactions, logs, selectedPeriod, dateRange]);
 
   const handleTransactionPress = (tx: Transaction) => {
     // Fuliza transactions are automated and should not be manually categorized
@@ -510,7 +537,7 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text className="text-white text-4xl font-bold mb-2">
-            KES {formatCurrency(thisMonthTotal - periodSummary.expense)}
+            KES {formatCurrency(periodSummary.income - periodSummary.expense)}
           </Text>
 
           <View className="flex-row justify-between gap-3 mt-4">
@@ -686,12 +713,15 @@ export default function HomeScreen() {
 
       {/* Select Savings Goal Modal */}
       {savingsModalVisible && (
-        <View className="absolute z-50 top-0 left-0 right-0 bottom-0 bg-black/40 justify-end">
-          <View className="bg-white dark:bg-[#0f172a] rounded-t-[32px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
+        <View className="absolute z-50 top-0 left-0 right-0 bottom-[100px] bg-black/40 justify-end">
+          <View className="bg-white dark:bg-[#0f172a] rounded-t-[12px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
             <View className="flex-row justify-between flex-wrap gap-y-3 items-center mb-6">
               <Text className="text-xl font-bold text-slate-900 dark:text-white">Select a Savings Goal</Text>
               <TouchableOpacity onPress={() => { setSavingsModalVisible(false); setSelectedTransaction(null); }}>
-                <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
+                <Image
+                  source={require('../../assets/svg/close.svg')}
+                  style={{ width: 10, height: 10 }}
+                />
               </TouchableOpacity>
             </View>
             <Text className="text-slate-500 dark:text-slate-400 mb-4">

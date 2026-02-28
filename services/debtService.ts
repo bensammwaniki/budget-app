@@ -1,7 +1,8 @@
 import { Debt, DebtStatus } from '../types/debt';
 import { calculateFulizaDailyCharge } from '../utils/fulizaCalculator';
 import { generateUUID } from '../utils/uuid';
-import { getDb, initDatabase } from './core/db';
+import { getDb, initDatabase, notifyListeners } from './core/db';
+import { getCategoryIdByName } from './database';
 
 export const debtService = {
     /**
@@ -17,6 +18,7 @@ export const debtService = {
         interestRate?: number;
         startDate?: Date;
         dueDate?: Date;
+        isReducingBalance?: boolean;
     }): Promise<Debt> {
         await initDatabase();
         const db = getDb();
@@ -24,13 +26,18 @@ export const debtService = {
         const now = new Date().toISOString();
         const startDate = payload.startDate ? payload.startDate.toISOString() : now;
 
+        const flatInterest = (!payload.isReducingBalance && payload.interestRate)
+            ? payload.amount * (payload.interestRate / 100)
+            : 0;
+        const initialBalance = payload.amount + flatInterest;
+
         await db.withTransactionAsync(async () => {
             // 1. Create Debt Record
             await db.runAsync(`
                 INSERT INTO debts (
-                    id, user_id, account_id, name, type, principal_amount, current_balance, is_revolving,
+                    id, user_id, account_id, name, type, principal_amount, current_balance, is_revolving, is_reducing_balance,
                     interest_rate, status, start_date, due_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 debtId,
                 payload.userId,
@@ -38,8 +45,9 @@ export const debtService = {
                 payload.name,
                 payload.type,
                 payload.amount,
-                payload.amount,
+                initialBalance,
                 0,
+                payload.isReducingBalance ? 1 : 0,
                 payload.interestRate || null,
                 'ACTIVE',
                 startDate,
@@ -82,6 +90,8 @@ export const debtService = {
             }
         });
 
+        notifyListeners('DEBTS');
+
         return {
             id: debtId,
             userId: payload.userId,
@@ -89,11 +99,12 @@ export const debtService = {
             type: payload.type as 'LIABILITY' | 'RECEIVABLE',
             name: payload.name,
             principalAmount: payload.amount,
-            currentBalance: payload.amount,
+            currentBalance: initialBalance,
             interestRate: payload.interestRate,
             startDate: new Date(startDate),
             status: 'ACTIVE',
             isRevolving: false,
+            isReducingBalance: payload.isReducingBalance || false,
             createdAt: new Date(now),
             updatedAt: new Date(now),
             dueDate: payload.dueDate
@@ -115,9 +126,25 @@ export const debtService = {
             if (!tx) throw new Error("Transaction not found");
             if (tx.linked_debt_id) throw new Error("Transaction is already linked to a debt");
 
+            // Calculate dynamic accrued fees to capitalize
+            let dynamicFees = 0;
+            const lastUpdate = new Date(debt.updated_at).getTime();
+            const nowTime = new Date(now).getTime();
+            const diffDays = Math.floor((nowTime - lastUpdate) / 86400000);
+
+            if (diffDays > 0) {
+                if (debt.type === 'OVERDRAFT') {
+                    dynamicFees = calculateFulizaDailyCharge(debt.current_balance) * diffDays;
+                } else if (debt.is_reducing_balance && debt.interest_rate > 0) {
+                    dynamicFees = debt.current_balance * (debt.interest_rate / 100 / 365) * diffDays;
+                }
+            }
+
+            const adjustedBalance = debt.current_balance + dynamicFees;
             const paymentAmount = Math.abs(tx.amount);
-            if (paymentAmount > debt.current_balance) {
-                throw new Error(`Overpayment detected. Remaining balance is ${debt.current_balance}`);
+
+            if (paymentAmount > adjustedBalance) {
+                throw new Error(`Overpayment detected. Remaining total balance is ${adjustedBalance.toFixed(2)}`);
             }
 
             const paymentId = generateUUID();
@@ -126,7 +153,7 @@ export const debtService = {
                 VALUES (?, ?, ?, ?, ?, ?)
             `, [paymentId, payload.debtId, payload.transactionId, paymentAmount, tx.date, now]);
 
-            const newBalance = debt.current_balance - paymentAmount;
+            const newBalance = adjustedBalance - paymentAmount;
             const newStatus = newBalance <= 0 ? 'PAID' : 'ACTIVE';
 
             await db.runAsync(`
@@ -135,12 +162,16 @@ export const debtService = {
                 WHERE id = ?
             `, [newBalance, newStatus, now, payload.debtId]);
 
+            const debtRepaymentCategoryId = await getCategoryIdByName('Debt Repayment');
+
             await db.runAsync(`
                 UPDATE transactions
-                SET transaction_kind = 'DEBT_REPAYMENT', linked_debt_id = ?
+                SET transaction_kind = 'DEBT_REPAYMENT', linked_debt_id = ?, category_id = ?
                 WHERE id = ?
-            `, [payload.debtId, payload.transactionId]);
+            `, [payload.debtId, debtRepaymentCategoryId, payload.transactionId]);
         });
+
+        notifyListeners('TRANSACTIONS');
     },
 
     /**
@@ -196,10 +227,12 @@ export const debtService = {
 
             await db.runAsync(`
                 UPDATE transactions
-                SET transaction_kind = ?, linked_debt_id = NULL
+                SET transaction_kind = ?, linked_debt_id = NULL, category_id = NULL
                 WHERE id = ?
             `, [kind, transactionId]);
         });
+
+        notifyListeners('TRANSACTIONS');
     },
 
     async getDebts(userId: string = 'local_user', filter?: DebtStatus, type?: 'LIABILITY' | 'RECEIVABLE' | 'OVERDRAFT'): Promise<Debt[]> {
@@ -229,13 +262,16 @@ export const debtService = {
     },
 
     async getOutstandingTotal(userId: string = 'local_user'): Promise<number> {
+        // Fetch mapped debts so accrued fees and flat interests are computed natively
+        const debts = await this.getDebts(userId, 'ACTIVE');
+        return debts.reduce((sum, d) => sum + d.currentBalance + (d.accruedFees || 0), 0);
+    },
+
+    async deleteDebt(debtId: string) {
         await initDatabase();
         const db = getDb();
-        const result = await db.getFirstAsync<{ total: number }>(
-            "SELECT SUM(current_balance) as total FROM debts WHERE user_id = ? AND status = 'ACTIVE'",
-            [userId]
-        );
-        return result?.total || 0;
+        await db.runAsync("DELETE FROM debts WHERE id = ?", [debtId]);
+        notifyListeners('DEBTS');
     },
 
     async getPotentialMatches(debtId: string): Promise<any[]> {
@@ -351,8 +387,8 @@ export const debtService = {
             await db.runAsync(`
                 INSERT INTO debts (
                     id, user_id, name, principal_amount, current_balance, 
-                    type, status, is_revolving, created_at, updated_at
-                ) VALUES (?, ?, 'Fuliza', 0, 0, 'OVERDRAFT', 'ACTIVE', 1, ?, ?)
+                    type, status, is_revolving, is_reducing_balance, created_at, updated_at
+                ) VALUES (?, ?, 'Fuliza', 0, 0, 'OVERDRAFT', 'ACTIVE', 1, 0, ?, ?)
             `, [id, userId, now, now]);
 
             debt = await db.getFirstAsync<any>(
@@ -372,6 +408,7 @@ export const debtService = {
             "UPDATE debts SET current_balance = current_balance + ?, updated_at = ? WHERE id = ?",
             [amount, now, debtId]
         );
+        notifyListeners('DEBTS');
     },
 
     async reduceDebtAmount(debtId: string, amount: number) {
@@ -382,6 +419,7 @@ export const debtService = {
             "UPDATE debts SET current_balance = MAX(0, current_balance - ?), updated_at = ? WHERE id = ?",
             [amount, now, debtId]
         );
+        notifyListeners('DEBTS');
     },
 
     async updateDebtBalance(debtId: string, balance: number) {
@@ -392,6 +430,23 @@ export const debtService = {
             "UPDATE debts SET current_balance = ?, updated_at = ? WHERE id = ?",
             [balance, now, debtId]
         );
+        notifyListeners('DEBTS');
+    },
+
+    /**
+     * Periodically called during sync/launch to apply accrued interest/maintenance
+     * fees for any active overdraft debts.
+     */
+    async updateFulizaFees() {
+        try {
+            const fulizaDebt = await this.getOrCreateFulizaDebt();
+            if (fulizaDebt && fulizaDebt.status === 'ACTIVE' && fulizaDebt.currentBalance > 0) {
+                // Reconcile will internally check latest SMS balance if available
+                await this.reconcileFulizaBalance();
+            }
+        } catch (e) {
+            console.error('Error updating Fuliza fees:', e);
+        }
     },
 
     async reconcileFulizaBalance() {
@@ -426,14 +481,30 @@ export const debtService = {
 
 const mapRowToDebt = (row: any): Debt => {
     let accruedFees = 0;
-    if (row.type === 'OVERDRAFT' && row.status === 'ACTIVE' && row.current_balance > 0) {
+
+    if (row.status === 'ACTIVE' && row.current_balance > 0) {
         const lastUpdate = new Date(row.updated_at);
         const now = new Date();
         const diffTime = Math.abs(now.getTime() - lastUpdate.getTime());
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays > 0) {
-            accruedFees = calculateFulizaDailyCharge(row.current_balance) * diffDays;
+            if (row.type === 'OVERDRAFT') {
+                accruedFees = calculateFulizaDailyCharge(row.current_balance) * diffDays;
+            } else if (row.is_reducing_balance && row.interest_rate > 0) {
+                accruedFees = row.current_balance * (row.interest_rate / 100 / 365) * diffDays;
+            }
+        }
+    }
+
+    let projectedInterest = 0;
+    if (row.status === 'ACTIVE' && row.is_reducing_balance && row.interest_rate > 0 && row.due_date) {
+        const dueDate = new Date(row.due_date);
+        const now = new Date();
+        if (dueDate > now) {
+            const diffTime = dueDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            projectedInterest = row.current_balance * (row.interest_rate / 100 / 365) * diffDays;
         }
     }
 
@@ -446,12 +517,14 @@ const mapRowToDebt = (row: any): Debt => {
         principalAmount: row.principal_amount,
         currentBalance: row.current_balance,
         isRevolving: !!row.is_revolving,
+        isReducingBalance: !!row.is_reducing_balance,
         interestRate: row.interest_rate,
         status: row.status as DebtStatus,
         startDate: new Date(row.start_date),
         dueDate: row.due_date ? new Date(row.due_date) : undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
-        accruedFees
+        accruedFees,
+        projectedInterest
     };
 };

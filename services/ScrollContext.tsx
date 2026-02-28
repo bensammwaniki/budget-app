@@ -8,7 +8,7 @@ const ScrollContext = createContext<{
 } | null>(null);
 
 export function ScrollProvider({ children }: { children: React.ReactNode }) {
-    const tabBarVisible = useSharedValue(0); // 0 = hidden, 1 = shown
+    const tabBarVisible = useSharedValue(1); // 0 = hidden, 1 = shown
 
     const showTabBar = () => {
         'worklet';
@@ -17,7 +17,9 @@ export function ScrollProvider({ children }: { children: React.ReactNode }) {
 
     const hideTabBar = () => {
         'worklet';
-        tabBarVisible.value = withTiming(0, { duration: 300 });
+        // Disabled hiding logic as per request to keep it permanently visible
+        // tabBarVisible.value = withTiming(0, { duration: 300 });
+        tabBarVisible.value = withTiming(1, { duration: 300 });
     };
 
     return (

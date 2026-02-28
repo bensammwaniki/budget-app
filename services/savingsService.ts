@@ -1,6 +1,6 @@
 import { generateUUID } from '../utils/uuid';
-import { getDb } from './core/db';
-import { getTransactions } from './database';
+import { getDb, notifyListeners } from './core/db';
+import { getCategoryIdByName, getTransactions } from './database';
 
 export interface SavingsGoal {
     id: string;
@@ -44,6 +44,8 @@ export const savingsService = {
             id, userId, data.name, data.targetAmount, data.targetDate || null, data.color || null, now, now
         ]);
 
+        notifyListeners('SAVINGS');
+
         return (await this.getGoalById(id))!;
     },
 
@@ -67,11 +69,13 @@ export const savingsService = {
         values.push(id);
 
         await db.runAsync(`UPDATE savings_goals SET ${setClauses.join(', ')} WHERE id = ?`, values);
+        notifyListeners('SAVINGS');
     },
 
     async deleteGoal(id: string): Promise<void> {
         const db = getDb();
         await db.runAsync('DELETE FROM savings_goals WHERE id = ?', [id]);
+        notifyListeners('SAVINGS');
     },
 
     async transferToSavings(goalId: string, amount: number, sourceAccountId: string): Promise<void> {
@@ -83,14 +87,16 @@ export const savingsService = {
         if (!goal) throw new Error('Goal not found');
 
         await db.withTransactionAsync(async () => {
+            const savingsCategoryId = await getCategoryIdByName('Savings');
+
             // 1. Create a transaction for the deposit
             await db.runAsync(`
                 INSERT INTO transactions (
-                    id, uuid, user_id, account_id, amount, type, transaction_kind, 
+                    id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, 
                     recipient_name, date, is_deleted, linked_goal_id, created_at, updated_at
-                ) VALUES (?, ?, 'local_user', ?, ?, 'SENT', 'SAVINGS_TRANSFER', ?, ?, 0, ?, ?, ?)
+                ) VALUES (?, ?, 'local_user', ?, ?, ?, 'SENT', 'SAVINGS_TRANSFER', ?, ?, 0, ?, ?, ?)
             `, [
-                txId, txId, sourceAccountId, amount,
+                txId, txId, sourceAccountId, savingsCategoryId, amount,
                 `Transfer to ${goal.name}`, now, goalId, now, now
             ]);
 
@@ -112,6 +118,8 @@ export const savingsService = {
                 [newBalance, status, now, goalId]
             );
         });
+
+        notifyListeners('TRANSACTIONS');
     },
 
     async linkTransactionToGoal(goalId: string, transactionId: string): Promise<void> {
@@ -128,12 +136,14 @@ export const savingsService = {
         if (txCheck.type !== 'SENT') throw new Error("Only OUTGOING transactions can be linked to savings");
 
         await db.withTransactionAsync(async () => {
+            const savingsCategoryId = await getCategoryIdByName('Savings');
+
             // 1. Update the transaction to link it
             await db.runAsync(`
                 UPDATE transactions 
-                SET linked_goal_id = ?, updated_at = ? 
+                SET linked_goal_id = ?, category_id = ?, updated_at = ? 
                 WHERE id = ?
-            `, [goalId, now, transactionId]);
+            `, [goalId, savingsCategoryId, now, transactionId]);
 
             // 2. Increment the goal balance
             const newBalance = goal.currentAmount + txCheck.amount;
@@ -148,6 +158,8 @@ export const savingsService = {
                 WHERE id = ?
             `, [newBalance, status, now, goalId]);
         });
+
+        notifyListeners('TRANSACTIONS');
     },
 
     async unlinkTransactionFromGoal(transactionId: string): Promise<void> {
@@ -166,7 +178,7 @@ export const savingsService = {
             // 1. Remove link from transaction
             await db.runAsync(`
                 UPDATE transactions 
-                SET linked_goal_id = NULL, updated_at = ? 
+                SET linked_goal_id = NULL, category_id = NULL, updated_at = ? 
                 WHERE id = ?
             `, [now, transactionId]);
 
@@ -183,6 +195,8 @@ export const savingsService = {
                 WHERE id = ?
             `, [newBalance, status, now, goalId]);
         });
+
+        notifyListeners('TRANSACTIONS');
     },
 
     async getGoalHistory(goalId: string) {
