@@ -1,10 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IncomeFrequency, incomeService } from '../../services/incomeService';
 
@@ -28,6 +29,8 @@ export default function AddIncomeSourceScreen() {
     const [selectedColor, setSelectedColor] = useState(COLORS[0]);
     const [isRecurring, setIsRecurring] = useState(true);
     const [loading, setLoading] = useState(false);
+    const [incomeDate, setIncomeDate] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const handleSave = async () => {
         if (!name.trim()) {
@@ -49,6 +52,8 @@ export default function AddIncomeSourceScreen() {
                 frequency,
                 color: selectedColor,
                 isRecurring,
+                initialAmount: amount, // Use the expected amount as initial log if provided
+                initialDate: incomeDate.toISOString(),
             });
             router.back();
         } catch (e) {
@@ -114,8 +119,8 @@ export default function AddIncomeSourceScreen() {
                                 key={f.value}
                                 onPress={() => setFrequency(f.value)}
                                 className={`flex-row items-center px-4 py-1 rounded-full border gap-1 ${frequency === f.value
-                                        ? 'border-emerald-600'
-                                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
+                                    ? 'border-emerald-600'
+                                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
                                     }`}
                                 style={frequency === f.value ? { backgroundColor: `${selectedColor}20`, borderColor: selectedColor } : {}}
                             >
@@ -127,21 +132,50 @@ export default function AddIncomeSourceScreen() {
                         ))}
                     </View>
 
+                    {/* Income Date */}
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Income Date</Text>
+                    <TouchableOpacity
+                        onPress={() => setShowDatePicker(true)}
+                        className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-3 mb-6 border border-slate-200 dark:border-slate-700"
+                    >
+                        <FontAwesome name="calendar" size={16} color={selectedColor} className="mr-3" />
+                        <Text className="text-slate-900 dark:text-white font-semibold ml-2">
+                            {incomeDate.toLocaleDateString(undefined, { dateStyle: 'long' })}
+                        </Text>
+                        <View className="flex-1" />
+                        <FontAwesome name="chevron-down" size={12} color="#94a3b8" />
+                    </TouchableOpacity>
+
+                    {showDatePicker && (
+                        <DateTimePicker
+                            value={incomeDate}
+                            mode="date"
+                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                            onChange={(event, selectedDate) => {
+                                setShowDatePicker(Platform.OS === 'ios');
+                                if (selectedDate) {
+                                    setIncomeDate(selectedDate);
+                                }
+                            }}
+                            maximumDate={new Date()}
+                        />
+                    )}
+
                     {/* Recurring Toggle */}
                     <View className="flex-row items-center justify-between mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <View>
                             <Text className="font-bold text-slate-900 dark:text-white">Recurring Income</Text>
                             <Text className="text-slate-400 text-xs mt-0.5">Track this as a regular income stream</Text>
                         </View>
-                            <Switch
-                                value={isRecurring}
-                                onValueChange={setIsRecurring}
-                                trackColor={{
-                                    false: '#cbd5e1',
-                                    true: selectedColor,
-                                }}
-                                thumbColor="#ffffff"
-                            />
+                        <Switch
+                            value={isRecurring}
+                            onValueChange={setIsRecurring}
+                            trackColor={{
+                                false: '#cbd5e1',
+                                true: selectedColor,
+                            }}
+                            thumbColor="#ffffff"
+                        />
                     </View>
 
                     {/* Color */}

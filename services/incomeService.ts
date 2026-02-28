@@ -1,6 +1,6 @@
 import { generateUUID } from '../utils/uuid';
 import { getDb } from './core/db';
-import { getTransactions } from './database';
+import { getTransactions, notifyListeners } from './database';
 
 export type IncomeFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'IRREGULAR';
 
@@ -38,7 +38,10 @@ export interface DetectedIncomePattern {
     transactionIds: string[];
 }
 
-export type CreateIncomeSourceDTO = Omit<IncomeSource, 'id' | 'userId' | 'status' | 'lastReceived' | 'createdAt' | 'updatedAt'>;
+export type CreateIncomeSourceDTO = Omit<IncomeSource, 'id' | 'userId' | 'status' | 'lastReceived' | 'createdAt' | 'updatedAt'> & {
+    initialAmount?: number;
+    initialDate?: string;
+};
 
 export const incomeService = {
     // ─── Sources ────────────────────────────────────────────────────────────
@@ -75,7 +78,15 @@ export const incomeService = {
             now, now
         ]);
 
-        return (await this.getSourceById(id))!;
+        const source = (await this.getSourceById(id))!;
+
+        // Handle initial backdated log if provided
+        if (data.initialAmount && data.initialAmount > 0) {
+            const logDate = data.initialDate || now;
+            await this.logIncome(id, data.initialAmount, logDate, undefined, 'Initial backdated amount');
+        }
+
+        return source;
     },
 
     async updateSource(id: string, updates: Partial<CreateIncomeSourceDTO & { status: IncomeSource['status'] }>): Promise<void> {
@@ -131,6 +142,8 @@ export const incomeService = {
             UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?
         `, [receivedAt, now, sourceId]);
 
+        notifyListeners('INCOME_LOGS');
+
         const row = await db.getFirstAsync<any>('SELECT * FROM income_logs WHERE id = ?', [id]);
         return this.mapDbToLog(row!);
     },
@@ -150,6 +163,7 @@ export const incomeService = {
 
         const receivedAt = tx.date ?? new Date().toISOString();
         await this.logIncome(sourceId, tx.amount, receivedAt, transactionId);
+        notifyListeners('INCOME_LOGS');
     },
 
     // ─── Auto-Detect ────────────────────────────────────────────────────────

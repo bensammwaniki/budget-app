@@ -15,7 +15,7 @@ export const ensureDb = (): SQLite.SQLiteDatabase => {
 };
 
 // Reactive Subscription Logic
-export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS';
+export type DatabaseChangeType = 'TRANSACTIONS' | 'CATEGORIES' | 'BUDGETS' | 'SETTINGS' | 'INCOME_LOGS';
 type DatabaseChangeListener = (type: DatabaseChangeType) => void;
 let listeners: DatabaseChangeListener[] = [];
 

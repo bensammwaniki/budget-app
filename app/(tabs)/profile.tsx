@@ -1,16 +1,15 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { Image as ExpoImage } from 'expo-image';
-import { Image } from 'expo-image';
+import { Image as ExpoImage, Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, InteractionManager, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, InteractionManager, Modal, RefreshControl, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
-import { deleteCategory, getCategories } from '../../services/database';
+import { deleteCategory, getCategories, initDatabase } from '../../services/database';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
 
@@ -46,6 +45,7 @@ export default function ProfileScreen() {
     const [editName, setEditName] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [editImage, setEditImage] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Load categories when screen is focused
     useFocusEffect(
@@ -67,6 +67,7 @@ export default function ProfileScreen() {
     }, [editProfileVisible, user, phoneNumber]);
 
     const loadCategories = async () => {
+        await initDatabase();
         const cats = await getCategories();
         setCategories(cats);
     };
@@ -75,6 +76,16 @@ export default function ProfileScreen() {
         await loadCategories();
         Alert.alert('Success', 'Category added successfully');
     };
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await loadCategories();
+            // Could add other reloads here if user data refreshes manually
+        } finally {
+            setRefreshing(false);
+        }
+    }, []);
 
     const handleDeleteCategory = (id: number) => {
         Alert.alert(
@@ -180,6 +191,7 @@ export default function ProfileScreen() {
             contentContainerStyle={{ paddingBottom: 120 }}
             onScroll={handleScroll}
             scrollEventThrottle={16}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />}
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
@@ -222,7 +234,7 @@ export default function ProfileScreen() {
                         { icon: require('../../assets/svg/automation.svg'), label: 'Create An Automation Rule', color: '#8b5cf6', action: () => router.push('/automation') },
                         { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                         { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
-                        ].map((item, index, arr) => (
+                    ].map((item, index, arr) => (
                         <TouchableOpacity
                             key={index}
                             onPress={item.action ? item.action : undefined}

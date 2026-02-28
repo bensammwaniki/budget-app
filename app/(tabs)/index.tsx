@@ -9,7 +9,7 @@ import CategorizationModal from '../../components/CategorizationModal';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
 import TransactionItem from '../../components/TransactionItem';
 import { useAlert } from '../../context/AlertContext';
-import { useSpendingSummary, useTransactions } from '../../hooks/useDatabase';
+import { useTransactions } from '../../hooks/useDatabase';
 import { useAuth } from '../../services/AuthContext';
 import {
   deleteTransaction,
@@ -21,7 +21,7 @@ import {
   updateTransactionDate
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
-import { IncomeSource, incomeService } from '../../services/incomeService';
+import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
@@ -40,8 +40,7 @@ export default function HomeScreen() {
   const lastScrollY = useSharedValue(0);
 
   // Use Reactive Hooks
-  const { transactions: allTransactions, loading: txLoading } = useTransactions();
-  const { summary: spending, loading: summaryLoading } = useSpendingSummary();
+  const { transactions: allTransactions } = useTransactions();
 
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('THIS_MONTH');
   const [refreshing, setRefreshing] = useState(false);
@@ -52,7 +51,30 @@ export default function HomeScreen() {
   const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
+  const [logs, setLogs] = useState<IncomeLog[]>([]);
 
+  const formatCurrency = (amount: number) => {
+    return amount.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+  };
+
+  // Calculate statistics
+  const { thisMonthTotal, lastMonthTotal } = useMemo(() => {
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    const thisTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth).reduce((sum, l) => sum + l.amount, 0);
+    const lastTotal = logs.filter(l => {
+      const d = new Date(l.receivedAt);
+      return d >= startOfLastMonth && d <= endOfLastMonth;
+    }).reduce((sum, l) => sum + l.amount, 0);
+
+    return { thisMonthTotal: thisTotal, lastMonthTotal: lastTotal };
+  }, [logs]);
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -77,8 +99,6 @@ export default function HomeScreen() {
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
 
-  // Force skeleton during initial mount until the first sync batch (30 days or quick refresh) is done
-  const initialLoading = appIsLaunching && !hasPerformedSyncOnce;
 
   // Load bank settings and subscribe to changes
   useEffect(() => {
@@ -124,6 +144,30 @@ export default function HomeScreen() {
     const unsubscribe = subscribeToDatabaseChanges((type) => {
       if (type === 'TRANSACTIONS') {
         loadDebtSummary();
+      }
+    });
+
+    return unsubscribe;
+  }, [dbReady]);
+
+  // Load income logs
+  useEffect(() => {
+    if (!dbReady) return;
+
+    const loadIncomeLogs = async () => {
+      try {
+        const fetchedLogs = await incomeService.getLogs();
+        setLogs(fetchedLogs);
+      } catch (error) {
+        console.error('Error loading income logs:', error);
+      }
+    };
+
+    loadIncomeLogs();
+
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'INCOME_LOGS') {
+        loadIncomeLogs();
       }
     });
 
@@ -238,18 +282,12 @@ export default function HomeScreen() {
     return filtered;
   }, [allTransactions, selectedPeriod, dateRange, imBankEnabled]);
 
-  // Fuliza Fees for the selected period
-  const periodFulizaFees = useMemo(() => {
-    return filteredTransactions.filter(t => t.id.startsWith('FULIZA-FEES-'));
-  }, [filteredTransactions]);
 
   // Calculate summary statistics for the selected period
   const periodSummary = useMemo(() => {
     let income = 0;
     let expense = 0;
     let cost = 0;
-    let fulizaBalance = 0;
-
     filteredTransactions.forEach((t: Transaction) => {
       if (t.type === 'RECEIVED') {
         income += t.amount;
@@ -264,9 +302,16 @@ export default function HomeScreen() {
       expense,
       cost
     };
-  }, [filteredTransactions, spending, selectedPeriod]);
+  }, [filteredTransactions, selectedPeriod]);
 
   const handleTransactionPress = (tx: Transaction) => {
+    // Fuliza transactions are automated and should not be manually categorized
+    const isFuliza = tx.recipientId === 'FULIZA_REPAYMENT' ||
+      tx.id?.startsWith('FULIZA-FEES-') ||
+      tx.categoryId === 12;
+
+    if (isFuliza) return;
+
     setSelectedTransaction(tx);
     setModalVisible(true);
   };
@@ -423,14 +468,11 @@ export default function HomeScreen() {
     },
   });
 
-  // if (initialLoading) {
-  //   return <HomeSkeleton />;
-  // }
 
   const renderHeader = () => (
     <View>
-      <View className="px-6 pt-16 pb-8 bg-white dark:bg-[#0f172a] rounded-b-[32px] border-b border-gray-200 dark:border-slate-800 shadow-lg shadow-black/5">
-        <View className="flex-row justify-between items-center mb-8">
+      <View className="px-6 pt-16 pb-4 bg-white dark:bg-[#0f172a] rounded-b-[12px]">
+        <View className="flex-row justify-between items-center mb-4">
           <View>
             <View className="flex-row items-center gap-2">
               <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium">
@@ -451,7 +493,7 @@ export default function HomeScreen() {
               )}
             </View>
 
-            <Text className="text-slate-900 dark:text-white text-3xl font-bold mt-1">{firstName}! 👋</Text>
+            <Text className="text-slate-900 dark:text-white text-xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
         </View>
 
@@ -468,7 +510,7 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text className="text-white text-4xl font-bold mb-2">
-            KES {spending?.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+            KES {formatCurrency(thisMonthTotal - periodSummary.expense)}
           </Text>
 
           <View className="flex-row justify-between gap-3 mt-4">
@@ -483,11 +525,11 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-xl border border-gray-200 dark:border-slate-700 mt-6">
+        <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6">
           {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR'] as Period[]).map((period) => (
             <TouchableOpacity
               key={period}
-              className={`flex-1 px-3 py-2 rounded-lg ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
+              className={`flex-1 px-1 py-2 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
               onPress={() => {
                 setPeriodLoading(true);
                 setDisplayLimit(20);

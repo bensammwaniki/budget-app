@@ -161,7 +161,7 @@ export const syncMessages = async (days: number = 30) => {
                                     date: fulizaRepayment.date,
                                     balance: fulizaRepayment.accountBalance,
                                     transactionCost: 0,
-                                    categoryId: undefined,
+                                    categoryId: 12, // Fuliza Charges
                                     rawSms: fulizaRepayment.rawSms,
                                     createdAt: new Date(),
                                     updatedAt: new Date(),

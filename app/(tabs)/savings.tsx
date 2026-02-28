@@ -4,19 +4,22 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { initDatabase } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 
 export default function SavingsScreen() {
     const [goals, setGoals] = useState<SavingsGoal[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
 
     const loadGoals = async () => {
         try {
+            await initDatabase();
             const data = await savingsService.getGoals('local_user');
             setGoals(data);
         } catch (error) {
@@ -31,6 +34,12 @@ export default function SavingsScreen() {
             loadGoals();
         }, [])
     );
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadGoals();
+        setRefreshing(false);
+    }, []);
 
     const totalSaved = goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
     const totalTarget = goals.reduce((sum, goal) => sum + goal.targetAmount, 0);
@@ -118,7 +127,7 @@ export default function SavingsScreen() {
                 <TouchableOpacity
                     onPress={() => router.push('/savings/add')}
                     className="p-4 -ml-2 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center"
-                    >
+                >
                     <Image
                         source={require('../../assets/svg/plus.svg')}
                         style={{ width: 18, height: 18 }}
@@ -179,6 +188,9 @@ export default function SavingsScreen() {
                     renderItem={renderGoal}
                     contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />
+                    }
                 />
             )}
         </View>

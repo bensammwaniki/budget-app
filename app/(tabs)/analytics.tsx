@@ -1,12 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
-// Removing all navigation hook imports to avoid the context render crash
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
-import { getTransactions } from '../../services/database';
+import { getTransactions, initDatabase } from '../../services/database';
 import { ForecastResult, forecastService } from '../../services/forecastService';
 import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
@@ -15,6 +14,7 @@ import { Transaction } from '../../types/transaction';
 
 type SpendingPeriod = 'Today' | 'This Week' | '2 Weeks' | '3 Weeks' | 'This Month' | 'This Year';
 
+import { router } from 'expo-router';
 import { useColorScheme } from "nativewind";
 
 export default function AnalyticsScreen() {
@@ -31,6 +31,7 @@ export default function AnalyticsScreen() {
   const [trends, setTrends] = useState<CategoryTrend[]>([]);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [insightsTab, setInsightsTab] = useState<'overview' | 'trends' | 'forecast'>('overview');
+  const [refreshing, setRefreshing] = useState(false);
 
   const { tabBarVisible } = useScrollVisibility();
   const lastScrollY = useSharedValue(0); const handleScroll = useAnimatedScrollHandler({
@@ -48,28 +49,39 @@ export default function AnalyticsScreen() {
     },
   });
   const loadData = useCallback(async () => {
-    const allTransactions = await getTransactions();
-    setTransactions(allTransactions);
-
-    // Load intelligence data in parallel
     try {
-      const [kMetrics, kTrends, kForecast, fetchedLogs] = await Promise.all([
-        insightsService.getKeyMetrics('local_user', allTransactions),
-        insightsService.getCategoryTrends(allTransactions),
-        forecastService.forecast(allTransactions),
-        incomeService.getLogs(),
-      ]);
-      setMetrics(kMetrics);
-      setTrends(kTrends);
-      setForecast(kForecast);
-      setLogs(fetchedLogs);
-    } catch (e) {
-      console.warn('Insights load failed:', e);
+      await initDatabase();
+      const allTransactions = await getTransactions();
+      setTransactions(allTransactions);
+
+      // Load intelligence data in parallel
+      try {
+        const [kMetrics, kTrends, kForecast, fetchedLogs] = await Promise.all([
+          insightsService.getKeyMetrics('local_user', allTransactions),
+          insightsService.getCategoryTrends(allTransactions),
+          forecastService.forecast(allTransactions),
+          incomeService.getLogs(),
+        ]);
+        setMetrics(kMetrics);
+        setTrends(kTrends);
+        setForecast(kForecast);
+        setLogs(fetchedLogs);
+      } catch (e) {
+        console.warn('Insights load failed:', e);
+      }
+    } catch (error) {
+      console.error('Failed to load analytics data:', error);
     }
   }, []);
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
   }, [loadData]);
 
   // Generate last 12 months
@@ -198,49 +210,55 @@ export default function AnalyticsScreen() {
   }, [transactions, currentYear]);
 
   const spendingChartData = useMemo(() => {
-    const expenses = transactions.filter(t => t.type === 'SENT');
+    // 1. Pre-filter and pre-parse dates to avoid repeated `new Date()` calls in loops
+    const expenses = transactions
+      .filter(t => t.type === 'SENT')
+      .map(t => ({
+        ...t,
+        parsedDate: t.date instanceof Date ? t.date : new Date(t.date)
+      }));
+
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const resultMap: Record<string, number> = {};
     let labels: string[] = [];
-
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     if (spendingFilter === 'Today') {
       labels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
       labels.forEach(l => resultMap[l] = 0);
 
-      expenses.forEach(t => {
-        const d = new Date(t.date);
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
         if (d >= todayStart) {
           const hour = `${d.getHours().toString().padStart(2, '0')}:00`;
-          if (resultMap[hour] !== undefined) resultMap[hour] += t.amount;
+          if (resultMap[hour] !== undefined) resultMap[hour] += expenses[i].amount;
         }
-      });
+      }
     } else if (spendingFilter === 'This Month') {
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString().padStart(2, '0'));
       labels.forEach(l => resultMap[l] = 0);
 
-      expenses.forEach(t => {
-        const d = new Date(t.date);
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
         if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
           const day = d.getDate().toString().padStart(2, '0');
-          if (resultMap[day] !== undefined) resultMap[day] += t.amount;
+          if (resultMap[day] !== undefined) resultMap[day] += expenses[i].amount;
         }
-      });
+      }
     } else if (spendingFilter === 'This Year') {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       labels = monthNames;
       labels.forEach(l => resultMap[l] = 0);
 
-      expenses.forEach(t => {
-        const d = new Date(t.date);
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
         if (d.getFullYear() === now.getFullYear()) {
           const month = monthNames[d.getMonth()];
-          if (resultMap[month] !== undefined) resultMap[month] += t.amount;
+          if (resultMap[month] !== undefined) resultMap[month] += expenses[i].amount;
         }
-      });
+      }
     } else {
       let daysBack = 7;
       if (spendingFilter === '2 Weeks') daysBack = 14;
@@ -255,24 +273,37 @@ export default function AnalyticsScreen() {
         resultMap[label] = 0;
       }
 
-      expenses.forEach(t => {
-        const d = new Date(t.date);
+      for (let i = 0; i < expenses.length; i++) {
+        const d = expenses[i].parsedDate;
         if (d >= startDate && d <= now) {
           const label = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
           if (resultMap[label] !== undefined) {
-            resultMap[label] += t.amount;
+            resultMap[label] += expenses[i].amount;
           }
         }
-      });
+      }
     }
 
-    return labels.map(label => ({
-      value: resultMap[label],
-      label: label,
-      frontColor: '#f472b6',
-    }));
+    // Determine max value to scale colors slightly if desired
+    const maxVal = Math.max(...Object.values(resultMap), 1);
 
-  }, [transactions, spendingFilter]);
+    return labels.map(label => {
+      const val = resultMap[label];
+      // Dynamic color based on value relative to max, adds visual interest
+      const intensity = val > 0 ? (val / maxVal) : 0;
+      const frontColor = intensity > 0.7 ? '#ec4899' : (intensity > 0.3 ? '#f472b6' : '#fbcfe8');
+
+      return {
+        value: val,
+        label: label,
+        frontColor: isDark ? (intensity > 0.7 ? '#ec4899' : (intensity > 0.3 ? '#f472b6' : '#9d174d')) : frontColor,
+        topLabelComponent: () => (
+          val > 0 ? <Text style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 8, marginBottom: 2 }}>{val > 1000 ? `${(val / 1000).toFixed(1)}k` : val}</Text> : null
+        )
+      };
+    });
+
+  }, [transactions, spendingFilter, isDark]);
 
   const renderLegend = (data: any[]) => {
     return (
@@ -329,6 +360,7 @@ export default function AnalyticsScreen() {
       contentContainerStyle={{ paddingBottom: 120 }}
       // onScroll={handleScroll}
       scrollEventThrottle={16}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? '#fff' : '#000'} />}
     >
       <StatusBar style="light" />
 
@@ -623,18 +655,21 @@ export default function AnalyticsScreen() {
       {/* Summary Cards */}
       <View className="px-6 mt-6">
         <View className="flex-row gap-3 mb-4">
-          <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
-            <View className="flex-row items-center mb-2">
-              <Image
-                source={require('../../assets/svg/income.svg')}
-                style={{ width: 20, height: 20 }}
-                tintColor={"#10b981"}
-                contentFit="contain"
-              />
-              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Income</Text>
+          {/*income card*/}
+          <TouchableOpacity onPress={() => router.push('/income')}>
+            <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
+              <View className="flex-row items-center mb-2">
+                <Image
+                  source={require('../../assets/svg/income.svg')}
+                  style={{ width: 20, height: 20 }}
+                  tintColor={"#10b981"}
+                  contentFit="contain"
+                />
+                <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Income</Text>
+              </View>
+              <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">KES {thisMonthTotal.toLocaleString()}</Text>
             </View>
-            <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">KES {thisMonthTotal.toLocaleString()}</Text>
-          </View>
+          </TouchableOpacity>
           <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
             <View className="flex-row items-center mb-2">
               <Image
@@ -685,24 +720,24 @@ export default function AnalyticsScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View>
               <BarChart
-                data={spendingChartData}
-                barWidth={10}
-                spacing={10}
+                data={spendingChartData.length > 0 ? spendingChartData : [{ value: 0, label: '' }]}
+                barWidth={18}
+                spacing={16}
                 roundedTop
                 roundedBottom
                 hideRules
                 xAxisThickness={0}
                 yAxisThickness={0}
-                yAxisTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 8 }}
+                yAxisTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: '600' }}
+                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: '600' }}
                 noOfSections={4}
-                maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.2}
-                frontColor="#f472b6"
+                maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.1}
+                frontColor={isDark ? '#ec4899' : '#f472b6'}
                 isAnimated
                 initialSpacing={10}
                 formatYLabel={(label: string) => {
                   const val = parseInt(label, 10);
-                  if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+                  if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
                   return label;
                 }}
               />

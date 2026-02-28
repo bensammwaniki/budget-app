@@ -147,7 +147,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                             </TouchableOpacity>
 
                             {categories
-                                .filter(c => transaction.type === 'RECEIVED' ? c.type === 'INCOME' : c.type === 'EXPENSE')
+                                .filter(c => c.id !== 12 && (transaction.type === 'RECEIVED' ? c.type === 'INCOME' : c.type === 'EXPENSE'))
                                 .map(category => (
                                     <TouchableOpacity
                                         key={category.id}
@@ -162,35 +162,47 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 ))}
                         </View>
 
-                        {/* Link to Savings Button (expenses only) */}
-                        {transaction.type === 'SENT' && (
-                            <TouchableOpacity
-                                onPress={() => onLinkToGoal?.(transaction)}
-                                className="mt-8 mb-2 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl items-center border border-purple-100 dark:border-purple-900/50 flex-row justify-center gap-2"
-                            >
-                                <FontAwesome name="bank" size={16} color="#8b5cf6" />
-                                <Text className="text-purple-600 dark:text-purple-400 font-semibold">Transfer to Savings Goal</Text>
-                            </TouchableOpacity>
-                        )}
+                        <View className="flex-row gap-x-3 mt-8 mb-4">
+                            {/* Link to Savings Button (expenses only) */}
+                            {transaction.type === 'SENT' && (
+                                <TouchableOpacity
+                                    onPress={() => onLinkToGoal?.(transaction)}
+                                    className="flex-1 bg-purple-50 dark:bg-purple-900/20 py-2 px-4 rounded-xl items-center border border-purple-100 dark:border-purple-900/50 flex-row justify-center gap-2"
+                                >
+                                    <Image
+                                        source={require('../assets/svg/savings-piggy.svg')}
+                                        style={{ width: 22, height: 22 }}
+                                        tintColor={'#8b5cf6'}
+                                        contentFit="contain"
+                                    />
+                                    <Text className="text-purple-600 dark:text-purple-400 font-semibold text-xs text-center">Move to Savings</Text>
+                                </TouchableOpacity>
+                            )}
 
-                        {/* Link to Income Source (income only) */}
-                        {transaction.type === 'RECEIVED' && (
-                            <TouchableOpacity
-                                onPress={() => onLinkToIncome?.(transaction)}
-                                className="mt-8 mb-2 bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl items-center border border-emerald-100 dark:border-emerald-900/50 flex-row justify-center gap-2"
-                            >
-                                <FontAwesome name="arrow-down" size={16} color="#10b981" />
-                                <Text className="text-emerald-600 dark:text-emerald-400 font-semibold">Link to Income Source</Text>
-                            </TouchableOpacity>
-                        )}
+                            {/* Link to Income Source (income only) */}
+                            {transaction.type === 'RECEIVED' && (
+                                <TouchableOpacity
+                                    onPress={() => onLinkToIncome?.(transaction)}
+                                    className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 py-2 px-4 rounded-xl items-center border border-emerald-100 dark:border-emerald-900/50 flex-row justify-center gap-2"
+                                >
+                                    <Image
+                                        source={require('../assets/svg/income.svg')}
+                                        style={{ width: 20, height: 20 }}
+                                        tintColor={'#10b981'}
+                                        contentFit="contain"
+                                    />
+                                    <Text className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs text-center">Link Income</Text>
+                                </TouchableOpacity>
+                            )}
 
-                        {/* Delete Button */}
-                        <TouchableOpacity
-                            onPress={handleDeletePress}
-                            className={`${transaction.type !== undefined ? 'mt-3 mb-4' : 'mt-8 mb-4'} bg-red-50 dark:bg-red-900/20 p-4 rounded-xl items-center border border-red-100 dark:border-red-900/50`}
-                        >
-                            <Text className="text-red-600 dark:text-red-400 font-semibold">Delete Transaction</Text>
-                        </TouchableOpacity>
+                            {/* Delete Button */}
+                            <TouchableOpacity
+                                onPress={handleDeletePress}
+                                className="flex-1 bg-red-50 dark:bg-red-900/20 py-2 px-4 rounded-xl items-center border border-red-100 dark:border-red-900/50 justify-center"
+                            >
+                                <Text className="text-red-600 dark:text-red-400 font-semibold text-xs">Delete</Text>
+                            </TouchableOpacity>
+                        </View>
 
                         <View className="h-10" />
                     </ScrollView>
