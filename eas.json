@@ -20,6 +20,15 @@
         "buildType": "apk"
       }
     },
+    "internal": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "production"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "distribution": "internal",

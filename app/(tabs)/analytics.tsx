@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
-import { getTransactions, initDatabase } from '../../services/database';
+import { getTransactions, initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { ForecastResult, forecastService } from '../../services/forecastService';
 import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
@@ -76,6 +76,14 @@ export default function AnalyticsScreen() {
 
   useEffect(() => {
     loadData();
+
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'TRANSACTIONS' || type === 'INCOME_LOGS' || type === 'INCOME_SOURCES' || type === 'CATEGORIES') {
+        loadData();
+      }
+    });
+
+    return unsubscribe;
   }, [loadData]);
 
   const onRefresh = useCallback(async () => {

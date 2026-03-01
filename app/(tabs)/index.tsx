@@ -143,7 +143,7 @@ export default function HomeScreen() {
 
     // Subscribe to transaction/debt/savings changes to refresh debt summary
     const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'TRANSACTIONS' || type === 'DEBTS' || type === 'SAVINGS') {
+      if (type === 'TRANSACTIONS' || type === 'DEBTS' || type === 'SAVINGS' || type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
         loadDebtSummary();
       }
     });
@@ -167,7 +167,7 @@ export default function HomeScreen() {
     loadIncomeLogs();
 
     const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
+      if (type === 'INCOME_LOGS' || type === 'INCOME_SOURCES' || type === 'TRANSACTIONS') {
         loadIncomeLogs();
       }
     });

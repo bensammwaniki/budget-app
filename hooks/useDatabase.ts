@@ -28,7 +28,7 @@ export function useTransactions() {
 
         // Subscribe to changes
         const unsubscribe = subscribeToDatabaseChanges((type) => {
-            if (type === 'TRANSACTIONS' || type === 'CATEGORIES') {
+            if (type === 'TRANSACTIONS' || type === 'CATEGORIES' || type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
                 load();
             }
         });
@@ -60,7 +60,7 @@ export function useSpendingSummary() {
 
         // Subscribe to changes
         const unsubscribe = subscribeToDatabaseChanges((type) => {
-            if (type === 'TRANSACTIONS' || type === 'CATEGORIES' || type === 'BUDGETS') {
+            if (type === 'TRANSACTIONS' || type === 'CATEGORIES' || type === 'BUDGETS' || type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
                 load();
             }
         });
