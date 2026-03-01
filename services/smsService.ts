@@ -5,13 +5,13 @@ import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../utils/smsParser';
 import { notifyListeners } from './core/db';
 import {
-    fulizaTransactionExists,
+    getFulizaTransactionIdsInRange,
+    getTransactionIdsInRange,
     getUserSettings,
     initDatabase,
     saveFulizaTransaction,
     saveTransaction,
-    saveUserSettings,
-    transactionExists
+    saveUserSettings
 } from './database';
 import { debtService } from './debtService';
 
@@ -87,43 +87,48 @@ export const syncMessages = async (days: number = 30) => {
         const messages = await readMpesaSMS(syncDays);
         const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
 
+        // BATCH CACHING: Fetch existing IDs once to prevent thousands of DB queries
+        const sinceDate = new Date(Date.now() - (syncDays + 2) * 24 * 60 * 60 * 1000);
+        const existingTxIds = await getTransactionIdsInRange(sinceDate);
+        const existingFulizaIds = await getFulizaTransactionIdsInRange(sinceDate);
+
         let newTransactionsCount = 0;
         let processedCount = 0;
 
-        // Helper to yield to main thread every N items to prevent UI freezing
+        // Optimized yielder: Yields every 40 items to let UI breathe
         const yieldIfNecessary = async () => {
             processedCount++;
-            if (processedCount % 50 === 0) {
-                // Yield to JS thread
-                await new Promise(resolve => setTimeout(resolve, 0));
-                notifyListeners('TRANSACTIONS');
+            if (processedCount % 40 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 1));
             }
         };
 
-        // PASS 1: Process M-PESA Messages ONLY
+        // SINGLE PASS: Process all messages in one loop for maximum speed
         for (const msg of messages) {
             await yieldIfNecessary();
 
-            if (msg.address === 'MPESA') {
+            const isMpesa = msg.address === 'MPESA';
+            const isBank = imBankEnabled && (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK'));
+
+            if (isMpesa) {
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
-                    const exists = await transactionExists(parsed.id);
-                    if (!exists) {
+                    if (!existingTxIds.has(parsed.id)) {
                         await saveTransaction(parsed, false);
+                        existingTxIds.add(parsed.id);
                         newTransactionsCount++;
                     }
                 } else {
                     const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
                     if (fulizaLoan) {
-                        const exists = await fulizaTransactionExists(fulizaLoan.id);
-                        if (!exists) {
+                        if (!existingFulizaIds.has(fulizaLoan.id)) {
                             await saveFulizaTransaction(fulizaLoan);
+                            existingFulizaIds.add(fulizaLoan.id);
                             const fulizaDebt = await debtService.getOrCreateFulizaDebt();
 
                             if (fulizaLoan.outstandingBalance !== undefined) {
                                 await debtService.updateDebtBalance(fulizaDebt.id, fulizaLoan.outstandingBalance);
                             } else {
-                                // Fallback if outstanding balance not found in SMS
                                 await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.amount);
                                 if (fulizaLoan.accessFee && fulizaLoan.accessFee > 0) {
                                     await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.accessFee);
@@ -135,9 +140,9 @@ export const syncMessages = async (days: number = 30) => {
 
                     const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
                     if (fulizaRepayment) {
-                        const exists = await fulizaTransactionExists(fulizaRepayment.id);
-                        if (!exists) {
+                        if (!existingFulizaIds.has(fulizaRepayment.id)) {
                             await saveFulizaTransaction(fulizaRepayment);
+                            existingFulizaIds.add(fulizaRepayment.id);
                             const fulizaDebt = await debtService.getOrCreateFulizaDebt();
 
                             if (fulizaRepayment.outstandingBalance !== undefined) {
@@ -148,28 +153,31 @@ export const syncMessages = async (days: number = 30) => {
 
                             if (fulizaRepayment.accountBalance !== undefined) {
                                 const mpesaTxId = fulizaRepayment.id;
-                                await saveTransaction({
-                                    id: mpesaTxId,
-                                    uuid: mpesaTxId,
-                                    userId: 'local_user',
-                                    accountId: 'ACC-MPESA-DEFAULT', // Fuliza affects M-PESA balance
-                                    amount: fulizaRepayment.amount,
-                                    type: 'SENT',
-                                    transactionKind: 'DEBT_REPAYMENT',
-                                    recipientId: 'FULIZA_REPAYMENT',
-                                    recipientName: 'Fuliza Repayment',
-                                    date: fulizaRepayment.date,
-                                    balance: fulizaRepayment.accountBalance,
-                                    transactionCost: 0,
-                                    categoryId: 12, // Fuliza Charges
-                                    rawSms: fulizaRepayment.rawSms,
-                                    createdAt: new Date(),
-                                    updatedAt: new Date(),
-                                    isDeleted: false,
-                                    linkedDebtId: fulizaDebt.id
-                                }, false);
+                                if (!existingTxIds.has(mpesaTxId)) {
+                                    await saveTransaction({
+                                        id: mpesaTxId,
+                                        uuid: mpesaTxId,
+                                        userId: 'local_user',
+                                        accountId: 'ACC-MPESA-DEFAULT',
+                                        amount: fulizaRepayment.amount,
+                                        type: 'SENT',
+                                        transactionKind: 'DEBT_REPAYMENT',
+                                        recipientId: 'FULIZA_REPAYMENT',
+                                        recipientName: 'Fuliza Repayment',
+                                        date: fulizaRepayment.date,
+                                        balance: fulizaRepayment.accountBalance,
+                                        transactionCost: 0,
+                                        categoryId: 12,
+                                        rawSms: fulizaRepayment.rawSms,
+                                        createdAt: new Date(),
+                                        updatedAt: new Date(),
+                                        isDeleted: false,
+                                        linkedDebtId: fulizaDebt.id
+                                    }, false);
+                                    existingTxIds.add(mpesaTxId);
+                                    newTransactionsCount++;
+                                }
 
-                                // Record history entry in debt_payments so it shows in Detail screen
                                 await debtService.recordDebtPayment({
                                     debtId: fulizaDebt.id,
                                     transactionId: mpesaTxId,
@@ -181,47 +189,20 @@ export const syncMessages = async (days: number = 30) => {
                         continue;
                     }
                 }
-            }
-        }
+            } else if (isBank) {
+                const parsed = parseBankSms(msg.body, msg.address);
+                if (parsed) {
+                    const mpesaRef = extractMpesaRefFromBankSms(msg.body);
+                    if (mpesaRef && existingTxIds.has(mpesaRef)) continue;
 
-        // PASS 2: Process Bank Messages (if enabled)
-        if (imBankEnabled) {
-            console.log('🏦 Bank parsing enabled, checking messages...');
-            let bankMessagesFound = 0;
-            let bankTransactionsParsed = 0;
-
-            for (const msg of messages) {
-                await yieldIfNecessary();
-                if (msg.address.includes('I&M') || msg.address.includes('IMBank') || msg.address.includes('IANDMBANK')) {
-                    bankMessagesFound++;
-                    console.log(`🏦 Found I&M Bank SMS from ${msg.address}`);
-                    console.log(`📧 SMS Body: ${msg.body.substring(0, 100)}...`);
-
-                    const parsed = parseBankSms(msg.body, msg.address);
-                    if (parsed) {
-                        bankTransactionsParsed++;
-                        console.log(`✅ Parsed bank transaction: ${parsed.type} ${parsed.amount} to ${parsed.recipientName}`);
-
-                        const mpesaRef = extractMpesaRefFromBankSms(msg.body);
-                        if (mpesaRef) {
-                            const exists = await transactionExists(mpesaRef);
-                            if (exists) {
-                                console.log(`⏭️ Skipping duplicate (M-PESA Ref: ${mpesaRef})`);
-                                continue;
-                            }
-                        }
-
+                    if (!existingTxIds.has(parsed.id)) {
                         parsed.date = new Date(msg.date);
-                        console.log(`💾 Saving bank transaction with ID: ${parsed.id}, Date: ${parsed.date.toISOString()}`);
                         await saveTransaction(parsed, false);
+                        existingTxIds.add(parsed.id);
                         newTransactionsCount++;
-                    } else {
-                        console.log(`❌ Failed to parse bank SMS`);
                     }
                 }
             }
-
-            console.log(`🏦 Bank SMS Summary: Found ${bankMessagesFound} messages, parsed ${bankTransactionsParsed} transactions`);
         }
 
         // Save sync time

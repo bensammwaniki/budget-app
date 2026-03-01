@@ -128,6 +128,24 @@ export const transactionExists = async (id: string): Promise<boolean> => {
     return (result?.count || 0) > 0;
 };
 
+export const getTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+    const database = getDb();
+    const results = await database.getAllAsync<{ id: string }>(
+        'SELECT id FROM transactions WHERE date >= ?',
+        [sinceDate.toISOString()]
+    );
+    return new Set(results.map(r => r.id));
+};
+
+export const getFulizaTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+    const database = getDb();
+    const results = await database.getAllAsync<{ id: string }>(
+        'SELECT id FROM fuliza_transactions WHERE date >= ?',
+        [sinceDate.toISOString()]
+    );
+    return new Set(results.map(r => r.id));
+};
+
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
     const database = getDb();
     await database.runAsync(
