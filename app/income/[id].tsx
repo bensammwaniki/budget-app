@@ -32,6 +32,16 @@ export default function IncomeDetailScreen() {
     const [manualNotes, setManualNotes] = useState('');
     const [recordingManual, setRecordingManual] = useState(false);
 
+    const formatWithCommas = (value: string) => {
+        const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
+        if (!numeric) return '';
+        return parseInt(numeric, 10).toLocaleString();
+    };
+
+    const handleManualAmountChange = (text: string) => {
+        setManualAmount(formatWithCommas(text));
+    };
+
     const scrollY = useSharedValue(0);
     const scrollHandler = useAnimatedScrollHandler(e => { scrollY.value = e.contentOffset.y; });
     const headerStyle = useAnimatedStyle(() => ({
@@ -368,7 +378,7 @@ export default function IncomeDetailScreen() {
                                     placeholderTextColor="#94a3b8"
                                     keyboardType="numeric"
                                     value={manualAmount}
-                                    onChangeText={setManualAmount}
+                                    onChangeText={handleManualAmountChange}
                                     autoFocus
                                 />
                             </View>
@@ -381,8 +391,8 @@ export default function IncomeDetailScreen() {
                                         key={ch.key}
                                         onPress={() => setManualChannel(ch.key)}
                                         className={`flex-row items-center px-3 py-1 rounded-2xl border gap-2 ${manualChannel === ch.key
-                                                ? 'border-transparent'
-                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1e293b]'
+                                            ? 'border-transparent'
+                                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1e293b]'
                                             }`}
                                         style={manualChannel === ch.key ? { backgroundColor: `${themeColor}20`, borderColor: themeColor } : {}}
                                     >

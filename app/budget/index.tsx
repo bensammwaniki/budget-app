@@ -24,6 +24,16 @@ export default function BudgetScreen() {
     const [allocations, setAllocations] = useState<Record<number, string>>({});
     const [spending, setSpending] = useState<Record<number, number>>({});
 
+    const formatWithCommas = (value: string) => {
+        const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
+        if (!numeric) return '';
+        return parseInt(numeric, 10).toLocaleString();
+    };
+
+    const handleIncomeChange = (text: string) => {
+        setIncome(formatWithCommas(text));
+    };
+
     const monthKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`;
     const monthName = selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -48,11 +58,11 @@ export default function BudgetScreen() {
             // Filter out Income categories from allocation list
             setCategories(cats.filter(c => c.type === 'EXPENSE'));
 
-            setIncome(budget.totalIncome > 0 ? budget.totalIncome.toString() : '');
+            setIncome(budget.totalIncome > 0 ? budget.totalIncome.toLocaleString() : '');
 
             const allocs: Record<number, string> = {};
             budget.allocations.forEach(a => {
-                allocs[a.categoryId] = a.budgetAmount.toString();
+                allocs[a.categoryId] = a.budgetAmount > 0 ? a.budgetAmount.toLocaleString() : '';
             });
             setAllocations(allocs);
             setSpending(spent);
@@ -68,10 +78,10 @@ export default function BudgetScreen() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const numericIncome = parseFloat(income) || 0;
+            const numericIncome = parseFloat(income.replace(/,/g, '')) || 0;
             const allocationList = Object.entries(allocations).map(([catId, amount]) => ({
                 categoryId: parseInt(catId),
-                budgetAmount: parseFloat(amount) || 0
+                budgetAmount: parseFloat(amount.replace(/,/g, '')) || 0
             }));
 
             await saveMonthlyBudget(monthKey, numericIncome, allocationList);
@@ -85,9 +95,10 @@ export default function BudgetScreen() {
     };
 
     const handleAllocationChange = (categoryId: number, value: string) => {
+        const formatted = formatWithCommas(value);
         setAllocations(prev => ({
             ...prev,
-            [categoryId]: value
+            [categoryId]: formatted
         }));
     };
 
@@ -98,8 +109,8 @@ export default function BudgetScreen() {
     };
 
     // Calculations
-    const totalAllocated = Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-    const totalIncome = parseFloat(income) || 0;
+    const totalAllocated = Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val.replace(/,/g, '')) || 0), 0);
+    const totalIncome = parseFloat(income.replace(/,/g, '')) || 0;
     const remainingIncome = totalIncome - totalAllocated;
 
     if (loading) {
@@ -157,7 +168,7 @@ export default function BudgetScreen() {
                                 placeholderTextColor="#94a3b8"
                                 keyboardType="numeric"
                                 value={income}
-                                onChangeText={setIncome}
+                                onChangeText={handleIncomeChange}
                             />
                         </View>
                     </View>

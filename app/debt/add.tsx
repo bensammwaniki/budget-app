@@ -31,6 +31,16 @@ function AddDebtScreen() {
 
     const scrollY = useSharedValue(0);
 
+    const formatWithCommas = (value: string) => {
+        const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
+        if (!numeric) return '';
+        return parseInt(numeric, 10).toLocaleString();
+    };
+
+    const handleAmountChange = (text: string) => {
+        setAmount(formatWithCommas(text));
+    };
+
     useFocusEffect(
         useCallback(() => {
             let active = true;
@@ -82,7 +92,7 @@ function AddDebtScreen() {
     };
 
     const projectedInterestValue = useMemo(() => {
-        const principal = parseFloat(amount) || 0;
+        const principal = parseFloat(amount.replace(/,/g, '')) || 0;
         const rate = parseFloat(interestRate) || 0;
         if (principal <= 0 || rate <= 0) return 0;
 
@@ -100,7 +110,7 @@ function AddDebtScreen() {
     }, [amount, interestRate, isReducingBalance, expectedPayDate, startDate]);
 
     const projectedTotal = useMemo(() => {
-        return (parseFloat(amount) || 0) + projectedInterestValue;
+        return (parseFloat(amount.replace(/,/g, '')) || 0) + projectedInterestValue;
     }, [amount, projectedInterestValue]);
 
     const handleSave = async () => {
@@ -115,7 +125,7 @@ function AddDebtScreen() {
                 userId: 'local_user',
                 type,
                 name,
-                amount: parseFloat(amount),
+                amount: parseFloat(amount.replace(/,/g, '')),
                 accountId: selectedAccount,
                 interestRate: interestRate ? parseFloat(interestRate) : undefined,
                 isReducingBalance,
@@ -220,7 +230,7 @@ function AddDebtScreen() {
                             placeholderTextColor="#94a3b8"
                             keyboardType="numeric"
                             value={amount}
-                            onChangeText={setAmount}
+                            onChangeText={handleAmountChange}
                         />
                     </View>
 

@@ -31,6 +31,16 @@ export default function AddGoalScreen() {
     const [selectedColor, setSelectedColor] = useState(COLORS[0]);
     const [loading, setLoading] = useState(false);
 
+    const formatWithCommas = (value: string) => {
+        const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
+        if (!numeric) return '';
+        return parseInt(numeric, 10).toLocaleString();
+    };
+
+    const handleAmountChange = (text: string) => {
+        setTargetAmount(formatWithCommas(text));
+    };
+
     const handleSave = async () => {
         if (!name.trim()) {
             Alert.alert('Error', 'Please enter a goal name.');
@@ -112,7 +122,7 @@ export default function AddGoalScreen() {
                             placeholder="0"
                             placeholderTextColor="#94a3b8"
                             value={targetAmount}
-                            onChangeText={setTargetAmount}
+                            onChangeText={handleAmountChange}
                             keyboardType="numeric"
                             style={{ color: selectedColor }}
                         />
@@ -125,7 +135,7 @@ export default function AddGoalScreen() {
                         onPress={() => setShowDatePicker(true)}
                     >
                         <FontAwesome name="calendar" size={16} color="#94a3b8" />
-                        <Text className={`flex-1 ml-6 font-semibold text-[14px] ${targetDate ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}   style={{color: targetDate ? selectedColor : '#94a3b8'}}>
+                        <Text className={`flex-1 ml-6 font-semibold text-[14px] ${targetDate ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} style={{ color: targetDate ? selectedColor : '#94a3b8' }}>
                             {targetDate ? targetDate.toLocaleDateString() : '  Set a deadline'}
                         </Text>
                         {targetDate && (

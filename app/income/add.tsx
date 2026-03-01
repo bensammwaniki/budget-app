@@ -32,6 +32,16 @@ export default function AddIncomeSourceScreen() {
     const [incomeDate, setIncomeDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
 
+    const formatWithCommas = (value: string) => {
+        const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
+        if (!numeric) return '';
+        return parseInt(numeric, 10).toLocaleString();
+    };
+
+    const handleAmountChange = (text: string) => {
+        setExpectedAmount(formatWithCommas(text));
+    };
+
     const handleSave = async () => {
         if (!name.trim()) {
             Alert.alert('Required', 'Please enter a name for this income source.');
@@ -106,7 +116,7 @@ export default function AddIncomeSourceScreen() {
                             placeholder="30000"
                             placeholderTextColor="#94a3b8"
                             value={expectedAmount}
-                            onChangeText={setExpectedAmount}
+                            onChangeText={handleAmountChange}
                             keyboardType="numeric"
                         />
                     </View>
