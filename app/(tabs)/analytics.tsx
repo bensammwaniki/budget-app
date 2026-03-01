@@ -110,6 +110,7 @@ export default function AnalyticsScreen() {
   // Filter transactions by selected month
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
+      if (t.isDeleted) return false;
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       if (isNaN(txDate.getTime())) return false;
       return isSameMonth(txDate, selectedDate);
@@ -174,6 +175,7 @@ export default function AnalyticsScreen() {
 
   const yearlyStats = useMemo(() => {
     const yearlyTransactions = transactions.filter(t => {
+      if (t.isDeleted) return false;
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       return txDate.getFullYear() === currentYear;
     });
@@ -220,7 +222,7 @@ export default function AnalyticsScreen() {
   const spendingChartData = useMemo(() => {
     // 1. Pre-filter and pre-parse dates to avoid repeated `new Date()` calls in loops
     const expenses = transactions
-      .filter(t => t.type === 'SENT')
+      .filter(t => t.type === 'SENT' && !t.isDeleted)
       .map(t => ({
         ...t,
         parsedDate: t.date instanceof Date ? t.date : new Date(t.date)
@@ -363,9 +365,6 @@ export default function AnalyticsScreen() {
         value: val,
         label: label,
         frontColor: isDark ? (intensity > 0.7 ? '#ec4899' : (intensity > 0.3 ? '#f472b6' : '#9d174d')) : frontColor,
-        topLabelComponent: () => (
-          val > 0 ? <Text style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 8, marginBottom: 2 }}>{val > 1000 ? `${(val / 1000).toFixed(1)}k` : val}</Text> : null
-        )
       };
     });
 
@@ -786,21 +785,20 @@ export default function AnalyticsScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View>
               <BarChart
-                data={spendingChartData.length > 0 ? spendingChartData : [{ value: 0, label: '' }]}
+                data={spendingChartData.length > 0 ? spendingChartData : [{ value: 0 }]}
                 showLine
                 lineConfig={{
                   color: isDark ? '#60a5fa' : '#3b82f6',
-                  thickness: 1,
+                  thickness: 2,
                   curved: true,
-                  hideDataPoints: false,
+                  hideDataPoints: true,
                   shiftY: 0,
-                  initialSpacing: 10,
+                  initialSpacing: 24.5, // 17 (initialSpacing) + 15/2 (barWidth/2)
+                  spacing: 45, // 30 (spacing) + 15 (barWidth)
                 }}
                 lineData={spendingChartData.length > 0 ? spendingChartData : [{ value: 0 }]}
                 barWidth={15}
                 spacing={30}
-                roundedTop
-                roundedBottom
                 hideRules
                 xAxisThickness={0}
                 yAxisThickness={0}
@@ -809,8 +807,11 @@ export default function AnalyticsScreen() {
                 noOfSections={4}
                 maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.1}
                 frontColor={isDark ? '#ec4899' : '#f472b6'}
-                isAnimated
+                height={200}
                 initialSpacing={17}
+                isAnimated
+                roundedTop
+                roundedBottom
                 formatYLabel={(label: string) => {
                   const val = parseInt(label, 10);
                   if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
@@ -819,6 +820,19 @@ export default function AnalyticsScreen() {
               />
             </View>
           </ScrollView>
+
+          {/* Legend */}
+          <View className="flex-row items-center justify-center gap-6 mt-6 pb-2 border-t border-slate-100 dark:border-slate-800 pt-4">
+            <View className="flex-row items-center">
+              <View className="w-3 h-3 rounded-sm bg-pink-400 dark:bg-pink-500 mr-2" />
+              <Text className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Spending Volume</Text>
+            </View>
+            <View className="flex-row items-center">
+              <View className="w-6 h-[2px] bg-blue-500 dark:bg-blue-400 mr-2" />
+              <View className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400 absolute left-2" />
+              <Text className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Spending Trend</Text>
+            </View>
+          </View>
         </View>
       </View>
 
