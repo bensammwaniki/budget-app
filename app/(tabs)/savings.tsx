@@ -172,19 +172,30 @@ export default function SavingsScreen() {
             </View>
 
             {goals.length === 0 ? (
-                <View className="flex-1 items-center justify-center p-6 mt-10">
-                    <View className="w-24 h-24 bg-blue-100 dark:bg-blue-900/20 rounded-full items-center justify-center mb-6">
-                        <FontAwesome name="flag-checkered" size={32} color="#3b82f6" />
-                    </View>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white mb-2 text-center">No Savings Goals Yet</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-center mb-8 px-4">
-                        Set a goal to save for a vacation, emergency fund, or new gadget. Tracking it makes it happen!
+                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <Image
+                        source={require('../../assets/svg/savings.svg')}
+                        style={{ width: 18, height: 18 }}
+                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                        contentFit="contain"
+                    />
+                    <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
+                        No savings goals yet
+                    </Text>
+                    <Text className="text-slate-400 text-sm mt-1 text-center">
+                        Start saving for a vacation, emergency fund, or anything you care about.
                     </Text>
                     <TouchableOpacity
                         onPress={() => router.push('/savings/add')}
-                        className="bg-blue-600 px-8 py-4 rounded-xl shadow-lg shadow-blue-500/30"
+                        className="mt-5 bg-blue-600 px-6 py-3 rounded-xl flex-row items-center gap-2"
                     >
-                        <Text className="text-white font-bold text-lg">Create First Goal</Text>
+                        <Image
+                            source={require('../../assets/svg/plus.svg')}
+                            style={{ width: 12, height: 12 }}
+                            tintColor={'#fff'}
+                            contentFit="contain"
+                        />
+                        <Text className="text-white font-bold text-sm">Create a Goal</Text>
                     </TouchableOpacity>
                 </View>
             ) : (

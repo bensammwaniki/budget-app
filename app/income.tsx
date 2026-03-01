@@ -181,21 +181,32 @@ export default function IncomeScreen() {
             </View>
 
             {sources.length === 0 ? (
-                <View className="flex-1 items-center justify-center p-6 mt-4">
-                    <View className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/20 rounded-full items-center justify-center mb-6">
-                        <FontAwesome name="money" size={32} color="#10b981" />
-                    </View>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white mb-2 text-center">No Income Sources Yet</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-center mb-8 px-4">
-                        Track your salary, freelance, or any recurring payments. Tap the wand icon to auto-detect patterns!
-                    </Text>
-                    <TouchableOpacity
-                        onPress={() => router.push('/income/add')}
-                        className="bg-emerald-600 px-8 py-4 rounded-xl shadow-lg shadow-emerald-500/30"
-                    >
-                        <Text className="text-white font-bold text-lg">Add Income Source</Text>
-                    </TouchableOpacity>
-                </View>
+                                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                                    <Image
+                                        source={require('../assets/svg/income.svg')}
+                                        style={{ width: 24, height: 24 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />
+                                    <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
+                                        No income sources yet
+                                    </Text>
+                                    <Text className="text-slate-400 text-sm mt-1 text-center">
+                                        Track your salary, freelance, or any recurring payments. Tap the wand icon to auto-detect patterns! or tap the plus icon to add an income source manually
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() => router.push('/income/add')}
+                                        className="mt-5 bg-emerald-600 px-6 py-3 rounded-xl flex-row items-center gap-2"
+                                    >
+                                        <Image
+                                            source={require('../assets/svg/plus.svg')}
+                                            style={{ width: 12, height: 12 }}
+                                            tintColor={'#fff'}
+                                            contentFit="contain"
+                                        />
+                                        <Text className="text-white font-bold text-sm">Add Income Source</Text>
+                                    </TouchableOpacity>
+                                </View>
             ) : (
                 <FlatList
                     data={sources}

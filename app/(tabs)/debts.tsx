@@ -230,8 +230,8 @@ export default function DebtsScreen() {
       style={{ paddingTop: insets.top }}
     >
       <View className="px-6 py-4 flex-row justify-between items-center bg-white dark:bg-[#0f172a] shadow-sm">
-        <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-          {typeFilter === 'LIABILITY' ? 'My Debts' : 'Money Owed to Me'}
+        <Text className="text-l font-bold text-slate-900 dark:text-white">
+          {typeFilter === 'LIABILITY' ? 'My Debts' : 'All my Loans and Receivables'}
         </Text>
 
         <TouchableOpacity
@@ -275,52 +275,66 @@ export default function DebtsScreen() {
             <View className="flex-row gap-4 mb-5">
               {/* Sub Tabs (Debts vs Assets) - Only show in ACTIVE view */}
               {statusFilter === 'ACTIVE' && (
-                <View className="flex-col gap-4 mb-5">
+                <View className="flex-col gap-4 mb-5 flex-1">
 
-                  {/* I Owe Card */}
-                  <TouchableOpacity
-                    onPress={() => setTypeFilter('LIABILITY')}
-                    className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'LIABILITY'
-                      ? 'bg-red-500 border-red-500'
-                      : 'bg-white border-slate-200'
-                      }`}
-                  >
-                    <Text className={`text-sm font-medium ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500'}`} >
-                      Total I Owe
-                    </Text>
+                  {/* I Owe Card — hidden when nothing is owed */}
+                  {liabilityCount > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setTypeFilter('LIABILITY')}
+                      className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'LIABILITY'
+                        ? 'bg-red-500 border-red-500'
+                        : 'bg-white border-slate-200'
+                        }`}
+                    >
+                      <Text className={`text-sm font-medium ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500'}`}>
+                        Total I Owe
+                      </Text>
+                      <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
+                        {formatCurrency(liabilityTotal)}
+                      </Text>
+                      <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`}>
+                        {liabilityCount} {statusFilter === 'ACTIVE' ? 'active' : ''} {liabilityCount === 1 ? 'debt' : 'debts'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
-                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
-                      {formatCurrency(liabilityTotal)}
-                    </Text>
+                  {/* Owed To Me Card — hidden when nothing is owed */}
+                  {receivableCount > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setTypeFilter('RECEIVABLE')}
+                      className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
+                        ? 'bg-green-500 border-green-500'
+                        : 'bg-white border-slate-200'
+                        }`}>
+                      <Text className={`text-sm font-medium ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500'}`}>
+                        Total Owed To Me
+                      </Text>
+                      <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
+                        {formatCurrency(receivableTotal)}
+                      </Text>
+                      <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
+                        {receivableCount} {statusFilter === 'ACTIVE' ? (receivableCount === 1 ? 'person owes' : 'people owe') : 'past'} you
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
-                    <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`} >
-                      {liabilityCount} {statusFilter === 'ACTIVE' ? 'active' : ''} {liabilityCount === 1 ? 'debt' : 'debts'}
-                    </Text>
-                  </TouchableOpacity>
-
-
-                  {/* Owed To Me Card */}
-                  <TouchableOpacity
-                    onPress={() => setTypeFilter('RECEIVABLE')}
-                    className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
-                      ? 'bg-green-500 border-green-500'
-                      : 'bg-white border-slate-200'
-                      }`}>
-                    <Text className={`text-sm font-medium ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500'}`}>
-                      Total Owed To Me
-                    </Text>
-
-                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
-                      {formatCurrency(receivableTotal)}
-                    </Text>
-                    <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
-                      {receivableCount} {statusFilter === 'ACTIVE' ? (receivableCount === 1 ? 'person owes' : 'people owe') : 'past'} you
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Empty state — shown when both counts are zero */}
+                  {liabilityCount === 0 && receivableCount === 0 && (
+                    <View className="w-full items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                      <FontAwesome name="inbox" size={36} color="#cbd5e1" />
+                      <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
+                        No active receivables or liabilities
+                      </Text>
+                      <Text className="text-slate-400 text-sm mt-1 text-center">
+                        Press the{' '}
+                        <Text className="font-bold text-blue-500">+</Text>
+                        {' '}button to add a debt or loan.
+                      </Text>
+                    </View>
+                  )}
 
                 </View>
               )}
-
 
               {statusFilter === 'ACTIVE' && chartData.length > 0 && (
                 <View className="bg-white dark:bg-[#0f172a] p-6 rounded-2xl border border-slate-200 shadow-sm items-center">
@@ -340,8 +354,7 @@ export default function DebtsScreen() {
               <Text className="text-slate-400 text-center">
                 {statusFilter === 'ACTIVE'
                   ? `You have no active ${typeFilter === 'LIABILITY' ? 'debts' : 'receivables'}.`
-                  : `No paid ${typeFilter === 'LIABILITY' ? 'debts' : 'receivables'} found.`
-                }
+                  : `No paid ${typeFilter === 'LIABILITY' ? 'debts' : 'receivables'} found.`}
               </Text>
             </View>
           ) : (

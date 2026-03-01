@@ -94,11 +94,10 @@ export default function AddIncomeSourceScreen() {
                 <View className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
 
                     {/* Name */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Money from</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-2  mb-6 border border-slate-200 dark:border-slate-700">
-                        <Text className="text-slate-400 font-bold mr-2">From</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Money from</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
                         <TextInput
-                            className="flex-1 text-slate-900 dark:text-white font-semibold text-md"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
                             placeholder="Salary, Freelance, Rental"
                             placeholderTextColor="#94a3b8"
                             value={name}
@@ -108,12 +107,12 @@ export default function AddIncomeSourceScreen() {
                     </View>
 
                     {/* Expected Amount */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Expected Amount</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-2 mb-6 border border-slate-200 dark:border-slate-700">
-                        <Text className="text-slate-400 font-bold mr-2">KES </Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Expected Amount (KES)</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-2">KES</Text>
                         <TextInput
-                            className="flex-1 text-slate-900 dark:text-white font-bold text-md"
-                            placeholder="30000"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
+                            placeholder="30,000"
                             placeholderTextColor="#94a3b8"
                             value={expectedAmount}
                             onChangeText={handleAmountChange}

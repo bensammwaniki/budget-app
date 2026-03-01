@@ -159,12 +159,12 @@ export default function BudgetScreen() {
 
                     {/* Income Input */}
                     <View className="mb-8">
-                        <Text className="text-slate-500 dark:text-slate-400 font-bold mb-2 uppercase text-xs tracking-wider">Total Expected Income</Text>
-                        <View className="flex-row items-center bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-4">
+                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Total Expected Income</Text>
+                        <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 border border-slate-200 dark:border-slate-700">
                             <Text className="text-slate-400 font-bold mr-2">KES</Text>
                             <TextInput
-                                className="flex-1 text-2xl font-bold text-slate-900 dark:text-white"
-                                placeholder="0.00"
+                                className="flex-1 text-xl font-bold text-slate-900 dark:text-white"
+                                placeholder="0"
                                 placeholderTextColor="#94a3b8"
                                 keyboardType="numeric"
                                 value={income}
@@ -209,10 +209,10 @@ export default function BudgetScreen() {
                                             <FontAwesome name={cat.icon as any} size={14} color={cat.color} />
                                         </View>
                                         <Text className="flex-1 font-bold text-slate-700 dark:text-slate-200 text-sm">{cat.name}</Text>
-                                        <View className="flex-row items-center bg-gray-50 dark:bg-[#0f172a] rounded-lg px-2 py-1.5 border border-gray-100 dark:border-slate-800 w-28">
+                                        <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-2 py-1 border border-slate-200 dark:border-slate-700 w-28">
                                             <Text className="text-xs text-slate-400 mr-1">KES</Text>
                                             <TextInput
-                                                className="flex-1 text-right font-bold text-slate-900 dark:text-white text-sm"
+                                                className="flex-1 text-right font-semibold text-slate-900 dark:text-white text-sm"
                                                 placeholder="0"
                                                 placeholderTextColor="#94a3b8"
                                                 keyboardType="numeric"

@@ -172,13 +172,13 @@ function AddDebtScreen() {
             >
                 <View className="p-6">
                     {/* Type Selection */}
-                    <View style={{ flexDirection: 'row', backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#e6edf3', padding: 4, borderRadius: 12, marginBottom: 24 }}>
+                    <View style={{ flexDirection: 'row', backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#e6edf3', padding: 4, borderRadius: 50, marginBottom: 24 }}>
                         <TouchableOpacity
                             onPress={() => setType('LIABILITY')}
                             style={{
                                 flex: 1,
-                                paddingVertical: 12,
-                                borderRadius: 12,
+                                paddingVertical: 8,
+                                borderRadius: 50,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 backgroundColor: type === 'LIABILITY' ? (colorScheme === 'dark' ? '#334155' : '#ffffff') : 'transparent',
@@ -195,8 +195,8 @@ function AddDebtScreen() {
                             onPress={() => setType('RECEIVABLE')}
                             style={{
                                 flex: 1,
-                                paddingVertical: 12,
-                                borderRadius: 12,
+                                paddingVertical: 8,
+                                borderRadius: 50,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 backgroundColor: type === 'RECEIVABLE' ? (colorScheme === 'dark' ? '#334155' : '#ffffff') : 'transparent',
@@ -211,10 +211,10 @@ function AddDebtScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-4">
-                        <Text className="text-sm font-semibold text-slate-500 mb-1">{type === 'LIABILITY' ? 'Lender Name' : 'Borrower Name'}</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">{type === 'LIABILITY' ? 'Lender Name' : 'Borrower Name'}</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
                         <TextInput
-                            className="text-slate-900 dark:text-white text-lg border-b border-gray-200 dark:border-gray-700 pb-2"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
                             placeholder={type === 'LIABILITY' ? "e.g. Fuliza, Bank, John" : "e.g. John, Alice"}
                             placeholderTextColor="#94a3b8"
                             value={name}
@@ -222,11 +222,12 @@ function AddDebtScreen() {
                         />
                     </View>
 
-                    <View className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-4">
-                        <Text className="text-sm font-semibold text-slate-500 mb-1">Total Amount (Principal)</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Total Amount (Principal)</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                        <Text className="text-slate-400 font-bold mr-2">KES</Text>
                         <TextInput
-                            className="text-slate-900 dark:text-white text-lg border-b border-gray-200 dark:border-gray-700 pb-2"
-                            placeholder="0.00"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
+                            placeholder="0"
                             placeholderTextColor="#94a3b8"
                             keyboardType="numeric"
                             value={amount}
@@ -234,35 +235,36 @@ function AddDebtScreen() {
                         />
                     </View>
 
-                    <View className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-4">
-                        <Text className="text-sm font-semibold text-slate-500 mb-1">Interest Rate (%) (Optional)</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Interest Rate (%) (Optional)</Text>
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-4 border border-slate-200 dark:border-slate-700">
                         <TextInput
-                            className="text-slate-900 dark:text-white text-lg border-b border-gray-200 dark:border-gray-700 pb-2"
+                            className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
                             placeholder="e.g. 12.5"
                             placeholderTextColor="#94a3b8"
                             keyboardType="numeric"
                             value={interestRate}
                             onChangeText={setInterestRate}
                         />
+                        <Text className="text-slate-400 font-bold ml-2">%</Text>
+                    </View>
 
-                        {/* Reducing Balance Toggle */}
-                        <View className="flex-row items-center justify-between mt-6 border-t border-gray-100 dark:border-gray-800 pt-4">
-                            <View className="flex-1 pr-4">
-                                <Text className="text-base font-semibold text-slate-800 dark:text-slate-200">Reducing Balance Rate</Text>
-                                <Text className="text-xs text-slate-500 mt-1 leading-snug">
-                                    Turn this on if repayments reduce the principal amount used to calculate future interest.
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => setIsReducingBalance(!isReducingBalance)}
-                                className={`w-12 h-6 rounded-full justify-center p-1 transition-colors duration-200 ease-in-out ${isReducingBalance ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                            >
-                                <Animated.View
-                                    className="w-4 h-4 rounded-full bg-white shadow-sm"
-                                    style={{ transform: [{ translateX: isReducingBalance ? 24 : 0 }] }}
-                                />
-                            </TouchableOpacity>
+                    {/* Reducing Balance Toggle */}
+                    <View className="flex-row items-center justify-between mb-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-3 border border-slate-200 dark:border-slate-700">
+                        <View className="flex-1 pr-4">
+                            <Text className="text-sm font-semibold text-slate-800 dark:text-slate-200">Reducing Balance Rate</Text>
+                            <Text className="text-xs text-slate-500 mt-1 leading-snug">
+                                Repayments reduce the principal used to calculate future interest.
+                            </Text>
                         </View>
+                        <TouchableOpacity
+                            onPress={() => setIsReducingBalance(!isReducingBalance)}
+                            className={`w-12 h-6 rounded-full justify-center p-1 ${isReducingBalance ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                        >
+                            <Animated.View
+                                className="w-4 h-4 rounded-full bg-white shadow-sm"
+                                style={{ transform: [{ translateX: isReducingBalance ? 24 : 0 }] }}
+                            />
+                        </TouchableOpacity>
                     </View>
                     <View className='flex-row'>
                         {/* Start Date Selector */}
@@ -455,7 +457,15 @@ function AddDebtScreen() {
                         onPress={handleSave}
                         disabled={loading}
                     >
-                        {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text>}
+                        {loading ? <ActivityIndicator color="white" /> : 
+                        <View className="flex-row items-center gap-2">
+                            <Image
+                            source={require('../../assets/svg/confirm.svg')}
+                            style={{ width: 20, height: 20 }}
+                            tintColor={"white"}
+                            contentFit="contain"
+                        />
+                        <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text></View>}
                     </TouchableOpacity>
                 </View>
             </Animated.ScrollView>

@@ -369,11 +369,11 @@ export default function IncomeDetailScreen() {
 
                         <ScrollView className="flex-1 p-6" keyboardShouldPersistTaps="handled">
                             {/* Amount */}
-                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Amount (KES)</Text>
-                            <View className="flex-row items-center bg-white dark:bg-[#1e293b] rounded-2xl py-2 px-4 mb-6 border border-slate-200 dark:border-slate-700">
-                                <Text className="text-slate-400 font-bold mr-2 text-xl">KES</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Amount (KES)</Text>
+                            <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                                <Text className="text-slate-400 font-bold mr-2">KES</Text>
                                 <TextInput
-                                    className="flex-1 text-slate-900 dark:text-white font-bold text-xl"
+                                    className="flex-1 text-slate-900 dark:text-white font-semibold text-[16px]"
                                     placeholder="0"
                                     placeholderTextColor="#94a3b8"
                                     keyboardType="numeric"
