@@ -5,7 +5,7 @@ export interface Debt {
     userId: string;
     accountId?: string; // Optional: Linked to an account (e.g., Bank Loan -> Bank Account)
     type: 'LIABILITY' | 'RECEIVABLE' | 'OVERDRAFT';
-    name: string; // e.g., "Fuliza", "HESLB"
+    name: string; // e.g., "Fuliza", "HELB", "M-Shwari", "KCB M-Pesa"
     isRevolving: boolean; // True for overdrafts that don't have a fixed principal (like Fuliza)
     isReducingBalance?: boolean; // True if the debt repayment reduces the original principal
 

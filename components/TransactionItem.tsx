@@ -20,8 +20,8 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
             onPress={() => onPress(tx)}
         >
             <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 border ${isBankTransaction
-                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                    : 'bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                : 'bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700'
                 }`}>
                 <FontAwesome
                     name={((tx.categoryIcon) || (isBankTransaction ? 'bank' : (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'))) as any}

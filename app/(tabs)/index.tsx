@@ -510,11 +510,11 @@ export default function HomeScreen() {
                 <View className="flex-row items-center dark:bg-blue-900/20 px-2 py-0.5">
                   <ActivityIndicator
                     size="small"
-                    color="#3b82f6"
+                    color="#f63b7dff"
                     style={{ transform: [{ scale: 0.6 }] }}
                   />
-                  <Text className="text-blue-600 dark:text-blue-400 text-[10px] font-bold ml-0.5">
-                    Syncing SMS...
+                  <Text className="text-red-400 dark:text-red-400 text-[10px] font-bold ml-0.5">
+                    Please wait, Syncing SMS...
                   </Text>
                 </View>
               )}

@@ -1,8 +1,9 @@
 import { Account, AccountType } from '../types/account';
-import { generateUUID, getDb } from './core/db';
+import { generateUUID, getDb, initDatabase } from './core/db';
 
 export const accountService = {
     async createAccount(name: string, type: AccountType, userId: string = 'local_user', balance: number = 0, currency: string = 'KES'): Promise<Account> {
+        await initDatabase();
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
@@ -27,6 +28,7 @@ export const accountService = {
     },
 
     async getAccounts(): Promise<Account[]> {
+        await initDatabase();
         const db = getDb();
         const results = await db.getAllAsync<any>('SELECT * FROM accounts WHERE is_active = 1 ORDER BY name ASC');
 
@@ -40,6 +42,7 @@ export const accountService = {
     },
 
     async getAccountById(id: string): Promise<Account | null> {
+        await initDatabase();
         const db = getDb();
         const result = await db.getFirstAsync<any>('SELECT * FROM accounts WHERE id = ?', [id]);
 
@@ -57,6 +60,7 @@ export const accountService = {
     // NOTE: Direct balance updates should ideally go through ledgerService for audit capability. 
     // This function is kept for simple corrections or initialization.
     async updateBalance(id: string, amount: number) {
+        await initDatabase();
         const db = getDb();
         await db.runAsync('UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE id = ?', [amount, new Date().toISOString(), id]);
     }

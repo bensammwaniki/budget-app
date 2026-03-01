@@ -15,17 +15,20 @@ export const ensureDb = (): SQLite.SQLiteDatabase => {
 
 
 export const getCategories = async (): Promise<Category[]> => {
+    await initDatabase();
     const database = getDb();
     return await database.getAllAsync<Category>('SELECT * FROM categories ORDER BY isCustom DESC, name ASC');
 };
 
 export const getCategoryIdByName = async (name: string): Promise<number | null> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getFirstAsync<{ id: number }>('SELECT id FROM categories WHERE name = ?', [name]);
     return result?.id || null;
 };
 
 export const addCategory = async (category: Omit<Category, 'id'>) => {
+    await initDatabase();
     const database = getDb();
     const result = await database.runAsync(
         'INSERT INTO categories (name, type, icon, color, isCustom, description) VALUES (?, ?, ?, ?, ?, ?)',
@@ -36,12 +39,14 @@ export const addCategory = async (category: Omit<Category, 'id'>) => {
 };
 
 export const deleteCategory = async (id: number) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync('DELETE FROM categories WHERE id = ?', [id]);
     notifyListenersImmediate('CATEGORIES');
 };
 
 export const saveUserSettings = async (key: string, value: string) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)',
@@ -52,6 +57,7 @@ export const saveUserSettings = async (key: string, value: string) => {
 
 export const getUserSettings = async (key: string): Promise<string | null> => {
     try {
+        await initDatabase();
         const database = getDb();
         const result = await database.getFirstAsync<{ value: string }>(
             'SELECT value FROM user_settings WHERE key = ?',
@@ -64,12 +70,14 @@ export const getUserSettings = async (key: string): Promise<string | null> => {
 };
 
 export const getRecipientCategory = async (recipientId: string, type: string): Promise<number | null> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getAllAsync<{ category_id: number }>('SELECT category_id FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
     return result.length > 0 ? result[0].category_id : null;
 };
 
 export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getAllAsync<any>('SELECT * FROM fuliza_transactions ORDER BY date ASC');
     return result.map(row => ({
@@ -88,6 +96,7 @@ export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
 
 export const saveRecipientCategory = async (recipientId: string, categoryId: number, type: string) => {
     if (!recipientId || !type) return;
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'INSERT OR REPLACE INTO recipients (id, type, category_id, last_seen) VALUES (?, ?, ?, ?)',
@@ -102,6 +111,7 @@ export const saveRecipientCategory = async (recipientId: string, categoryId: num
 
 export const updateTransactionCategory = async (transactionId: string, categoryId: number | null) => {
     if (!transactionId) return;
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'UPDATE transactions SET category_id = ? WHERE id = ?',
@@ -111,6 +121,7 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
 };
 
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'UPDATE transactions SET date = ? WHERE id = ?',
@@ -120,6 +131,7 @@ export const updateTransactionDate = async (transactionId: string, newDate: Date
 };
 
 export const transactionExists = async (id: string): Promise<boolean> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getFirstAsync<{ count: number }>(
         'SELECT count(*) as count FROM transactions WHERE id = ?',
@@ -129,6 +141,7 @@ export const transactionExists = async (id: string): Promise<boolean> => {
 };
 
 export const getTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+    await initDatabase();
     const database = getDb();
     const results = await database.getAllAsync<{ id: string }>(
         'SELECT id FROM transactions WHERE date >= ?',
@@ -138,6 +151,7 @@ export const getTransactionIdsInRange = async (sinceDate: Date): Promise<Set<str
 };
 
 export const getFulizaTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+    await initDatabase();
     const database = getDb();
     const results = await database.getAllAsync<{ id: string }>(
         'SELECT id FROM fuliza_transactions WHERE date >= ?',
@@ -147,6 +161,7 @@ export const getFulizaTransactionIdsInRange = async (sinceDate: Date): Promise<S
 };
 
 export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         `INSERT OR REPLACE INTO fuliza_transactions 
@@ -168,6 +183,7 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
 };
 
 export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getFirstAsync<{ count: number }>(
         'SELECT count(*) as count FROM fuliza_transactions WHERE id = ?',
@@ -177,6 +193,7 @@ export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
 };
 
 export const saveTransaction = async (transaction: Transaction, shouldNotify: boolean = true) => {
+    await initDatabase();
     const database = getDb();
 
     if (!transaction.categoryId) {
@@ -228,6 +245,7 @@ export const saveTransaction = async (transaction: Transaction, shouldNotify: bo
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getAllAsync<any>(`
         SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
@@ -274,6 +292,7 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 };
 
 export const getSpendingSummary = async (): Promise<SpendingSummary> => {
+    await initDatabase();
     const database = getDb();
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -311,6 +330,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
 };
 
 export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getFirstAsync<{ sms_id: string }>(
         'SELECT sms_id FROM processed_sms WHERE sms_id = ?',
@@ -320,6 +340,7 @@ export const isMessageProcessed = async (smsId: string): Promise<boolean> => {
 };
 
 export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'INSERT OR IGNORE INTO processed_sms (sms_id, processed_at) VALUES (?, ?)',
@@ -328,11 +349,13 @@ export const markMessageAsProcessed = async (smsId: string): Promise<void> => {
 };
 
 export const clearProcessedSms = async (): Promise<void> => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync('DELETE FROM processed_sms');
 };
 
 export const getAutomationRules = async (): Promise<AutomationRule[]> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getAllAsync<any>('SELECT * FROM automation_rules ORDER BY id DESC');
     return result.map(row => ({
@@ -346,6 +369,7 @@ export const getAutomationRules = async (): Promise<AutomationRule[]> => {
 };
 
 export const addAutomationRule = async (rule: Omit<AutomationRule, 'id'>) => {
+    await initDatabase();
     const database = getDb();
     const result = await database.runAsync(
         'INSERT INTO automation_rules (name, type, conditions, action, is_enabled) VALUES (?, ?, ?, ?, ?)',
@@ -362,11 +386,13 @@ export const addAutomationRule = async (rule: Omit<AutomationRule, 'id'>) => {
 };
 
 export const deleteAutomationRule = async (id: number) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync('DELETE FROM automation_rules WHERE id = ?', [id]);
 };
 
 export const toggleAutomationRule = async (id: number, isEnabled: boolean) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync(
         'UPDATE automation_rules SET is_enabled = ? WHERE id = ?',
@@ -375,6 +401,7 @@ export const toggleAutomationRule = async (id: number, isEnabled: boolean) => {
 };
 
 export const applyRuleToExistingTransactions = async (rule: AutomationRule): Promise<number> => {
+    await initDatabase();
     const database = getDb();
     const allTransactions = await getTransactions();
     let updatedCount = 0;
@@ -396,6 +423,7 @@ export const applyRuleToExistingTransactions = async (rule: AutomationRule): Pro
 };
 
 export const revertRuleEffects = async (rule: AutomationRule): Promise<number> => {
+    await initDatabase();
     const database = getDb();
     const allTransactions = await getTransactions();
     let revertedCount = 0;
@@ -415,6 +443,7 @@ export const revertRuleEffects = async (rule: AutomationRule): Promise<number> =
 };
 
 export const getMonthlyBudget = async (month: string) => {
+    await initDatabase();
     const database = getDb();
 
     const budgetResult = await database.getFirstAsync<{ total_income: number }>(
@@ -434,6 +463,7 @@ export const getMonthlyBudget = async (month: string) => {
 };
 
 export const saveMonthlyBudget = async (month: string, totalIncome: number, allocations: { categoryId: number, budgetAmount: number }[]) => {
+    await initDatabase();
     const database = getDb();
 
     await database.withTransactionAsync(async () => {
@@ -454,6 +484,7 @@ export const saveMonthlyBudget = async (month: string, totalIncome: number, allo
 };
 
 export const getCategorySpending = async (month: string): Promise<Record<number, number>> => {
+    await initDatabase();
     const database = getDb();
     const [year, monthNum] = month.split('-');
     const startDate = `${month}-01T00:00:00.000Z`;
@@ -474,6 +505,7 @@ export const getCategorySpending = async (month: string): Promise<Record<number,
 };
 
 export const deleteTransaction = async (id: string) => {
+    await initDatabase();
     const database = getDb();
     await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
     notifyListenersImmediate('TRANSACTIONS');

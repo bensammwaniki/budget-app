@@ -1,5 +1,5 @@
 import { generateUUID } from '../utils/uuid';
-import { getDb, notifyListeners } from './core/db';
+import { getDb, initDatabase, notifyListeners } from './core/db';
 import { getCategoryIdByName, getTransactions } from './database';
 
 export interface SavingsGoal {
@@ -19,6 +19,7 @@ export type CreateSavingsGoalDTO = Omit<SavingsGoal, 'id' | 'userId' | 'currentA
 
 export const savingsService = {
     async getGoals(userId: string = 'local_user'): Promise<SavingsGoal[]> {
+        await initDatabase();
         const db = getDb();
         const goals = await db.getAllAsync<any>('SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC', [userId]);
 
@@ -26,12 +27,14 @@ export const savingsService = {
     },
 
     async getGoalById(id: string): Promise<SavingsGoal | null> {
+        await initDatabase();
         const db = getDb();
         const row = await db.getFirstAsync<any>('SELECT * FROM savings_goals WHERE id = ?', [id]);
         return row ? this.mapDbToGoal(row) : null;
     },
 
     async createGoal(data: CreateSavingsGoalDTO, userId: string = 'local_user'): Promise<SavingsGoal> {
+        await initDatabase();
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
@@ -50,6 +53,7 @@ export const savingsService = {
     },
 
     async updateGoal(id: string, updates: Partial<CreateSavingsGoalDTO & { status: SavingsGoal['status'] }>): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 
@@ -73,12 +77,14 @@ export const savingsService = {
     },
 
     async deleteGoal(id: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         await db.runAsync('DELETE FROM savings_goals WHERE id = ?', [id]);
         notifyListeners('SAVINGS');
     },
 
     async transferToSavings(goalId: string, amount: number, sourceAccountId: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const txId = generateUUID();
         const now = new Date().toISOString();
@@ -123,6 +129,7 @@ export const savingsService = {
     },
 
     async linkTransactionToGoal(goalId: string, transactionId: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
         const goal = await this.getGoalById(goalId);
@@ -163,6 +170,7 @@ export const savingsService = {
     },
 
     async unlinkTransactionFromGoal(transactionId: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 

@@ -436,7 +436,7 @@ async function seedCategories(database: SQLite.SQLiteDatabase) {
         ['Business', 'INCOME', 'briefcase', '#0ea5e9', 0, 'Business revenue'],
         ['Gifts', 'INCOME', 'gift', '#d946ef', 0, 'Gifts received'],
         ['Fuliza Charges', 'EXPENSE', 'warning', '#f97316', 0, 'Fuliza access fees and interest'],
-        ['Savings', 'EXPENSE', 'piggy-bank', '#6366f1', 0, 'Money moved to savings goals'],
+        ['Savings', 'EXPENSE', 'university', '#6366f1', 0, 'Money moved to savings goals'],
         ['Debt Repayment', 'EXPENSE', 'money', '#0f172a', 0, 'Payments made towards debts']
     ];
 

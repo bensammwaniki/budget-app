@@ -1,10 +1,11 @@
 import { Transaction } from '../types/transaction';
-import { getDb } from './core/db';
+import { getDb, initDatabase } from './core/db';
 
 export const transactionService = {
     // Basic CRUD - For complex flows use ledgerService
 
     async getTransactionsByAccount(accountId: string): Promise<Transaction[]> {
+        await initDatabase();
         const db = getDb();
         const results = await db.getAllAsync<any>(
             'SELECT * FROM transactions WHERE account_id = ? AND is_deleted = 0 ORDER BY date DESC',
@@ -15,6 +16,7 @@ export const transactionService = {
     },
 
     async getAllTransactions(): Promise<Transaction[]> {
+        await initDatabase();
         const db = getDb();
         // Limit for performance until pagination is added
         const results = await db.getAllAsync<any>(
@@ -50,6 +52,7 @@ const mapRowToTransaction = (row: any): Transaction => {
 };
 
 export const transactionExists = async (id: string): Promise<boolean> => {
+    await initDatabase();
     const database = getDb();
     const result = await database.getFirstAsync<{ count: number }>(
         'SELECT count(*) as count FROM transactions WHERE id = ?',

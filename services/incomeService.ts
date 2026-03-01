@@ -1,5 +1,5 @@
 import { generateUUID } from '../utils/uuid';
-import { getDb, notifyListeners } from './core/db';
+import { getDb, initDatabase, notifyListeners } from './core/db';
 import { getTransactions } from './database';
 
 export type IncomeFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'IRREGULAR';
@@ -47,6 +47,7 @@ export const incomeService = {
     // ─── Sources ────────────────────────────────────────────────────────────
 
     async getSources(userId: string = 'local_user'): Promise<IncomeSource[]> {
+        await initDatabase();
         const db = getDb();
         const rows = await db.getAllAsync<any>(
             'SELECT * FROM income_sources WHERE user_id = ? ORDER BY created_at DESC',
@@ -56,12 +57,14 @@ export const incomeService = {
     },
 
     async getSourceById(id: string): Promise<IncomeSource | null> {
+        await initDatabase();
         const db = getDb();
         const row = await db.getFirstAsync<any>('SELECT * FROM income_sources WHERE id = ?', [id]);
         return row ? this.mapDbToSource(row) : null;
     },
 
     async createSource(data: CreateIncomeSourceDTO, userId: string = 'local_user'): Promise<IncomeSource> {
+        await initDatabase();
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
@@ -92,6 +95,7 @@ export const incomeService = {
     },
 
     async updateSource(id: string, updates: Partial<CreateIncomeSourceDTO & { status: IncomeSource['status'] }>): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
         const setClauses: string[] = [];
@@ -115,6 +119,7 @@ export const incomeService = {
     },
 
     async deleteSource(id: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         await db.runAsync('DELETE FROM income_sources WHERE id = ?', [id]);
         notifyListeners('INCOME_SOURCES');
@@ -123,6 +128,7 @@ export const incomeService = {
     // ─── Logs ───────────────────────────────────────────────────────────────
 
     async getLogs(sourceId?: string): Promise<IncomeLog[]> {
+        await initDatabase();
         const db = getDb();
         const query = sourceId
             ? 'SELECT * FROM income_logs WHERE source_id = ? ORDER BY received_at DESC'
@@ -132,6 +138,7 @@ export const incomeService = {
     },
 
     async logIncome(sourceId: string, amount: number, receivedAt: string, transactionId?: string, notes?: string): Promise<IncomeLog> {
+        await initDatabase();
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
@@ -153,6 +160,7 @@ export const incomeService = {
     },
 
     async linkTransactionToSource(sourceId: string, transactionId: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         // Verify transaction is income
         const tx = await db.getFirstAsync<any>('SELECT * FROM transactions WHERE id = ?', [transactionId]);

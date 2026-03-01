@@ -115,6 +115,7 @@ export const debtService = {
         debtId: string;
         transactionId: string;
     }): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 
@@ -184,6 +185,7 @@ export const debtService = {
         amount: number;
         date: string;
     }): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 
@@ -244,6 +246,11 @@ export const debtService = {
         if (filter) {
             query += ' AND status = ?';
             params.push(filter);
+
+            // Exclude zero balances from ACTIVE view
+            if (filter === 'ACTIVE') {
+                query += ' AND current_balance > 0';
+            }
         }
 
         if (type) {
@@ -330,6 +337,7 @@ export const debtService = {
             WHERE user_id = ? 
             AND type IN ('LIABILITY', 'OVERDRAFT')
             AND status = 'ACTIVE'
+            AND current_balance > 0
         `, [userId]);
 
         const receivables = await db.getFirstAsync<{ total: number; count: number }>(`
@@ -340,6 +348,7 @@ export const debtService = {
             WHERE user_id = ? 
             AND type = 'RECEIVABLE' 
             AND status = 'ACTIVE'
+            AND current_balance > 0
         `, [userId]);
 
         let totalLiabilities = liabilities?.total || 0;

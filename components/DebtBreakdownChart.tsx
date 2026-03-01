@@ -77,7 +77,7 @@ export default function DebtBreakdownChart({ data }: Props) {
                                 style={{ backgroundColor: item.color }}
                                 className="w-3 h-3 rounded-full mr-3"
                             />
-                            <Text className="text-gray-700 font-medium">{item.label?.slice(0, 5)}  </Text>
+                            <Text className="text-gray-700 font-medium items-center">{item.label?.slice(0, 5)}  </Text>
                         </View>
 
                         <Text className="font-semibold text-gray-900">

@@ -1,5 +1,5 @@
 import { generateUUID } from '../utils/uuid';
-import { getDb } from './core/db';
+import { getDb, initDatabase } from './core/db';
 import { getTransactions } from './database';
 import { debtService } from './debtService';
 import { savingsService } from './savingsService';
@@ -52,6 +52,7 @@ export interface MonthlySummary {
 export const insightsService = {
 
     async getKeyMetrics(userId: string = 'local_user', providedTx?: any[]): Promise<KeyMetrics> {
+        await initDatabase();
         const db = getDb();
         const now = new Date();
 
@@ -144,6 +145,7 @@ export const insightsService = {
     },
 
     async getCategoryTrends(providedTx?: any[]): Promise<CategoryTrend[]> {
+        await initDatabase();
         const now = new Date();
         const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -185,6 +187,7 @@ export const insightsService = {
     },
 
     async getMonthlySummaries(months: number = 6): Promise<MonthlySummary[]> {
+        await initDatabase();
         const db = getDb();
         const rows = await db.getAllAsync<any>(
             'SELECT * FROM monthly_summaries ORDER BY month DESC LIMIT ?', [months]
@@ -199,6 +202,7 @@ export const insightsService = {
     },
 
     async recordNetWorthSnapshot(): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const today = new Date().toISOString().split('T')[0];
         const metrics = await this.getKeyMetrics();
@@ -210,6 +214,7 @@ export const insightsService = {
     },
 
     async getNetWorthHistory(days: number = 90): Promise<{ date: string; netWorth: number }[]> {
+        await initDatabase();
         const db = getDb();
         const rows = await db.getAllAsync<any>(
             'SELECT * FROM net_worth_history ORDER BY snapshot_date DESC LIMIT ?', [days]
@@ -220,6 +225,7 @@ export const insightsService = {
     async upsertMonthlySummary(
         month: string, income: number, expenses: number, savings: number, netWorth: number
     ): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const id = generateUUID();
         await db.runAsync(`

@@ -1,7 +1,7 @@
 import { Transaction } from '../types/transaction';
 import { generateUUID } from '../utils/uuid';
 import { accountService } from './accountService';
-import { getDb } from './core/db';
+import { getDb, initDatabase } from './core/db';
 
 interface TransferPayload {
     fromAccountId: string;
@@ -33,6 +33,7 @@ export const ledgerService = {
      * Atomic: Inserts Transaction -> Updates Account Balance
      */
     async recordTransaction(payload: TransactionPayload): Promise<Transaction> {
+        await initDatabase();
         const db = getDb();
         const uuid = generateUUID();
         const now = new Date().toISOString();
@@ -100,6 +101,7 @@ export const ledgerService = {
      * Creates TWO transactions linked by a referenceId.
      */
     async recordTransfer(payload: TransferPayload): Promise<{ debitTx: string, creditTx: string }> {
+        await initDatabase();
         const db = getDb();
         const referenceId = generateUUID(); // Link them
         const now = new Date().toISOString();
@@ -166,6 +168,7 @@ export const ledgerService = {
      * Soft Deletes a transaction and Reverses its balance impact.
      */
     async reverseTransaction(transactionId: string): Promise<void> {
+        await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
 
