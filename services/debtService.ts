@@ -277,8 +277,32 @@ export const debtService = {
     async deleteDebt(debtId: string) {
         await initDatabase();
         const db = getDb();
-        await db.runAsync("DELETE FROM debts WHERE id = ?", [debtId]);
+
+        await db.withTransactionAsync(async () => {
+            // Unlink all repayments so they become normal expenses/incomes again
+            await db.runAsync(`
+                UPDATE transactions 
+                SET transaction_kind = CASE WHEN amount < 0 THEN 'EXPENSE' ELSE 'INCOME' END,
+                    linked_debt_id = NULL,
+                    category_id = NULL
+                WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_REPAYMENT'
+            `, [debtId]);
+
+            // Delete principal transactions (which represented the initial loan transfer)
+            await db.runAsync(`
+                DELETE FROM transactions
+                WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_PRINCIPAL'
+            `, [debtId]);
+
+            // Delete payment records
+            await db.runAsync("DELETE FROM debt_payments WHERE debt_id = ?", [debtId]);
+
+            // Finally, delete the debt record
+            await db.runAsync("DELETE FROM debts WHERE id = ?", [debtId]);
+        });
+
         notifyListeners('DEBTS');
+        notifyListeners('TRANSACTIONS');
     },
 
     async getPotentialMatches(debtId: string): Promise<any[]> {
@@ -296,7 +320,6 @@ export const debtService = {
             AND transaction_kind != 'DEBT_PRINCIPAL'
             AND is_deleted = 0
             ORDER BY date DESC
-            LIMIT 50
         `, [type]);
     },
 

@@ -80,7 +80,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                         <TouchableOpacity onPress={onClose} className="p-2 -mr-2 mt-[-10px] bg-gray-100 dark:bg-slate-800 rounded-full">
                             <Image
                                 source={require('../assets/svg/close.svg')}
-                                style={{ width: 16, height: 16 }}
+                                style={{ width: 14, height: 14 }}
                                 contentFit="contain"
                                 tintColor={colorScheme === 'dark' ? '#ffffffff' : '#1e293b'}
                             />
@@ -141,7 +141,12 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 className="w-[48%] p-4 rounded-2xl border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 flex-row items-center active:bg-blue-100 dark:active:bg-blue-900/40"
                             >
                                 <View className="w-10 h-10 rounded-full items-center justify-center mr-3 bg-blue-100 dark:bg-blue-800">
-                                    <FontAwesome name="plus" size={18} color="#3b82f6" />
+                                    <Image
+                                        source={require('../assets/svg/plus.svg')}
+                                        style={{ width: 14, height: 14 }}
+                                        contentFit="contain"
+                                        tintColor={colorScheme === 'dark' ? '#ffffffff' : '#002db6ff'}
+                                    />
                                 </View>
                                 <Text className="text-blue-700 dark:text-blue-300 font-medium flex-1">New Category</Text>
                             </TouchableOpacity>

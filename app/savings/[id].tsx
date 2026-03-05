@@ -3,8 +3,8 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTransactions } from '../../services/database';
@@ -26,6 +26,17 @@ export default function GoalDetailScreen() {
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [linkableTransactions, setLinkableTransactions] = useState<Transaction[]>([]);
     const [linking, setLinking] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredLinkableTransactions = useMemo(() => {
+        if (!searchQuery.trim()) return linkableTransactions;
+        const q = searchQuery.toLowerCase();
+        return linkableTransactions.filter(t =>
+            (t.recipientName && t.recipientName.toLowerCase().includes(q)) ||
+            (t.transactionKind && t.transactionKind.toLowerCase().includes(q)) ||
+            t.amount.toString().includes(q)
+        );
+    }, [linkableTransactions, searchQuery]);
 
     const scrollY = useSharedValue(0);
 
@@ -285,18 +296,18 @@ export default function GoalDetailScreen() {
 
                     <View className="flex-row gap-3 mb-8">
                         {goal.status !== 'COMPLETED' && (
-                        <TouchableOpacity
-                            className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
+                            <TouchableOpacity
+                                className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
                                 style={{ backgroundColor: themeColor, shadowColor: themeColor }}
-                            onPress={fetchLinkableTransactions}>
-                            <Image
-                                source={require(`../../assets/svg/link-sms.svg`)}
-                                style={{ width: 22, height: 22 }}
-                                tintColor={"white"}
-                                contentFit="contain"
-                            />
-                            <Text className="text-white font-bold text-lg">Link SMS</Text>
-                        </TouchableOpacity>
+                                onPress={fetchLinkableTransactions}>
+                                <Image
+                                    source={require(`../../assets/svg/link-sms.svg`)}
+                                    style={{ width: 22, height: 22 }}
+                                    tintColor={"white"}
+                                    contentFit="contain"
+                                />
+                                <Text className="text-white font-bold text-lg">Link SMS</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
 
@@ -361,20 +372,42 @@ export default function GoalDetailScreen() {
                         <TouchableOpacity onPress={() => setShowLinkModal(false)} className="p-2 -mr-2">
                             <Image
                                 source={require(`../../assets/svg/close.svg`)}
-                                style={{ width: 20, height: 20}}
+                                style={{ width: 20, height: 20 }}
                                 tintColor={isDark ? '#94a3b8' : themeColor}
                                 contentFit="contain"
                             />
                         </TouchableOpacity>
                     </View>
 
-                    {linkableTransactions.length === 0 ? (
+                    {/* Search Bar */}
+                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <FontAwesome name="search" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                            <TextInput
+                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
+                                placeholder="Search by name or amount..."
+                                placeholderTextColor={isDark ? '#cbd5e1' : '#94a3b8'}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
+                                    <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {filteredLinkableTransactions.length === 0 ? (
                         <View className="flex-1 items-center justify-center p-6">
-                            <Text className="text-slate-500 dark:text-slate-400 text-center">No eligible transactions found. Only standard expenses can be linked to savings goals.</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-center">
+                                {searchQuery ? 'No matching transactions found.' : 'No eligible transactions found. Only standard expenses can be linked to savings goals.'}
+                            </Text>
                         </View>
                     ) : (
                         <FlatList
-                            data={linkableTransactions}
+                            data={filteredLinkableTransactions}
                             keyExtractor={tx => tx.id}
                             contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
                             renderItem={({ item: tx }) => (
@@ -388,7 +421,7 @@ export default function GoalDetailScreen() {
                                             <Image
                                                 source={require(`../../assets/svg/savings.svg`)}
                                                 style={{ width: 20, height: 20 }}
-                                                tintColor={isDark ? '#94a3b8' :themeColor }
+                                                tintColor={isDark ? '#94a3b8' : themeColor}
                                                 contentFit="contain"
                                             />
                                         </View>
@@ -411,7 +444,7 @@ export default function GoalDetailScreen() {
                                         ) : (
                                             <Image
                                                 source={require(`../../assets/svg/link-sms.svg`)}
-                                                style={{ width: 28, height: 28}}
+                                                style={{ width: 28, height: 28 }}
                                                 tintColor={themeColor}
                                                 contentFit="contain"
                                             />

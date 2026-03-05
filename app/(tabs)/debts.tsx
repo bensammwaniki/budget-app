@@ -6,10 +6,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
   RefreshControl,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DebtBreakdownChart, { DebtItem } from '../../components/DebtBreakdownChart';
@@ -62,7 +63,10 @@ export default function DebtsScreen() {
 
     const unsubscribe = subscribeToDatabaseChanges((type) => {
       if (type === 'DEBTS' || type === 'TRANSACTIONS') {
-        loadDebts();
+        InteractionManager.runAfterInteractions(() => {
+          loadDebts();
+          loadTotals(); // also refresh totals on database changes
+        });
       }
     });
 

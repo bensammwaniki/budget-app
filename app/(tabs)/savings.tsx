@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, InteractionManager, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
@@ -34,7 +34,9 @@ export default function SavingsScreen() {
 
         const unsubscribe = subscribeToDatabaseChanges((type) => {
             if (type === 'SAVINGS' || type === 'TRANSACTIONS') {
-                loadGoals();
+                InteractionManager.runAfterInteractions(() => {
+                    loadGoals();
+                });
             }
         });
 

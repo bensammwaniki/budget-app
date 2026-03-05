@@ -140,23 +140,33 @@ export const transactionExists = async (id: string): Promise<boolean> => {
     return (result?.count || 0) > 0;
 };
 
-export const getTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+export const getTransactionIdsInRange = async (sinceDate?: Date): Promise<Set<string>> => {
     await initDatabase();
     const database = getDb();
-    const results = await database.getAllAsync<{ id: string }>(
-        'SELECT id FROM transactions WHERE date >= ?',
-        [sinceDate.toISOString()]
-    );
+    let results: { id: string }[];
+    if (sinceDate) {
+        results = await database.getAllAsync<{ id: string }>(
+            'SELECT id FROM transactions WHERE date >= ?',
+            [sinceDate.toISOString()]
+        );
+    } else {
+        results = await database.getAllAsync<{ id: string }>('SELECT id FROM transactions');
+    }
     return new Set(results.map(r => r.id));
 };
 
-export const getFulizaTransactionIdsInRange = async (sinceDate: Date): Promise<Set<string>> => {
+export const getFulizaTransactionIdsInRange = async (sinceDate?: Date): Promise<Set<string>> => {
     await initDatabase();
     const database = getDb();
-    const results = await database.getAllAsync<{ id: string }>(
-        'SELECT id FROM fuliza_transactions WHERE date >= ?',
-        [sinceDate.toISOString()]
-    );
+    let results: { id: string }[];
+    if (sinceDate) {
+        results = await database.getAllAsync<{ id: string }>(
+            'SELECT id FROM fuliza_transactions WHERE date >= ?',
+            [sinceDate.toISOString()]
+        );
+    } else {
+        results = await database.getAllAsync<{ id: string }>('SELECT id FROM fuliza_transactions');
+    }
     return new Set(results.map(r => r.id));
 };
 

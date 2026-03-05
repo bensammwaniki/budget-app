@@ -12,7 +12,7 @@ import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insig
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
 
-type SpendingPeriod = 'Today' | 'This Week' | '2 Weeks' | '3 Weeks' | 'This Month' | 'This Year';
+type SpendingPeriod = 'This Week' | 'Last Week' | 'This Month' | 'This Year';
 
 import { router } from 'expo-router';
 import { useColorScheme } from "nativewind";
@@ -23,7 +23,7 @@ export default function AnalyticsScreen() {
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('Today');
+  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Week');
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Phase 5 intelligence state
@@ -243,84 +243,40 @@ export default function AnalyticsScreen() {
       }
     };
 
-    if (spendingFilter === 'Today') {
-      // Show Today in hours
-      labels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
+    if (spendingFilter === 'This Week') {
+      // Mon-Sun of the current week
+      const startOfWeek = new Date(todayStart);
+      startOfWeek.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7)); // Monday
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      dayNames.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
+      labels = dayNames;
 
       for (let i = 0; i < expenses.length; i++) {
         const d = expenses[i].parsedDate;
-        if (d >= todayStart) {
-          const hour = `${d.getHours().toString().padStart(2, '0')}:00`;
-          addData(hour, expenses[i].amount);
+        if (d >= startOfWeek && d <= now) {
+          const dayIndex = (d.getDay() + 6) % 7; // 0=Mon..6=Sun
+          addData(dayNames[dayIndex], expenses[i].amount);
         }
       }
-    } else if (spendingFilter === 'This Week') {
-      // This week show in days (Last 7 days)
-      const daysBack = 7;
-      const startDate = new Date(todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60 * 1000);
+    } else if (spendingFilter === 'Last Week') {
+      // Mon-Sun of the previous calendar week
+      const thisWeekStart = new Date(todayStart);
+      thisWeekStart.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7));
+      const lastWeekStart = new Date(thisWeekStart);
+      lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+      const lastWeekEnd = new Date(thisWeekStart);
+      lastWeekEnd.setMilliseconds(-1);
 
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-      for (let i = 0; i < daysBack; i++) {
-        const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-        const label = dayNames[d.getDay()];
-        labels.push(label);
-        resultMap[label] = 0;
-        lineMap[label] = 0;
-      }
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      dayNames.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
+      labels = dayNames;
 
       for (let i = 0; i < expenses.length; i++) {
         const d = expenses[i].parsedDate;
-        if (d >= startDate && d <= now) {
-          const label = dayNames[d.getDay()];
-          addData(label, expenses[i].amount);
-        }
-      }
-    } else if (spendingFilter === '2 Weeks') {
-      // 2 Weeks show in 2 days (7 data points)
-      const startDate = new Date(todayStart.getTime() - 13 * 24 * 60 * 60 * 1000);
-
-      for (let i = 0; i < 7; i++) {
-        const d1 = new Date(startDate.getTime() + (i * 2) * 24 * 60 * 60 * 1000);
-        const d2 = new Date(startDate.getTime() + (i * 2 + 1) * 24 * 60 * 60 * 1000);
-        const label = `${d1.getDate()}-${d2.getDate()}`;
-        labels.push(label);
-        resultMap[label] = 0;
-        lineMap[label] = 0;
-      }
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d >= startDate && d <= now) {
-          const diffDays = Math.floor((d.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-          const index = Math.floor(diffDays / 2);
-          if (index >= 0 && index < 7) {
-            addData(labels[index], expenses[i].amount);
-          }
-        }
-      }
-    } else if (spendingFilter === '3 Weeks') {
-      // 3 Weeks show in 3 days (7 data points)
-      const startDate = new Date(todayStart.getTime() - 20 * 24 * 60 * 60 * 1000);
-
-      for (let i = 0; i < 7; i++) {
-        const d1 = new Date(startDate.getTime() + (i * 3) * 24 * 60 * 60 * 1000);
-        const d2 = new Date(startDate.getTime() + (i * 3 + 2) * 24 * 60 * 60 * 1000);
-        const label = `${d1.getDate()}-${d2.getDate()}`;
-        labels.push(label);
-        resultMap[label] = 0;
-        lineMap[label] = 0;
-      }
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d >= startDate && d <= now) {
-          const diffDays = Math.floor((d.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-          const index = Math.floor(diffDays / 3);
-          if (index >= 0 && index < 7) {
-            addData(labels[index], expenses[i].amount);
-          }
+        if (d >= lastWeekStart && d <= lastWeekEnd) {
+          const dayIndex = (d.getDay() + 6) % 7;
+          addData(dayNames[dayIndex], expenses[i].amount);
         }
       }
     } else if (spendingFilter === 'This Month') {
@@ -333,7 +289,7 @@ export default function AnalyticsScreen() {
         if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
           const day = d.getDate();
           let weekIndex = Math.floor((day - 1) / 7);
-          if (weekIndex > 3) weekIndex = 3; // Put remaining days in Week 4
+          if (weekIndex > 3) weekIndex = 3;
           addData(labels[weekIndex], expenses[i].amount);
         }
       }
@@ -765,7 +721,7 @@ export default function AnalyticsScreen() {
         <View className="bg-white  dark:bg-[#1e293b] py-4 px-4 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
           {/* Pills */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 flex-row" contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-            {(['Today', 'This Week', '2 Weeks', '3 Weeks', 'This Month', 'This Year'] as SpendingPeriod[]).map(filter => {
+            {(['This Week', 'Last Week', 'This Month', 'This Year'] as SpendingPeriod[]).map(filter => {
               const isActive = spendingFilter === filter;
               return (
                 <TouchableOpacity

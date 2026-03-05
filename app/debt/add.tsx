@@ -354,8 +354,10 @@ function AddDebtScreen() {
                                     <View className="flex-row flex-wrap justify-between">
                                         {Array.from({ length: 12 }).map((_, i) => {
                                             const now = new Date();
+                                            const displayYear = expectedPayDate ? expectedPayDate.getFullYear() : now.getFullYear();
                                             const currentMonth = expectedPayDate ? expectedPayDate.getMonth() : -1;
-                                            const isPastMonth = i < now.getMonth() && (!expectedPayDate || expectedPayDate.getFullYear() <= now.getFullYear());
+                                            // Disable months before the current month if we're displaying the current year
+                                            const isPastMonth = displayYear === now.getFullYear() && i < now.getMonth();
 
                                             return (
                                                 <TouchableOpacity
@@ -379,7 +381,8 @@ function AddDebtScreen() {
                                         <TouchableOpacity
                                             onPress={() => {
                                                 const currentYear = expectedPayDate ? expectedPayDate.getFullYear() : new Date().getFullYear();
-                                                handleMonthYearSelect(expectedPayDate?.getMonth() || 0, currentYear - 1);
+                                                const currentMon = expectedPayDate ? expectedPayDate.getMonth() : new Date().getMonth();
+                                                handleMonthYearSelect(currentMon, currentYear - 1);
                                             }}
                                             className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full items-center justify-center"
                                         >
@@ -391,7 +394,8 @@ function AddDebtScreen() {
                                         <TouchableOpacity
                                             onPress={() => {
                                                 const currentYear = expectedPayDate ? expectedPayDate.getFullYear() : new Date().getFullYear();
-                                                handleMonthYearSelect(expectedPayDate?.getMonth() || 0, currentYear + 1);
+                                                const currentMon = expectedPayDate ? expectedPayDate.getMonth() : new Date().getMonth();
+                                                handleMonthYearSelect(currentMon, currentYear + 1);
                                             }}
                                             className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full items-center justify-center"
                                         >
@@ -457,15 +461,15 @@ function AddDebtScreen() {
                         onPress={handleSave}
                         disabled={loading}
                     >
-                        {loading ? <ActivityIndicator color="white" /> : 
-                        <View className="flex-row items-center gap-2">
-                            <Image
-                            source={require('../../assets/svg/confirm.svg')}
-                            style={{ width: 20, height: 20 }}
-                            tintColor={"white"}
-                            contentFit="contain"
-                        />
-                        <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text></View>}
+                        {loading ? <ActivityIndicator color="white" /> :
+                            <View className="flex-row items-center gap-2">
+                                <Image
+                                    source={require('../../assets/svg/confirm.svg')}
+                                    style={{ width: 20, height: 20 }}
+                                    tintColor={"white"}
+                                    contentFit="contain"
+                                />
+                                <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text></View>}
                     </TouchableOpacity>
                 </View>
             </Animated.ScrollView>

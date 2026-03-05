@@ -30,8 +30,13 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const bankRef = match[4]; // Bank Ref
         const mpesaRef = match[5]; // M-PESA Ref - useful for deduplication
 
+        const txId = `IM_TRANSFER_${bankRef}`;
         return {
-            id: `IM_TRANSFER_${bankRef}`, // Standardize ID with IM_ prefix
+            id: txId, // Standardize ID with IM_ prefix
+            uuid: txId,
+            userId: 'local_user',
+            accountId: 'ACC-MPESA-DEFAULT', // Default to MPESA for now
+            transactionKind: 'EXPENSE',
             amount: amount,
             type: 'SENT',
             recipientId: phoneNumber,
@@ -41,6 +46,9 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             transactionCost: 0,
             categoryId: undefined, // Will be categorized later
             rawSms: smsText,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isDeleted: false
             // Custom field to help with deduplication
             // We put the MPESA Ref in the narration or a special field if we had one.
             // For now, we rely on the logic in smsService to check this.
@@ -58,17 +66,25 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const bankRef = match[3];
         const mpesaRef = match[4];
 
+        const txId = `IM_TRANSFER_${bankRef}`;
         return {
-            id: `IM_TRANSFER_${bankRef}`, // SAME ID as the transfer message
+            id: txId, // SAME ID as the transfer message
+            uuid: txId,
+            userId: 'local_user',
+            accountId: 'ACC-MPESA-DEFAULT',
+            transactionKind: 'INCOME',
             amount: amount,
-            type: 'SENT', // Force SENT to maintain it as an expense/transfer record
+            type: 'RECEIVED', // Receipt should probably be received
             recipientId: 'SELF', // Or user name
             recipientName: senderName, // "BENSON..."
             date: new Date(),
             balance: 0,
             transactionCost: 0,
             categoryId: undefined,
-            rawSms: smsText
+            rawSms: smsText,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isDeleted: false
         };
     }
 
@@ -86,8 +102,13 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             normalizedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
 
+        const txId = `IM_CARD_${dateStr.replace(/-/g, '')}${timeStr.replace(/:/g, '')}`;
         return {
-            id: `IM_CARD_${dateStr.replace(/-/g, '')}${timeStr.replace(/:/g, '')}`, // Generate a unique ID
+            id: txId, // Generate a unique ID
+            uuid: txId,
+            userId: 'local_user',
+            accountId: 'ACC-MPESA-DEFAULT',
+            transactionKind: 'EXPENSE',
             amount: amount,
             type: 'SENT',
             recipientId: merchant.toUpperCase(),
@@ -95,7 +116,10 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             date: new Date(`${normalizedDate}T${timeStr}`),
             balance: 0,
             transactionCost: 0,
-            rawSms: smsText
+            rawSms: smsText,
+            createdAt: new Date(`${normalizedDate}T${timeStr}`),
+            updatedAt: new Date(`${normalizedDate}T${timeStr}`),
+            isDeleted: false
         };
     }
 

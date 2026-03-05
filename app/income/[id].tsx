@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,16 @@ export default function IncomeDetailScreen() {
     const [showModal, setShowModal] = useState(false);
     const [linkableTx, setLinkableTx] = useState<Transaction[]>([]);
     const [linking, setLinking] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredLinkableTx = useMemo(() => {
+        if (!searchQuery.trim()) return linkableTx;
+        const q = searchQuery.toLowerCase();
+        return linkableTx.filter(t =>
+            (t.recipientName && t.recipientName.toLowerCase().includes(q)) ||
+            t.amount.toString().includes(q)
+        );
+    }, [linkableTx, searchQuery]);
 
     // Manual income recording state
     const [showManualModal, setShowManualModal] = useState(false);
@@ -313,13 +323,35 @@ export default function IncomeDetailScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {linkableTx.length === 0 ? (
+                    {/* Search Bar */}
+                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <FontAwesome name="search" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                            <TextInput
+                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
+                                placeholder="Search by name or amount..."
+                                placeholderTextColor={isDark ? '#cbd5e1' : '#94a3b8'}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
+                                    <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {filteredLinkableTx.length === 0 ? (
                         <View className="flex-1 items-center justify-center p-6">
-                            <Text className="text-slate-500 dark:text-slate-400 text-center">No unlinked income transactions found.</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-center">
+                                {searchQuery ? 'No matching transactions found.' : 'No unlinked income transactions found.'}
+                            </Text>
                         </View>
                     ) : (
                         <FlatList
-                            data={linkableTx}
+                            data={filteredLinkableTx}
                             keyExtractor={t => t.id}
                             contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
                             renderItem={({ item: tx }) => (

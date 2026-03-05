@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
 import TransactionItem from '../../components/TransactionItem';
@@ -29,7 +29,7 @@ import { syncMessages } from '../../services/smsService';
 import { Category, Transaction } from '../../types/transaction';
 // calculateFulizaDailyCharge removed - now handled in debt detail if needed
 
-type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST 3 MONTHS' | 'CURRENT YEAR';
+type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST 3 MONTHS' | 'CURRENT YEAR' | 'ALL TIME';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -53,6 +53,11 @@ export default function HomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [logs, setLogs] = useState<IncomeLog[]>([]);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const searchWidth = useSharedValue(0);
 
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString(undefined, {
@@ -244,7 +249,7 @@ export default function HomeScreen() {
 
   // Filter transactions based on selected period AND bank settings
   const filteredTransactions = useMemo(() => {
-    const filtered = allTransactions.filter((t: Transaction) => {
+    let filtered = allTransactions.filter((t: Transaction) => {
       // Filter out bank transactions if bank is disabled
       const isBankTransaction = t.id.startsWith('IM_');
 
@@ -266,8 +271,17 @@ export default function HomeScreen() {
       } else if (selectedPeriod === 'CURRENT YEAR') {
         return txDate >= startOfCurrentYear;
       }
-      return true;
+      return true; // 'ALL TIME' or unmatched falls through
     });
+
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(t =>
+        (t.recipientName && t.recipientName.toLowerCase().includes(q)) ||
+        (t.amount.toString().includes(q)) ||
+        (t.categoryName && t.categoryName.toLowerCase().includes(q))
+      );
+    }
 
     // Debug: Count bank transactions
     const bankTransactions = filtered.filter(t => t.id.startsWith('IM_'));
@@ -281,7 +295,7 @@ export default function HomeScreen() {
     }
 
     return filtered;
-  }, [allTransactions, selectedPeriod, dateRange, imBankEnabled]);
+  }, [allTransactions, selectedPeriod, dateRange, imBankEnabled, searchQuery]);
 
 
   // Calculate summary statistics for the selected period
@@ -349,9 +363,14 @@ export default function HomeScreen() {
       setSelectedTransaction(null);
 
       try {
-        if (activeTransaction.recipientId) {
+        const isFirstTime = !activeTransaction.categoryId || activeTransaction.categoryId === 0;
+
+        if (isFirstTime && activeTransaction.recipientId) {
+          // First time categorizing: creates automation rule (future) & applies to past uncategorized
           await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
         }
+
+        // Re-categorizing: ONLY updates this specific transaction
         await updateTransactionCategory(activeTransaction.id, category.id);
       } catch (error) {
         console.error("Failed to save category:", error);
@@ -495,12 +514,33 @@ export default function HomeScreen() {
     },
   });
 
+  const searchAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      width: searchWidth.value,
+      opacity: searchWidth.value > 0 ? 1 : 0,
+      overflow: 'hidden',
+    };
+  });
+
+  const toggleSearch = () => {
+    if (isSearchActive) {
+      searchWidth.value = withTiming(0, { duration: 300 });
+      setTimeout(() => {
+        setIsSearchActive(false);
+        setSearchQuery('');
+      }, 300);
+    } else {
+      setIsSearchActive(true);
+      searchWidth.value = withTiming(200, { duration: 300 });
+    }
+  };
+
 
   const renderHeader = () => (
     <View>
       <View className="px-6 pt-16 pb-4 bg-white dark:bg-[#0f172a] rounded-b-[12px]">
         <View className="flex-row justify-between items-center mb-4">
-          <View>
+          <View className="flex-1">
             <View className="flex-row items-center gap-2">
               <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                 Welcome back,
@@ -521,6 +561,27 @@ export default function HomeScreen() {
             </View>
 
             <Text className="text-slate-900 dark:text-white text-xl font-bold mt-1">{firstName}! 👋</Text>
+          </View>
+
+          <View className="flex-row items-center justify-end h-10">
+            <Animated.View style={[searchAnimatedStyle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderRadius: 20, height: 40, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }]}>
+              <TextInput
+                placeholder="Search queries..."
+                placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                className="flex-1 text-slate-900 dark:text-white h-full text-sm"
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} className="ml-2 py-2">
+                  <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+            <TouchableOpacity onPress={toggleSearch} className="w-10 h-10 items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-full ml-2">
+              <FontAwesome name={isSearchActive ? "times" : "search"} size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -552,25 +613,27 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="flex-row bg-white dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6">
-          {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR'] as Period[]).map((period) => (
-            <TouchableOpacity
-              key={period}
-              className={`flex-1 px-1 py-2 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
-              onPress={() => {
-                setPeriodLoading(true);
-                setDisplayLimit(20);
-                setTimeout(() => {
-                  setSelectedPeriod(period);
-                  setPeriodLoading(false);
-                }, 100);
-              }}
-            >
-              <Text className={`font-semibold text-[8px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
-                {period.replace('_', ' ')}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View className="bg-white dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6 overflow-hidden">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 2 }}>
+            {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
+              <TouchableOpacity
+                key={period}
+                className={`px-3 py-2 mr-1 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
+                onPress={() => {
+                  setPeriodLoading(true);
+                  setDisplayLimit(20);
+                  setTimeout(() => {
+                    setSelectedPeriod(period);
+                    setPeriodLoading(false);
+                  }, 100);
+                }}
+              >
+                <Text className={`font-semibold text-xs text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
+                  {period.replace('_', ' ')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
 
@@ -679,7 +742,7 @@ export default function HomeScreen() {
       <Animated.FlatList
         data={filteredTransactions
           .filter(t => !t.id.startsWith('FULIZA-FEES-'))
-          .slice(0, displayLimit)}
+          .slice(0, searchQuery ? filteredTransactions.length : displayLimit)}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TransactionItem
@@ -687,8 +750,8 @@ export default function HomeScreen() {
             onPress={handleTransactionPress}
           />
         )}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
+        ListHeaderComponent={renderHeader()}
+        ListFooterComponent={renderFooter()}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
         onScroll={handleScroll}

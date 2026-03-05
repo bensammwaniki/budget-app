@@ -53,7 +53,7 @@ export const requestSMSPermission = async (): Promise<boolean> => {
 /**
  * Read M-PESA SMS messages from the phone
  */
-export const syncMessages = async (days: number = 30) => {
+export const syncMessages = async (days: number = 30, fullHistory: boolean = false) => {
     await initDatabase();
 
     try {
@@ -69,8 +69,11 @@ export const syncMessages = async (days: number = 30) => {
         let syncDays = days;
         const lastSyncStr = await getUserSettings('last_sync_timestamp');
 
-        // AND this is the first ever sync.
-        if (!lastSyncStr && days === 30) {
+        if (fullHistory) {
+            // All-time sync — no day limit
+            syncDays = 0;
+            console.log(`🕰️ Full history sync requested — fetching ALL SMS messages.`);
+        } else if (!lastSyncStr && days === 30) {
             syncDays = 30;
             console.log(`🚀 Initial launch: Performing default sync (30 days).`);
         } else if (lastSyncStr) {
@@ -87,8 +90,10 @@ export const syncMessages = async (days: number = 30) => {
         const messages = await readMpesaSMS(syncDays);
         const imBankEnabled = await getUserSettings('bank_im_enabled') === 'true';
 
-        // BATCH CACHING: Fetch existing IDs once to prevent thousands of DB queries
-        const sinceDate = new Date(Date.now() - (syncDays + 2) * 24 * 60 * 60 * 1000);
+        // BATCH CACHING: Fetch existing IDs — for full history pass no date
+        const sinceDate = syncDays > 0
+            ? new Date(Date.now() - (syncDays + 2) * 24 * 60 * 60 * 1000)
+            : undefined;
         const existingTxIds = await getTransactionIdsInRange(sinceDate);
         const existingFulizaIds = await getFulizaTransactionIdsInRange(sinceDate);
 
@@ -235,18 +240,23 @@ export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
         let allMessages: SMSMessage[] = [];
         let indexFrom = 0;
         const batchSize = 1000;
-        const minDate = Date.now() - (days * 24 * 60 * 60 * 1000);
+        // When days === 0, fetch all-time (no minDate restriction)
+        const minDate = days > 0 ? Date.now() - (days * 24 * 60 * 60 * 1000) : undefined;
 
-        console.log(`🔍 Combing through SMS for the last ${days} days...`);
+        console.log(minDate
+            ? `🔍 Combing through SMS for the last ${days} days...`
+            : `🔍 Combing through ALL-TIME SMS messages...`);
 
         while (true) {
             const batch: SMSMessage[] = await new Promise((resolve) => {
-                const filter = {
+                const filter: any = {
                     box: 'inbox',
                     indexFrom,
                     maxCount: batchSize,
-                    minDate,
                 };
+                if (minDate !== undefined) {
+                    filter.minDate = minDate;
+                }
 
                 SmsAndroid.list(
                     JSON.stringify(filter),

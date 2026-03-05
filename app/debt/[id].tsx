@@ -2,8 +2,8 @@ import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { debtService } from '../../services/debtService';
@@ -24,6 +24,16 @@ export default function DebtDetailScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [potentialMatches, setPotentialMatches] = useState<any[]>([]);
     const [matchesLoading, setMatchesLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredMatches = useMemo(() => {
+        if (!searchQuery.trim()) return potentialMatches;
+        const q = searchQuery.toLowerCase();
+        return potentialMatches.filter(t =>
+            (t.recipient_name && t.recipient_name.toLowerCase().includes(q)) ||
+            t.amount.toString().includes(q)
+        );
+    }, [potentialMatches, searchQuery]);
 
     const scrollY = useSharedValue(0);
 
@@ -122,6 +132,30 @@ export default function DebtDetailScreen() {
         );
     };
 
+    const handleDeleteDebt = () => {
+        Alert.alert(
+            "Delete Debt",
+            "Are you sure you want to delete this debt? This action cannot be undone. All linked payments will become normal expenses/incomes.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            if (debt) {
+                                await debtService.deleteDebt(debt.id);
+                                router.back();
+                            }
+                        } catch (e: any) {
+                            Alert.alert('Error', e.message || 'Failed to delete debt');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-[#020617]">
@@ -162,7 +196,9 @@ export default function DebtDetailScreen() {
                         />
                     </TouchableOpacity>
                     <Text className="text-xl font-bold text-slate-900 dark:text-white">{debt.name}</Text>
-                    <View style={{ width: 20 }} />
+                    <TouchableOpacity onPress={handleDeleteDebt} className="p-2 -mr-2">
+                        <FontAwesome name="trash-o" size={22} color="#ef4444" />
+                    </TouchableOpacity>
                 </View>
             </Animated.View>
 
@@ -321,18 +357,38 @@ export default function DebtDetailScreen() {
             {/* Link Transaction Modal */}
             <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
                 <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-4">
-                    <View className="px-6 py-4 flex-row items-center justify-between">
+                    <View className="px-6 py-4 flex-row items-center justify-between border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
                         <TouchableOpacity onPress={() => setModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 p-2 rounded-full">
                             <FontAwesome name="close" size={16} color="#64748b" />
                         </TouchableOpacity>
                     </View>
 
+                    {/* Search Bar */}
+                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <FontAwesome name="search" size={16} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
+                            <TextInput
+                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
+                                placeholder="Search by name or amount..."
+                                placeholderTextColor={colorScheme === 'dark' ? '#cbd5e1' : '#94a3b8'}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
+                                    <FontAwesome name="times-circle" size={16} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
                     {matchesLoading ? (
-                        <ActivityIndicator size="large" className="mt-10" />
+                        <ActivityIndicator size="large" className="mt-10" color="#3b82f6" />
                     ) : (
                         <FlatList
-                            data={potentialMatches}
+                            data={filteredMatches}
                             keyExtractor={item => item.id}
                             contentContainerStyle={{ padding: 24 }}
                             ListHeaderComponent={

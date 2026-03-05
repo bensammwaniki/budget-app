@@ -1,3 +1,4 @@
+import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
@@ -14,6 +15,7 @@ export default function MyBanksScreen() {
     const { showAlert } = useAlert();
     const [imBankEnabled, setImBankEnabled] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isSyncingAll, setIsSyncingAll] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -72,6 +74,37 @@ export default function MyBanksScreen() {
             } finally {
                 setIsSyncing(false);
             }
+        }
+    };
+
+    const handleSyncAllHistory = async () => {
+        setIsSyncingAll(true);
+        try {
+            const result = await syncMessages(30, true); // fullHistory=true
+            if (result.success) {
+                showAlert({
+                    title: 'Full Sync Complete',
+                    message: `Synced all-time SMS messages. ${result.count ?? 0} new transactions found.`,
+                    type: 'success',
+                    buttons: [{ text: 'OK' }]
+                });
+            } else {
+                showAlert({
+                    title: 'Sync Failed',
+                    message: typeof result.error === 'string' ? result.error : 'Could not sync. Please try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'cancel' }]
+                });
+            }
+        } catch (error) {
+            showAlert({
+                title: 'Sync Error',
+                message: 'An error occurred while syncing. Please try again.',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'cancel' }]
+            });
+        } finally {
+            setIsSyncingAll(false);
         }
     };
 
@@ -139,6 +172,28 @@ export default function MyBanksScreen() {
                     <View className="flex-row items-center justify-center py-4">
                         <Text className="text-slate-400 dark:text-slate-500 font-medium">More banks coming soon</Text>
                     </View>
+                </View>
+
+                {/* Sync All History */}
+                <View className="mt-6 mb-8">
+                    <Text className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-3">SMS History</Text>
+                    <TouchableOpacity
+                        onPress={handleSyncAllHistory}
+                        disabled={isSyncingAll || isSyncing}
+                        className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 border border-blue-200 dark:border-blue-900 flex-row items-center justify-between"
+                    >
+                        <View className="flex-1">
+                            <Text className="text-slate-900 dark:text-white font-semibold">Sync All-Time SMS</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                                Parse every M-PESA &amp; bank SMS from your phone's inbox (may take a while)
+                            </Text>
+                        </View>
+                        {isSyncingAll ? (
+                            <ActivityIndicator size="small" color="#3b82f6" className="ml-4" />
+                        ) : (
+                            <FontAwesome name="history" size={20} color="#3b82f6" style={{ marginLeft: 12 }} />
+                        )}
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
         </View>
