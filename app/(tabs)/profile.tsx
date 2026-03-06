@@ -1,4 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image as ExpoImage, Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -9,7 +10,7 @@ import { ActivityIndicator, Alert, InteractionManager, Modal, RefreshControl, Sc
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
-import { deleteCategory, getCategories, initDatabase } from '../../services/database';
+import { deleteCategory, getCategories, getUserSettings, initDatabase, saveUserSettings } from '../../services/database';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
 
@@ -47,15 +48,30 @@ export default function ProfileScreen() {
     const [editImage, setEditImage] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Settings State
+    const [financialMonthStart, setFinancialMonthStart] = useState(1);
+    const [smsParseStartDate, setSmsParseStartDate] = useState<Date | null>(null);
+    const [dayPickerVisible, setDayPickerVisible] = useState(false);
+    const [showSmsDatePicker, setShowSmsDatePicker] = useState(false);
+
     // Load categories when screen is focused
     useFocusEffect(
         React.useCallback(() => {
             const task = InteractionManager.runAfterInteractions(() => {
                 loadCategories();
+                loadSettings();
             });
             return () => task.cancel();
         }, [])
     );
+
+    const loadSettings = async () => {
+        const startDay = await getUserSettings('financial_month_start_day');
+        if (startDay) setFinancialMonthStart(parseInt(startDay, 10));
+
+        const smsDate = await getUserSettings('sms_parse_start_date');
+        if (smsDate) setSmsParseStartDate(new Date(smsDate));
+    };
 
     // Initialize edit form when opening modal
     useEffect(() => {
@@ -232,6 +248,14 @@ export default function ProfileScreen() {
                         { icon: require('../../assets/svg/budget.svg'), label: 'Create Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                         { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
                         { icon: require('../../assets/svg/automation.svg'), label: 'Create An Automation Rule', color: '#8b5cf6', action: () => router.push('/automation') },
+                        {
+                            icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
+                            value: `Day ${financialMonthStart}`
+                        },
+                        {
+                            icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
+                            value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
+                        },
                         { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                         { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
                     ].map((item, index, arr) => (
@@ -241,7 +265,6 @@ export default function ProfileScreen() {
                             className={`flex-row items-center p-4 ${index !== arr.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}
                         >
                             <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700">
-                                {/* <FontAwesome name={item.icon as any} size={18} color={item.color} /> */}
                                 <Image
                                     source={item.icon as any}
                                     style={{ width: 20, height: 20 }}
@@ -251,6 +274,7 @@ export default function ProfileScreen() {
                             </View>
                             <View className="flex-1">
                                 <Text className="text-slate-800 dark:text-white font-semibold text-base">{item.label}</Text>
+                                {item.value && <Text className="text-slate-500 dark:text-slate-400 text-xs">{item.value}</Text>}
                             </View>
                             <FontAwesome name="angle-right" size={20} color="#94a3b8" />
                         </TouchableOpacity>
@@ -407,6 +431,58 @@ export default function ProfileScreen() {
 
                 <Text className="text-center text-slate-400 dark:text-slate-600 text-xs mb-8">Version 1.0.0</Text>
             </View>
+
+            {/* Financial Month Day Picker Modal */}
+            <Modal visible={dayPickerVisible} transparent animationType="fade">
+                <View className="flex-1 justify-center items-center bg-black/60 px-6">
+                    <View className="bg-white dark:bg-slate-900 w-full rounded-3xl overflow-hidden shadow-2xl">
+                        <View className="p-6 border-b border-gray-100 dark:border-slate-800">
+                            <Text className="text-xl font-bold text-slate-900 dark:text-white">Month Start Day</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">Select the day your financial month begins.</Text>
+                        </View>
+                        <View className="flex-row flex-wrap p-4 justify-between">
+                            {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                                <TouchableOpacity
+                                    key={day}
+                                    onPress={async () => {
+                                        setFinancialMonthStart(day);
+                                        await saveUserSettings('financial_month_start_day', day.toString());
+                                        setDayPickerVisible(false);
+                                    }}
+                                    className={`w-[22%] mb-3 aspect-square items-center justify-center rounded-2xl border ${financialMonthStart === day ? 'bg-blue-500 border-blue-500' : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700'
+                                        }`}
+                                >
+                                    <Text className={`font-bold ${financialMonthStart === day ? 'text-white' : 'text-slate-800 dark:text-white'}`}>{day}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => setDayPickerVisible(false)}
+                            className="bg-gray-100 dark:bg-slate-800 p-4 items-center"
+                        >
+                            <Text className="text-slate-600 dark:text-slate-300 font-bold">Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* SMS Parse Date Picker */}
+            {showSmsDatePicker && (
+                <DateTimePicker
+                    value={smsParseStartDate || new Date()}
+                    mode="date"
+                    display="default"
+                    maximumDate={new Date()}
+                    onChange={async (event, selectedDate) => {
+                        setShowSmsDatePicker(false);
+                        if (selectedDate) {
+                            setSmsParseStartDate(selectedDate);
+                            await saveUserSettings('sms_parse_start_date', selectedDate.toISOString());
+                            Alert.alert('Settings Saved', 'Sync will now start from the selected date.');
+                        }
+                    }}
+                />
+            )}
         </Animated.ScrollView>
     );
 }

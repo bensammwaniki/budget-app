@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { BarChart, PieChart } from "react-native-gifted-charts";
+import { PieChart } from "react-native-gifted-charts";
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { getTransactions, initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { ForecastResult, forecastService } from '../../services/forecastService';
@@ -12,7 +12,7 @@ import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insig
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
 
-type SpendingPeriod = 'This Week' | 'Last Week' | 'This Month' | 'This Year';
+
 
 import { router } from 'expo-router';
 import { useColorScheme } from "nativewind";
@@ -23,7 +23,7 @@ export default function AnalyticsScreen() {
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [spendingFilter, setSpendingFilter] = useState<SpendingPeriod>('This Week');
+
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Phase 5 intelligence state
@@ -219,112 +219,7 @@ export default function AnalyticsScreen() {
     };
   }, [transactions, currentYear]);
 
-  const spendingChartData = useMemo(() => {
-    // 1. Pre-filter and pre-parse dates to avoid repeated `new Date()` calls in loops
-    const expenses = transactions
-      .filter(t => t.type === 'SENT' && !t.isDeleted)
-      .map(t => ({
-        ...t,
-        parsedDate: t.date instanceof Date ? t.date : new Date(t.date)
-      }));
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const resultMap: Record<string, number> = {};
-    let labels: string[] = [];
-    let lineMap: Record<string, number> = {}; // for the line graph
-
-    // Helper to add data to resultMap
-    const addData = (label: string, amount: number) => {
-      if (resultMap[label] !== undefined) {
-        resultMap[label] += amount;
-        lineMap[label] += amount;
-      }
-    };
-
-    if (spendingFilter === 'This Week') {
-      // Mon-Sun of the current week
-      const startOfWeek = new Date(todayStart);
-      startOfWeek.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7)); // Monday
-      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-      dayNames.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
-      labels = dayNames;
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d >= startOfWeek && d <= now) {
-          const dayIndex = (d.getDay() + 6) % 7; // 0=Mon..6=Sun
-          addData(dayNames[dayIndex], expenses[i].amount);
-        }
-      }
-    } else if (spendingFilter === 'Last Week') {
-      // Mon-Sun of the previous calendar week
-      const thisWeekStart = new Date(todayStart);
-      thisWeekStart.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7));
-      const lastWeekStart = new Date(thisWeekStart);
-      lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-      const lastWeekEnd = new Date(thisWeekStart);
-      lastWeekEnd.setMilliseconds(-1);
-
-      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      dayNames.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
-      labels = dayNames;
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d >= lastWeekStart && d <= lastWeekEnd) {
-          const dayIndex = (d.getDay() + 6) % 7;
-          addData(dayNames[dayIndex], expenses[i].amount);
-        }
-      }
-    } else if (spendingFilter === 'This Month') {
-      // This Month show in weekly (4 weeks)
-      labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
-          const day = d.getDate();
-          let weekIndex = Math.floor((day - 1) / 7);
-          if (weekIndex > 3) weekIndex = 3;
-          addData(labels[weekIndex], expenses[i].amount);
-        }
-      }
-    } else if (spendingFilter === 'This Year') {
-      // This Year show in monthly
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      labels = monthNames;
-      labels.forEach(l => { resultMap[l] = 0; lineMap[l] = 0; });
-
-      for (let i = 0; i < expenses.length; i++) {
-        const d = expenses[i].parsedDate;
-        if (d.getFullYear() === now.getFullYear()) {
-          const month = monthNames[d.getMonth()];
-          addData(month, expenses[i].amount);
-        }
-      }
-    }
-
-    // Determine max value to scale colors slightly if desired
-    const maxVal = Math.max(...Object.values(resultMap), 1);
-
-    return labels.map(label => {
-      const val = resultMap[label];
-      // Dynamic color based on value relative to max, adds visual interest
-      const intensity = val > 0 ? (val / maxVal) : 0;
-      const frontColor = intensity > 0.7 ? '#ec4899' : (intensity > 0.3 ? '#f472b6' : '#fbcfe8');
-
-      return {
-        value: val,
-        label: label,
-        frontColor: isDark ? (intensity > 0.7 ? '#ec4899' : (intensity > 0.3 ? '#f472b6' : '#9d174d')) : frontColor,
-      };
-    });
-
-  }, [transactions, spendingFilter, isDark]);
 
   const renderLegend = (data: any[]) => {
     return (
@@ -715,82 +610,7 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      {/* Spending Over Time Chart */}
-      <View className="px-1 mt-8 h-auto">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold px-2 mb-4">Spending Over Time</Text>
-        <View className="bg-white  dark:bg-[#1e293b] py-4 px-4 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          {/* Pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 flex-row" contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-            {(['This Week', 'Last Week', 'This Month', 'This Year'] as SpendingPeriod[]).map(filter => {
-              const isActive = spendingFilter === filter;
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  onPress={() => setSpendingFilter(filter)}
-                  className={`px-2 py-1 rounded-full ${isActive ? 'bg-slate-900 dark:bg-white' : 'bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700'}`}
-                >
-                  <Text className={`font-bold text-[10px] ${isActive ? 'text-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-                    {filter}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
 
-          {/* Chart */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View>
-              <BarChart
-                data={spendingChartData.length > 0 ? spendingChartData : [{ value: 0 }]}
-                showLine
-                lineConfig={{
-                  color: isDark ? '#60a5fa' : '#3b82f6',
-                  thickness: 2,
-                  curved: true,
-                  hideDataPoints: true,
-                  shiftY: 0,
-                  initialSpacing: 24.5, // 17 (initialSpacing) + 15/2 (barWidth/2)
-                  spacing: 45, // 30 (spacing) + 15 (barWidth)
-                }}
-                lineData={spendingChartData.length > 0 ? spendingChartData : [{ value: 0 }]}
-                barWidth={15}
-                spacing={30}
-                hideRules
-                xAxisThickness={0}
-                yAxisThickness={0}
-                yAxisTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: '600' }}
-                xAxisLabelTextStyle={{ color: isDark ? '#94a3b8' : '#64748b', padding: 2, fontSize: 10, fontWeight: '600', transform: [{ rotate: '45deg' }] }}
-                noOfSections={4}
-                maxValue={Math.max(...spendingChartData.map(d => d.value), 100) * 1.1}
-                frontColor={isDark ? '#ec4899' : '#f472b6'}
-                height={200}
-                initialSpacing={17}
-                isAnimated
-                roundedTop
-                roundedBottom
-                formatYLabel={(label: string) => {
-                  const val = parseInt(label, 10);
-                  if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
-                  return label;
-                }}
-              />
-            </View>
-          </ScrollView>
-
-          {/* Legend */}
-          <View className="flex-row items-center justify-center gap-6 mt-6 pb-2 border-t border-slate-100 dark:border-slate-800 pt-4">
-            <View className="flex-row items-center">
-              <View className="w-3 h-3 rounded-sm bg-pink-400 dark:bg-pink-500 mr-2" />
-              <Text className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Spending Volume</Text>
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-6 h-[2px] bg-blue-500 dark:bg-blue-400 mr-2" />
-              <View className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400 absolute left-2" />
-              <Text className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Spending Trend</Text>
-            </View>
-          </View>
-        </View>
-      </View>
 
       {/* Spending by Category */}
       <View className="px-6 mt-8">

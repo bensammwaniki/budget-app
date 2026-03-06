@@ -68,11 +68,18 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
         // SMART SYNC: Check last sync time
         let syncDays = days;
         const lastSyncStr = await getUserSettings('last_sync_timestamp');
+        const smsParseStartDateStr = await getUserSettings('sms_parse_start_date');
 
         if (fullHistory) {
-            // All-time sync — no day limit
-            syncDays = 0;
-            console.log(`🕰️ Full history sync requested — fetching ALL SMS messages.`);
+            // All-time sync — respect user set start date if available
+            if (smsParseStartDateStr) {
+                const parseDate = new Date(smsParseStartDateStr);
+                syncDays = Math.ceil((Date.now() - parseDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                console.log(`🕰️ Full history sync requested — capped by user setting to ${syncDays} days.`);
+            } else {
+                syncDays = 0; // Truly all time
+                console.log(`🕰️ Full history sync requested — fetching ALL SMS messages.`);
+            }
         } else if (!lastSyncStr && days === 30) {
             syncDays = 30;
             console.log(`🚀 Initial launch: Performing default sync (30 days).`);
@@ -85,6 +92,19 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
             console.log(`🔄 Last sync was ${daysSinceLastSync} days ago. Syncing ${syncDays} days.`);
         } else {
             console.log(`⚡ Performing requested ${days}-day sync.`);
+        }
+
+        // Apply global SMS parse start date limit if set
+        if (smsParseStartDateStr && syncDays === 0) {
+            const parseDate = new Date(smsParseStartDateStr);
+            syncDays = Math.ceil((Date.now() - parseDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        } else if (smsParseStartDateStr && syncDays > 0) {
+            const parseDate = new Date(smsParseStartDateStr);
+            const limitDays = Math.ceil((Date.now() - parseDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            if (syncDays > limitDays) {
+                syncDays = limitDays;
+                console.log(`📏 Sync range capped by SMS Parse Start Date to ${syncDays} days.`);
+            }
         }
 
         const messages = await readMpesaSMS(syncDays);

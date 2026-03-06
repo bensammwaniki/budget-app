@@ -19,6 +19,7 @@ import {
   saveRecipientCategory,
   subscribeToDatabaseChanges,
   updateTransactionCategory,
+  updateTransactionCategoryByScope,
   updateTransactionDate
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
@@ -48,9 +49,10 @@ export default function HomeScreen() {
   const [periodLoading, setPeriodLoading] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20); // Smaller initial limit for better fast-load
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [financialMonthStart, setFinancialMonthStart] = useState(1);
   const [appIsLaunching, setAppIsLaunching] = useState(true);
   const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
@@ -184,21 +186,23 @@ export default function HomeScreen() {
     const runProgressiveSync = async () => {
       try {
         setIsSyncing(true);
-        // initDatabase() call removed - now handled in Root Layout
         setDbReady(true);
+
+        const startDay = await getUserSettings('financial_month_start_day');
+        if (startDay) setFinancialMonthStart(parseInt(startDay, 10));
 
         const lastSync = await getUserSettings('last_sync_timestamp');
 
         if (!lastSync) {
-          // FIRST LAUNCH: Dual-Stage Sync
+          // FIRST LAUNCH: Quick 30-day sync to show data fast
           console.log('🚀 First launch: Starting Quick Start sync (30 days)...');
           await syncMessages(30);
           await debtService.updateFulizaFees();
           setHasPerformedSyncOnce(true);
           setAppIsLaunching(false);
 
+          // Then deep sync in background (1 year)
           console.log('⏳ Quick start complete. Starting Background Deep Sync (366 days)...');
-          // Keep isSyncing true during background sync
           syncMessages(366).then(() => {
             console.log('✅ Deep sync complete.');
             debtService.updateFulizaFees();
@@ -208,12 +212,21 @@ export default function HomeScreen() {
             setIsSyncing(false);
           });
         } else {
-          // Wait for DB to be really ready
+          // SUBSEQUENT LAUNCHES: Only sync SMS newer than last sync timestamp
+          // syncMessages already uses last_sync_timestamp to compute the gap — avoids re-parsing old messages
           await initDatabase();
           await debtService.updateFulizaFees();
-          setIsSyncing(false);
           setHasPerformedSyncOnce(true);
           setAppIsLaunching(false);
+
+          // Run incremental sync silently in background (only new SMS since last sync)
+          syncMessages().then(() => {
+            debtService.updateFulizaFees();
+          }).catch(err => {
+            console.error('Incremental sync error:', err);
+          }).finally(() => {
+            setIsSyncing(false);
+          });
         }
       } catch (error) {
         console.error('Error in progressive sync:', error);
@@ -238,14 +251,43 @@ export default function HomeScreen() {
   // Calculate date boundaries once
   const dateRange = useMemo(() => {
     const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    const startDay = financialMonthStart;
+
+    let startOfThisMonth: Date;
+    if (now.getDate() >= startDay) {
+      startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), startDay);
+    } else {
+      startOfThisMonth = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
+    }
+
+    const startOfLastMonth = new Date(startOfThisMonth.getFullYear(), startOfThisMonth.getMonth() - 1, startDay);
+    const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+
     const startOfCurrentYear = new Date(now.getFullYear(), 0, 1);
-    const startOfLast3Months = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const startOfLast3Months = new Date(startOfThisMonth.getFullYear(), startOfThisMonth.getMonth() - 2, startDay);
 
     return { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months };
-  }, []);
+  }, [financialMonthStart]);
+
+  // Calculate carried forward balance (from previous financial month)
+  const carriedForwardBalance = useMemo(() => {
+    const { startOfLastMonth, endOfLastMonth } = dateRange;
+
+    const lastMonthTransactions = allTransactions.filter(t => {
+      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
+      return txDate >= startOfLastMonth && txDate <= endOfLastMonth && !t.isDeleted;
+    });
+
+    const income = lastMonthTransactions
+      .filter(t => t.type === 'RECEIVED')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expense = lastMonthTransactions
+      .filter(t => t.type === 'SENT')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return income - expense;
+  }, [allTransactions, dateRange]);
 
   // Filter transactions based on selected period AND bank settings
   const filteredTransactions = useMemo(() => {
@@ -359,19 +401,82 @@ export default function HomeScreen() {
 
   const handleCategorySelect = async (category: Category) => {
     if (activeTransaction) {
-      setModalVisible(false);
-      setSelectedTransaction(null);
-
       try {
         const isFirstTime = !activeTransaction.categoryId || activeTransaction.categoryId === 0;
 
-        if (isFirstTime && activeTransaction.recipientId) {
+        if (isFirstTime) {
+          setModalVisible(false);
+          setSelectedTransaction(null);
           // First time categorizing: creates automation rule (future) & applies to past uncategorized
-          await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
+          if (activeTransaction.recipientId) {
+            await saveRecipientCategory(activeTransaction.recipientId, category.id, activeTransaction.type);
+          } else {
+            await updateTransactionCategory(activeTransaction.id, category.id);
+          }
+        } else {
+          // RE-CATEGORIZING: Ask for scope
+          showAlert({
+            title: 'Recategorize Scope',
+            message: 'How would you like to apply this change?',
+            type: 'info',
+            buttons: [
+              {
+                text: 'Just this one',
+                onPress: async () => {
+                  setModalVisible(false);
+                  setSelectedTransaction(null);
+                  await updateTransactionCategory(activeTransaction.id, category.id);
+                }
+              },
+              {
+                text: 'Past similar',
+                onPress: async () => {
+                  setModalVisible(false);
+                  setSelectedTransaction(null);
+                  await updateTransactionCategoryByScope(
+                    activeTransaction.id,
+                    activeTransaction.recipientId || null,
+                    activeTransaction.type,
+                    activeTransaction.date,
+                    category.id,
+                    'PAST'
+                  );
+                }
+              },
+              {
+                text: 'Future transactions',
+                onPress: async () => {
+                  setModalVisible(false);
+                  setSelectedTransaction(null);
+                  await updateTransactionCategoryByScope(
+                    activeTransaction.id,
+                    activeTransaction.recipientId || null,
+                    activeTransaction.type,
+                    activeTransaction.date,
+                    category.id,
+                    'FUTURE'
+                  );
+                }
+              },
+              {
+                text: 'All time',
+                onPress: async () => {
+                  setModalVisible(false);
+                  setSelectedTransaction(null);
+                  await updateTransactionCategoryByScope(
+                    activeTransaction.id,
+                    activeTransaction.recipientId || null,
+                    activeTransaction.type,
+                    activeTransaction.date,
+                    category.id,
+                    'ALL'
+                  );
+                }
+              },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          });
         }
-
-        // Re-categorizing: ONLY updates this specific transaction
-        await updateTransactionCategory(activeTransaction.id, category.id);
       } catch (error) {
         console.error("Failed to save category:", error);
       }
@@ -597,8 +702,13 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
+          {carriedForwardBalance !== 0 && (
+            <Text className="text-blue-200 text-xs mb-1">
+              Carried Forward: KES {carriedForwardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+          )}
           <Text className="text-white text-4xl font-bold mb-2">
-            KES {formatCurrency(periodSummary.income - periodSummary.expense)}
+            KES {formatCurrency(periodSummary.income - periodSummary.expense + carriedForwardBalance)}
           </Text>
 
           <View className="flex-row justify-between gap-3 mt-4">

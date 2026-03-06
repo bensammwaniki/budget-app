@@ -120,6 +120,51 @@ export const updateTransactionCategory = async (transactionId: string, categoryI
     notifyListenersImmediate('TRANSACTIONS');
 };
 
+export const updateTransactionCategoryByScope = async (
+    transactionId: string,
+    recipientId: string | null,
+    type: string,
+    transactionDate: Date,
+    newCategoryId: number | null,
+    scope: 'THIS' | 'PAST' | 'FUTURE' | 'ALL'
+) => {
+    if (!transactionId) return;
+    await initDatabase();
+    const database = getDb();
+
+    await database.withTransactionAsync(async () => {
+        // 1. Always update THIS transaction
+        await database.runAsync(
+            'UPDATE transactions SET category_id = ? WHERE id = ?',
+            [newCategoryId ?? null, transactionId]
+        );
+
+        // 2. Handle PAST or ALL
+        if ((scope === 'PAST' || scope === 'ALL') && recipientId) {
+            await database.runAsync(
+                'UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND date <= ?',
+                [newCategoryId ?? null, recipientId, type, transactionDate.toISOString()]
+            );
+        }
+
+        // 3. Handle FUTURE or ALL (Automation/Rules table)
+        if ((scope === 'FUTURE' || scope === 'ALL') && recipientId) {
+            await database.runAsync(
+                'INSERT OR REPLACE INTO recipients (id, type, category_id, last_seen) VALUES (?, ?, ?, ?)',
+                [recipientId, type, newCategoryId ?? null, new Date().toISOString()]
+            );
+
+            // Also update any transactions in the DB that are future-dated relative to this one
+            await database.runAsync(
+                'UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND date > ?',
+                [newCategoryId ?? null, recipientId, type, transactionDate.toISOString()]
+            );
+        }
+    });
+
+    notifyListenersImmediate('TRANSACTIONS');
+};
+
 export const updateTransactionDate = async (transactionId: string, newDate: Date) => {
     await initDatabase();
     const database = getDb();
@@ -305,7 +350,19 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     await initDatabase();
     const database = getDb();
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    // Get financial month start day setting
+    const startDayStr = await getUserSettings('financial_month_start_day');
+    const startDay = startDayStr ? parseInt(startDayStr, 10) : 1;
+
+    let startOfMonth: Date;
+    if (now.getDate() >= startDay) {
+        startOfMonth = new Date(now.getFullYear(), now.getMonth(), startDay);
+    } else {
+        startOfMonth = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
+    }
+
+    const startOfMonthISO = startOfMonth.toISOString();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
     const account = await database.getFirstAsync<{ balance: number }>(
@@ -325,7 +382,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
             COUNT(*) as count
         FROM transactions 
         WHERE date >= ? AND is_deleted = 0
-    `, [startOfMonth]);
+    `, [startOfMonthISO]);
 
     return {
         currentBalance: account?.balance || 0,
