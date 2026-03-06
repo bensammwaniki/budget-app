@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
@@ -103,6 +103,10 @@ export default function HomeScreen() {
   const [incomeModalVisible, setIncomeModalVisible] = useState(false);
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
   const [linkingIncome, setLinkingIncome] = useState<string | null>(null);
+
+  // Re-categorization Scope State
+  const [scopeModalVisible, setScopeModalVisible] = useState(false);
+  const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
 
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
@@ -387,6 +391,26 @@ export default function HomeScreen() {
     };
   }, [filteredTransactions, logs, selectedPeriod, dateRange]);
 
+
+  const getPeriodLabel = (period: Period) => {
+    const now = new Date();
+
+    if (period === 'THIS_MONTH') {
+      return now.toLocaleString('default', { month: 'long' });
+    }
+
+    if (period === 'LAST_MONTH') {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return lastMonth.toLocaleString('default', { month: 'long' });
+    }
+
+    if (period === 'LAST 3 MONTHS') return 'Last 3 Months';
+    if (period === 'CURRENT YEAR') return 'This Year';
+    if (period === 'ALL TIME') return 'All Time';
+
+    return period;
+  };
+
   const handleTransactionPress = (tx: Transaction) => {
     // Fuliza transactions are automated and should not be manually categorized
     const isFuliza = tx.recipientId === 'FULIZA_REPAYMENT' ||
@@ -414,68 +438,10 @@ export default function HomeScreen() {
             await updateTransactionCategory(activeTransaction.id, category.id);
           }
         } else {
-          // RE-CATEGORIZING: Ask for scope
-          showAlert({
-            title: 'Recategorize Scope',
-            message: 'How would you like to apply this change?',
-            type: 'info',
-            buttons: [
-              {
-                text: 'Just this one',
-                onPress: async () => {
-                  setModalVisible(false);
-                  setSelectedTransaction(null);
-                  await updateTransactionCategory(activeTransaction.id, category.id);
-                }
-              },
-              {
-                text: 'Past similar',
-                onPress: async () => {
-                  setModalVisible(false);
-                  setSelectedTransaction(null);
-                  await updateTransactionCategoryByScope(
-                    activeTransaction.id,
-                    activeTransaction.recipientId || null,
-                    activeTransaction.type,
-                    activeTransaction.date,
-                    category.id,
-                    'PAST'
-                  );
-                }
-              },
-              {
-                text: 'Future transactions',
-                onPress: async () => {
-                  setModalVisible(false);
-                  setSelectedTransaction(null);
-                  await updateTransactionCategoryByScope(
-                    activeTransaction.id,
-                    activeTransaction.recipientId || null,
-                    activeTransaction.type,
-                    activeTransaction.date,
-                    category.id,
-                    'FUTURE'
-                  );
-                }
-              },
-              {
-                text: 'All time',
-                onPress: async () => {
-                  setModalVisible(false);
-                  setSelectedTransaction(null);
-                  await updateTransactionCategoryByScope(
-                    activeTransaction.id,
-                    activeTransaction.recipientId || null,
-                    activeTransaction.type,
-                    activeTransaction.date,
-                    category.id,
-                    'ALL'
-                  );
-                }
-              },
-              { text: 'Cancel', style: 'cancel' }
-            ]
-          });
+          // RE-CATEGORIZING: Close categorization modal and show scope modal
+          setModalVisible(false);
+          setPendingCategory(category);
+          setScopeModalVisible(true);
         }
       } catch (error) {
         console.error("Failed to save category:", error);
@@ -667,27 +633,6 @@ export default function HomeScreen() {
 
             <Text className="text-slate-900 dark:text-white text-xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
-
-          <View className="flex-row items-center justify-end h-10">
-            <Animated.View style={[searchAnimatedStyle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderRadius: 20, height: 40, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }]}>
-              <TextInput
-                placeholder="Search queries..."
-                placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                className="flex-1 text-slate-900 dark:text-white h-full text-sm"
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} className="ml-2 py-2">
-                  <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                </TouchableOpacity>
-              )}
-            </Animated.View>
-            <TouchableOpacity onPress={toggleSearch} className="w-10 h-10 items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-full ml-2">
-              <FontAwesome name={isSearchActive ? "times" : "search"} size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
@@ -723,34 +668,34 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="bg-white dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6 overflow-hidden">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 2 }}>
-            {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
-              <TouchableOpacity
-                key={period}
-                className={`px-3 py-2 mr-1 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
-                onPress={() => {
-                  setPeriodLoading(true);
-                  setDisplayLimit(20);
-                  setTimeout(() => {
-                    setSelectedPeriod(period);
-                    setPeriodLoading(false);
-                  }, 100);
-                }}
-              >
-                <Text className={`font-semibold text-xs text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
-                  {period.replace('_', ' ')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        <View className="bg-white flex-row justify-between items-center dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6 overflow-hidden">
+          {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
+            <TouchableOpacity
+              key={period}
+              className={`px-2 py-1 mr-1 text-[8px] font-medium rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
+              onPress={() => {
+                setPeriodLoading(true);
+                setDisplayLimit(20);
+                setTimeout(() => {
+                  setSelectedPeriod(period);
+                  setPeriodLoading(false);
+                }, 100);
+              }}
+            >
+              <Text className={`uppercase font-medium text-[8px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
+                {getPeriodLabel(period)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
+
+
       </View>
 
       {/* Debt Summary Widget */}
       {debtSummary && debtSummary.activeDebts > 0 && (
         <View className="px-6 mt-8 mb-2">
-          <View className="flex-row justify-between items-center mb-4">
+          <View className="flex-row justify-between items-center mb-1">
             <Text className="text-slate-900 dark:text-white text-lg font-bold">Debts</Text>
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/debts')}
@@ -776,6 +721,8 @@ export default function HomeScreen() {
                 <FontAwesome name="exchange" size={20} color="#9333ea" />
               </View>
             </View>
+
+
 
             {debtSummary.activeDebts > 0 && (
               <View className="flex-row justify-between items-center mb-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
@@ -806,13 +753,55 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* search bar */}
+      <View className="flex-row items-center flex-1 h-10 ml-4 mr-4 ">
+        <TouchableOpacity onPress={toggleSearch} className="w-9 h-9 items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-[10px] mr-2">
+          {isSearchActive && <Image
+            source={require('../../assets/svg/close.svg')}
+            style={{ width: 12, height: 12 }}
+            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+            contentFit="contain"
+          />}
+          {!isSearchActive && (
+            <Image
+              source={require('../../assets/svg/search.svg')}
+              style={{ width: 24, height: 24 }}
+              tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+              contentFit="contain"
+            />
+          )}
+        </TouchableOpacity>
+
+        <Animated.View style={[searchAnimatedStyle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }]}
+        >
+          <TextInput
+            placeholder="Search Transactions..."
+            placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            className="flex-1 text-slate-900 dark:text-white h-full text-[12px] p-2"
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} className="ml-2 py-2">
+              <Image
+                source={require('../../assets/svg/close.svg')}
+                style={{ width: 12, height: 12, backgroundColor: 'white', borderRadius: 20 }}
+                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                contentFit="contain"
+              />
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </View>
+      {/* end search bar */}
+
       <View className="px-6 mt-6 mb-4 flex-row justify-between items-center">
         <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Transactions</Text>
         <Text className="text-slate-500 text-xs">
           {filteredTransactions.length} items
         </Text>
       </View>
-
       {periodLoading && (
         <View className="px-6 pb-4">
           <ActivityIndicator size="small" color="#3b82f6" />
@@ -976,6 +965,157 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+
+      {/* Scope Modal */}
+      <Modal
+        visible={scopeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScopeModalVisible(false)}
+      >
+        <View className="flex-1 bg-black/40 justify-end mb-10">
+          <View className="bg-white dark:bg-[#0f172a] rounded-t-[16px] p-6 pb-10">
+            <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+              Recategorize Transactions
+            </Text>
+            <Text className="text-slate-500 dark:text-slate-400 mb-6 text-sm">
+              How should this change be applied?
+            </Text>
+
+            <View className="gap-y-3">
+              <TouchableOpacity
+                onPress={async () => {
+                  setScopeModalVisible(false);
+                  if (activeTransaction && pendingCategory) {
+                    await updateTransactionCategory(activeTransaction.id, pendingCategory.id);
+                  }
+                  setSelectedTransaction(null);
+                }}
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 items-center justify-center mr-3">
+                      <Image
+                          source={require('../../assets/svg/transaction.svg')}
+                          style={{ width: 16, height: 16 }}
+                          tintColor={colorScheme === 'dark' ? '#fff' : '#3b82f6'}
+                          contentFit="contain"
+                      />
+                  </View>
+                  <Text className="text-slate-900 dark:text-white font-semibold">
+                    Just this transaction
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setScopeModalVisible(false);
+                  if (activeTransaction && pendingCategory) {
+                    await updateTransactionCategoryByScope(
+                      activeTransaction.id,
+                      activeTransaction.recipientId || null,
+                      activeTransaction.type,
+                      activeTransaction.date,
+                      pendingCategory.id,
+                      'PAST'
+                    );
+                  }
+                  setSelectedTransaction(null);
+                }}
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 items-center justify-center mr-3">
+                      <Image
+                          source={require('../../assets/svg/transaction.svg')}
+                          style={{ width: 16, height: 16 }}
+                          tintColor={colorScheme === 'dark' ? '#fff' : '#f59e0b'}
+                          contentFit="contain"
+                      />
+                  </View>
+                  <Text className="text-slate-900 dark:text-white font-semibold">
+                    Past similar transactions
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setScopeModalVisible(false);
+                  if (activeTransaction && pendingCategory) {
+                    await updateTransactionCategoryByScope(
+                      activeTransaction.id,
+                      activeTransaction.recipientId || null,
+                      activeTransaction.type,
+                      activeTransaction.date,
+                      pendingCategory.id,
+                      'FUTURE'
+                    );
+                  }
+                  setSelectedTransaction(null);
+                }}
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 items-center justify-center mr-3">
+                      <Image
+                          source={require('../../assets/svg/transaction.svg')}
+                          style={{ width: 16, height: 16 }}
+                          tintColor={colorScheme === 'dark' ? '#fff' : '#a855f7'}
+                          contentFit="contain"
+                      />
+                  </View>
+                  <Text className="text-slate-900 dark:text-white font-semibold">
+                    Future transactions
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setScopeModalVisible(false);
+                  if (activeTransaction && pendingCategory) {
+                    await updateTransactionCategoryByScope(
+                      activeTransaction.id,
+                      activeTransaction.recipientId || null,
+                      activeTransaction.type,
+                      activeTransaction.date,
+                      pendingCategory.id,
+                      'ALL'
+                    );
+                  }
+                  setSelectedTransaction(null);
+                }}
+                className="bg-slate-50 dark:bg-slate-800  p-4 rounded-2xl flex-row justify-between items-center"
+              >
+                <View className="flex-row items-center" >
+                  <View className="w-8 h-8 rounded-lg bg-green-100 dark:bg-purple-900/30 items-center justify-center mr-3">
+                      <Image
+                          source={require('../../assets/svg/transaction.svg')}
+                          style={{ width: 16, height: 16 }}
+                          tintColor={colorScheme === 'dark' ? '#fff' : '#65f755ff'}
+                          contentFit="contain"
+                      />
+                  </View>
+                  <Text className="text-slate-900 dark:text-white font-bold text-base">
+                    Apply to All Transactions
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setScopeModalVisible(false)}
+              className="bg-red-50 dark:bg-red-900/20 p-4 mt-6 mb-6 rounded-xl items-center border border-red-100 dark:border-red-900/50 justify-center"
+            >
+              <Text className="text-red-600 dark:text-red-400 font-semibold text-[16px]">
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

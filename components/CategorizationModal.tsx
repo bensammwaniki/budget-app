@@ -90,7 +90,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                     <ScrollView className="flex-1 p-6">
                         {/* Date Editor */}
                         <View className="mb-8 bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-700">
-                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mb-3 uppercase tracking-wider">Transaction Date</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mb-3 uppercase tracking-wider">Change Transaction Date</Text>
                             <View className="flex-row items-center justify-between">
                                 <TouchableOpacity
                                     onPress={() => handleDateChange(-1)}
@@ -127,18 +127,30 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                             )}
                         </View>
 
-                        <Text className="text-slate-500 dark:text-slate-300 font-medium">
+                        <Text className="text-slate-500 dark:text-slate-300 font-medium text-[14px] mb-4">
                             {transaction.type === 'RECEIVED' ? 'What type of income is this?' : 'What type of expense is this?'}
-                        </Text>
-                        <Text className="text-slate-500 color-[green] dark:text-slate-300 text-[11px] mb-4 text-left">
-                            Categorize this transaction, you only need to do it once
                         </Text>
 
                         <View className="flex-row flex-wrap justify-between gap-y-3">
+                            {categories
+                                .filter(c => c.id !== 12 && (transaction.type === 'RECEIVED' ? c.type === 'INCOME' : c.type === 'EXPENSE'))
+                                .map(category => (
+                                    <TouchableOpacity
+                                        key={category.id}
+                                        onPress={() => onCategorySelect(category)}
+                                        className="w-[48%] px-4 py-2 rounded-[12px] border bg-gray-50 dark:bg-[#1e293b] border-gray-200 dark:border-slate-700 flex-row items-center active:bg-blue-50 dark:active:bg-blue-600/10 active:border-blue-500"
+                                    >
+                                        <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${category.color}20` }}>
+                                            <FontAwesome name={category.icon as any} size={16} color={category.color} />
+                                        </View>
+                                        <Text className="text-slate-900 dark:text-white font-medium flex-1" numberOfLines={1}>{category.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+
                             {/* Add New Category Button */}
                             <TouchableOpacity
                                 onPress={() => setShowAddCategory(true)}
-                                className="w-[48%] p-4 rounded-2xl border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 flex-row items-center active:bg-blue-100 dark:active:bg-blue-900/40"
+                                className="w-[48%] px-4 py-2 rounded-[12px] border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 flex-row items-center active:bg-blue-100 dark:active:bg-blue-900/40"
                             >
                                 <View className="w-10 h-10 rounded-full items-center justify-center mr-3 bg-blue-100 dark:bg-blue-800">
                                     <Image
@@ -148,23 +160,9 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                         tintColor={colorScheme === 'dark' ? '#ffffffff' : '#002db6ff'}
                                     />
                                 </View>
-                                <Text className="text-blue-700 dark:text-blue-300 font-medium flex-1">New Category</Text>
+                                <Text className="text-blue-700 dark:text-blue-300 font-medium flex-1">Add Category</Text>
                             </TouchableOpacity>
-
-                            {categories
-                                .filter(c => c.id !== 12 && (transaction.type === 'RECEIVED' ? c.type === 'INCOME' : c.type === 'EXPENSE'))
-                                .map(category => (
-                                    <TouchableOpacity
-                                        key={category.id}
-                                        onPress={() => onCategorySelect(category)}
-                                        className="w-[48%] p-4 rounded-2xl border bg-gray-50 dark:bg-[#1e293b] border-gray-200 dark:border-slate-700 flex-row items-center active:bg-blue-50 dark:active:bg-blue-600/10 active:border-blue-500"
-                                    >
-                                        <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${category.color}20` }}>
-                                            <FontAwesome name={category.icon as any} size={18} color={category.color} />
-                                        </View>
-                                        <Text className="text-slate-900 dark:text-white font-medium flex-1" numberOfLines={1}>{category.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                            {/* End Add New Category Button */}
                         </View>
 
                         <View className="flex-row gap-x-3 mt-8 mb-4">

@@ -356,20 +356,30 @@ export default function DebtDetailScreen() {
 
             {/* Link Transaction Modal */}
             <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-4">
+                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-4 mt-6">
                     <View className="px-6 py-4 flex-row items-center justify-between border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
-                        <TouchableOpacity onPress={() => setModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 p-2 rounded-full">
-                            <FontAwesome name="close" size={16} color="#64748b" />
+                        <TouchableOpacity onPress={() => setModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 p-3 rounded-full">
+                            <Image
+                                source={require('../../assets/svg/close.svg')}
+                                style={{ width: 16, height: 16 }}
+                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                contentFit="contain"
+                            />
                         </TouchableOpacity>
                     </View>
 
                     {/* Search Bar */}
-                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
+                    <View className="px-4 py-2 border-b border-gray-200 dark:border-slate-800">
                         <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <FontAwesome name="search" size={16} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
+                            <Image
+                                source={require('../../assets/svg/search.svg')}
+                                style={{ width: 26, height: 26 }}
+                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                contentFit="contain"
+                            />
                             <TextInput
-                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
+                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[14px]"
                                 placeholder="Search by name or amount..."
                                 placeholderTextColor={colorScheme === 'dark' ? '#cbd5e1' : '#94a3b8'}
                                 value={searchQuery}
@@ -378,7 +388,12 @@ export default function DebtDetailScreen() {
                             />
                             {searchQuery.length > 0 && (
                                 <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
-                                    <FontAwesome name="times-circle" size={16} color={colorScheme === 'dark' ? '#94a3b8' : '#64748b'} />
+                                    <Image
+                                        source={require('../../assets/svg/close.svg')}
+                                        style={{ width: 10, height: 10 }}
+                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                                        contentFit="contain"
+                                    />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -392,7 +407,7 @@ export default function DebtDetailScreen() {
                             keyExtractor={item => item.id}
                             contentContainerStyle={{ padding: 24 }}
                             ListHeaderComponent={
-                                <Text className="text-slate-500 mb-4">
+                                <Text className="text-slate-500 mb-2 text-[12px]">
                                     Select a transaction to link as repayment for this debt.
                                     Only showing {debt.type === 'LIABILITY' ? 'Sent' : 'Received'} transactions not yet linked.
                                 </Text>
