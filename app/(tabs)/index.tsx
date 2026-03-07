@@ -328,6 +328,11 @@ export default function HomeScreen() {
     return income - expense;
   }, [allTransactions, dateRange]);
 
+  const carriedForwardPeriodLabel = useMemo(() => {
+    const { endOfLastMonth } = dateRange;
+    return endOfLastMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }, [dateRange]);
+
   // Filter transactions based on selected period AND bank settings
   const filteredTransactions = useMemo(() => {
     let filtered = allTransactions.filter((t: Transaction) => {
@@ -391,7 +396,6 @@ export default function HomeScreen() {
 
     return filtered;
   }, [allTransactions, selectedPeriod, dateRange, imBankEnabled, searchQuery]);
-
 
   // Calculate summary statistics for the selected period
   const periodSummary = useMemo(() => {
@@ -459,6 +463,9 @@ export default function HomeScreen() {
 
     return period;
   };
+
+  const showTotalBalanceCard = selectedPeriod !== 'ALL TIME';
+  const totalBalanceValue = periodSummary.income - periodSummary.expense + (selectedPeriod === 'THIS_MONTH' ? carriedForwardBalance : 0);
 
   const handleTransactionPress = (tx: Transaction) => {
     if (modalVisible) return;
@@ -678,38 +685,40 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
-          <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
-          <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
+        {showTotalBalanceCard && (
+          <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
+            <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
+            <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
 
-          <View className="flex-row justify-between items-start mb-2">
-            <Text className="text-blue-100 font-medium">Total Balance</Text>
-            <View className="bg-red-500/20 px-2 py-1 rounded-lg">
-              <Text className="text-red-200 text-xs font-medium">
-                Cost: KES {periodSummary.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <View className="flex-row justify-between items-start mb-2">
+              <Text className="text-blue-100 font-medium">Total Balance</Text>
+              <View className="bg-red-500/20 px-2 py-1 rounded-lg">
+                <Text className="text-red-200 text-xs font-medium">
+                  Cost: KES {periodSummary.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+            </View>
+            {selectedPeriod === 'THIS_MONTH' && carriedForwardBalance !== 0 && (
+              <Text className="text-blue-200 text-xs mb-1">
+                Carried Forward ({carriedForwardPeriodLabel}): KES {carriedForwardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
-            </View>
-          </View>
-          {carriedForwardBalance !== 0 && (
-            <Text className="text-blue-200 text-xs mb-1">
-              Carried Forward: KES {carriedForwardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            )}
+            <Text className="text-white text-4xl font-bold mb-2">
+              KES {formatCurrency(totalBalanceValue)}
             </Text>
-          )}
-          <Text className="text-white text-4xl font-bold mb-2">
-            KES {formatCurrency(periodSummary.income - periodSummary.expense + carriedForwardBalance)}
-          </Text>
 
-          <View className="flex-row justify-between gap-3 mt-4">
-            <View className="flex-1 bg-green-500/30 px-3 py-2 rounded-xl">
-              <Text className="text-green-100 text-xs mb-1">Income</Text>
-              <Text className="text-white font-bold">KES {periodSummary.income.toLocaleString()}</Text>
-            </View>
-            <View className="flex-1 bg-red-500/30 px-3 py-2 rounded-xl">
-              <Text className="text-red-100 text-xs mb-1">Expense</Text>
-              <Text className="text-white font-bold">KES {periodSummary.expense.toLocaleString()}</Text>
+            <View className="flex-row justify-between gap-3 mt-4">
+              <View className="flex-1 bg-green-500/30 px-3 py-2 rounded-xl">
+                <Text className="text-green-100 text-xs mb-1">Income</Text>
+                <Text className="text-white font-bold">KES {periodSummary.income.toLocaleString()}</Text>
+              </View>
+              <View className="flex-1 bg-red-500/30 px-3 py-2 rounded-xl">
+                <Text className="text-red-100 text-xs mb-1">Expense</Text>
+                <Text className="text-white font-bold">KES {periodSummary.expense.toLocaleString()}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         <View className="bg-white flex-row justify-between items-center dark:bg-[#1e293b] p-1 rounded-[20px] border border-gray-200 dark:border-slate-700 mt-6 overflow-hidden">
           {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
@@ -799,16 +808,16 @@ export default function HomeScreen() {
       {/* search bar */}
       <View className="mx-4 mt-6">
         <View className="h-12 px-3 rounded-[12px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] flex-row items-center shadow-sm">
-          <View className="w-8 h-8 rounded-[8px] bg-blue-50 dark:bg-blue-900/30 items-center justify-center mr-2">
+          <View className="w-6 h-6 items-center justify-center mr-2">
             <Image
               source={require('../../assets/svg/search.svg')}
-              style={{ width: 26, height: 26 }}
+              style={{ width: 30, height: 30 }}
               tintColor={colorScheme === 'dark' ? '#93c5fd' : '#2563eb'}
               contentFit="contain"
             />
           </View>
           <TextInput
-            placeholder="Search for amount, category, or recipient..."
+            placeholder="Search for amount, rrtegory, or recipient..."
             placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
             value={searchQuery}
             onChangeText={setSearchQuery}
