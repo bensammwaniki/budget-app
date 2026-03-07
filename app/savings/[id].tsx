@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,8 @@ export default function GoalDetailScreen() {
 
     // Linking Modal State
     const [showLinkModal, setShowLinkModal] = useState(false);
+    const [openingLinkModal, setOpeningLinkModal] = useState(false);
+    const openingLinkModalRef = useRef(false);
     const [linkableTransactions, setLinkableTransactions] = useState<Transaction[]>([]);
     const [linking, setLinking] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -56,7 +58,7 @@ export default function GoalDetailScreen() {
         };
     });
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         if (!id) return;
         try {
             const fetchedGoal = await savingsService.getGoalById(id as string);
@@ -71,45 +73,13 @@ export default function GoalDetailScreen() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useFocusEffect(
         useCallback(() => {
             loadData();
-        }, [id])
+        }, [loadData])
     );
-
-    const handleDeposit = () => {
-        Alert.prompt(
-            'Deposit to Savings',
-            'Enter amount to transfer from M-PESA to this goal.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Transfer',
-                    onPress: async (amountText?: string) => {
-                        const amount = parseFloat(amountText || '');
-                        if (isNaN(amount) || amount <= 0) {
-                            Alert.alert('Error', 'Invalid amount entered.');
-                            return;
-                        }
-
-                        try {
-                            // Using default M-PESA account ID for now
-                            await savingsService.transferToSavings(goal!.id, amount, 'ACC-MPESA-DEFAULT');
-                            Alert.alert('Success', 'Funds deposited successfully!');
-                            loadData();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to deposit funds.');
-                        }
-                    },
-                },
-            ],
-            'plain-text',
-            '',
-            'numeric'
-        );
-    };
 
     const handleDelete = () => {
         Alert.alert(
@@ -124,7 +94,7 @@ export default function GoalDetailScreen() {
                         try {
                             await savingsService.deleteGoal(goal!.id);
                             router.back();
-                        } catch (error) {
+                        } catch {
                             Alert.alert('Error', 'Failed to delete goal.');
                         }
                     },
@@ -134,6 +104,9 @@ export default function GoalDetailScreen() {
     };
 
     const fetchLinkableTransactions = async () => {
+        if (showLinkModal || openingLinkModal || openingLinkModalRef.current) return;
+        openingLinkModalRef.current = true;
+        setOpeningLinkModal(true);
         try {
             const allTx = await getTransactions();
             // Filter: Outgoing only, not already linked to a goal, maybe not already linked to debt
@@ -148,6 +121,9 @@ export default function GoalDetailScreen() {
         } catch (error) {
             console.error('Error fetching linkable txs:', error);
             Alert.alert('Error', 'Failed to load eligible transactions.');
+        } finally {
+            openingLinkModalRef.current = false;
+            setOpeningLinkModal(false);
         }
     };
 
@@ -299,7 +275,8 @@ export default function GoalDetailScreen() {
                             <TouchableOpacity
                                 className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
                                 style={{ backgroundColor: themeColor, shadowColor: themeColor }}
-                                onPress={fetchLinkableTransactions}>
+                                onPress={fetchLinkableTransactions}
+                                disabled={openingLinkModal || showLinkModal}>
                                 <Image
                                     source={require(`../../assets/svg/link-sms.svg`)}
                                     style={{ width: 22, height: 22 }}

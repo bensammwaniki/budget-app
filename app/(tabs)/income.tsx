@@ -4,16 +4,16 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { initDatabase } from '../services/database';
-import { IncomeLog, IncomeSource, incomeService } from '../services/incomeService';
+import { initDatabase } from '../../services/database';
+import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 
 export default function IncomeScreen() {
     const [sources, setSources] = useState<IncomeSource[]>([]);
     const [logs, setLogs] = useState<IncomeLog[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
@@ -37,6 +37,12 @@ export default function IncomeScreen() {
 
     useFocusEffect(useCallback(() => { loadData(); }, []));
 
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadData();
+        setRefreshing(false);
+    };
+
     const now = new Date();
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -56,9 +62,24 @@ export default function IncomeScreen() {
         MONTHLY: 'Monthly', WEEKLY: 'Weekly', BI_WEEKLY: 'Bi-weekly', IRREGULAR: 'Irregular'
     };
 
+    const parseAmountValue = (value: unknown): number => {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+        if (typeof value === 'string') {
+            const parsed = parseFloat(value.replace(/,/g, '').trim());
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    };
+
     const renderSource = ({ item }: { item: IncomeSource }) => {
         const sourceLogs = logs.filter(l => l.sourceId === item.id);
         const totalReceived = sourceLogs.reduce((sum, l) => sum + l.amount, 0);
+        const expectedAmountValue = parseAmountValue(item.expectedAmount);
+        const hasExpectedAmount = expectedAmountValue > 0;
+        const isPaidOff = (item.status || '').toUpperCase() === 'INACTIVE';
+        const displayTotalReceived = isPaidOff && hasExpectedAmount
+            ? Math.max(totalReceived, expectedAmountValue)
+            : totalReceived;
         const lastLog = sourceLogs.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())[0];
         const themeColor = item.color || '#10b981';
 
@@ -73,7 +94,7 @@ export default function IncomeScreen() {
                 <View className="flex-row items-center mb-3">
                     <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${themeColor}20` }}>
                         <Image
-                            source={require('../assets/svg/income.svg')}
+                            source={require('../../assets/svg/income.svg')}
                             style={{ width: 18, height: 18 }}
                             tintColor={themeColor}
                             contentFit="contain"
@@ -81,11 +102,13 @@ export default function IncomeScreen() {
                     </View>
                     <View className="flex-1">
                         <Text className="text-slate-900 dark:text-white font-bold text-base" numberOfLines={1}>{item.name}</Text>
-                        <Text className="text-slate-400 text-xs mt-0.5">{FREQ_LABELS[item.frequency]} • {sourceLogs.length} entries</Text>
+                        <Text className="text-slate-400 text-xs mt-0.5">
+                            {item.isRecurring ? `${FREQ_LABELS[item.frequency]} • ` : ''}{sourceLogs.length} entries
+                        </Text>
                     </View>
-                    {item.status === 'INACTIVE' && (
+                    {isPaidOff && (
                         <View className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
-                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold">Inactive</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold">Paid Off</Text>
                         </View>
                     )}
                 </View>
@@ -93,13 +116,13 @@ export default function IncomeScreen() {
                 <View className="flex-row justify-between items-end">
                     <View>
                         <Text className="text-slate-400 text-xs mb-1">Total Received</Text>
-                        <Text className="text-2xl font-bold text-slate-900 dark:text-white">KES {totalReceived.toLocaleString()}</Text>
+                        <Text className="text-2xl font-bold text-slate-900 dark:text-white">KES {displayTotalReceived.toLocaleString()}</Text>
                     </View>
                     <View className="items-end">
-                        {item.expectedAmount && (
+                        {hasExpectedAmount && (
                             <>
                                 <Text className="text-slate-400 text-xs mb-1">Expected</Text>
-                                <Text className="text-slate-600 dark:text-slate-300 font-semibold">KES {item.expectedAmount.toLocaleString()}</Text>
+                                <Text className="text-slate-600 dark:text-slate-300 font-semibold">KES {expectedAmountValue.toLocaleString()}</Text>
                             </>
                         )}
                         {lastLog && (
@@ -140,7 +163,7 @@ export default function IncomeScreen() {
                         className="w-10 h-10 bg-emerald-600 rounded-full items-center justify-center shadow-lg shadow-emerald-500/30"
                     >
                         <Image
-                            source={require('../assets/svg/plus.svg')}
+                            source={require('../../assets/svg/plus.svg')}
                             style={{ width: 18, height: 18 }}
                             tintColor={"white"}
                             contentFit="contain"
@@ -154,20 +177,20 @@ export default function IncomeScreen() {
                 <View className="absolute right-[-20] top-[-20] opacity-10">
                     <FontAwesome name="line-chart" size={150} color="white" />
                 </View>
-                <Text className="text-emerald-100 text-sm font-medium mb-1">This Month's Income</Text>
+                <Text className="text-emerald-100 text-sm font-medium mb-1">This Month&apos;s Income</Text>
                 <Text className="text-white text-4xl font-bold mb-3">KES {thisMonthTotal.toLocaleString()}</Text>
                 <View className="flex-row items-center gap-2">
                     <View className={`flex-row items-center px-3 py-1 rounded-full gap-1 ${trendUp ? 'bg-white/20' : 'bg-red-400/30'}`}>
                         {trendUp ?
                             <Image
-                                source={require(`../assets/svg/trend-up.svg`)}
+                                source={require(`../../assets/svg/trend-up.svg`)}
                                 style={{ width: 18, height: 18 }}
                                 tintColor={"white"}
                                 contentFit="contain"
                             />
                             :
                             <Image
-                                source={require(`../assets/svg/trend-down.svg`)}
+                                source={require(`../../assets/svg/trend-down.svg`)}
                                 style={{ width: 18, height: 18 }}
                                 tintColor={"white"}
                                 contentFit="contain"
@@ -181,32 +204,43 @@ export default function IncomeScreen() {
             </View>
 
             {sources.length === 0 ? (
-                                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
-                                    <Image
-                                        source={require('../assets/svg/income.svg')}
-                                        style={{ width: 24, height: 24 }}
-                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                                        contentFit="contain"
-                                    />
-                                    <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
-                                        No income sources yet
-                                    </Text>
-                                    <Text className="text-slate-400 text-sm mt-1 text-center">
-                                        Track your salary, freelance, or any recurring payments. Tap the wand icon to auto-detect patterns! or tap the plus icon to add an income source manually
-                                    </Text>
-                                    <TouchableOpacity
-                                        onPress={() => router.push('/income/add')}
-                                        className="mt-5 bg-emerald-600 px-6 py-3 rounded-xl flex-row items-center gap-2"
-                                    >
-                                        <Image
-                                            source={require('../assets/svg/plus.svg')}
-                                            style={{ width: 12, height: 12 }}
-                                            tintColor={'#fff'}
-                                            contentFit="contain"
-                                        />
-                                        <Text className="text-white font-bold text-sm">Add Income Source</Text>
-                                    </TouchableOpacity>
-                                </View>
+                <ScrollView
+                    contentContainerStyle={{ paddingBottom: 100 }}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={isDark ? '#fff' : '#000'}
+                        />
+                    }
+                >
+                    <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <Image
+                            source={require('../../assets/svg/income.svg')}
+                            style={{ width: 24, height: 24 }}
+                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                            contentFit="contain"
+                        />
+                        <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
+                            No income sources yet
+                        </Text>
+                        <Text className="text-slate-400 text-sm mt-1 text-center">
+                            Track your salary, freelance, or any recurring payments. Tap the wand icon to auto-detect patterns! or tap the plus icon to add an income source manually
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => router.push('/income/add')}
+                            className="mt-5 bg-emerald-600 px-6 py-3 rounded-xl flex-row items-center gap-2"
+                        >
+                            <Image
+                                source={require('../../assets/svg/plus.svg')}
+                                style={{ width: 12, height: 12 }}
+                                tintColor={'#fff'}
+                                contentFit="contain"
+                            />
+                            <Text className="text-white font-bold text-sm">Add Income Source</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
             ) : (
                 <FlatList
                     data={sources}
@@ -214,6 +248,13 @@ export default function IncomeScreen() {
                     renderItem={renderSource}
                     contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={isDark ? '#fff' : '#000'}
+                        />
+                    }
                     ListHeaderComponent={
                         <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-4">
                             {sources.length} Active Source{sources.length !== 1 ? 's' : ''}

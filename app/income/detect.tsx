@@ -91,7 +91,7 @@ export default function DetectIncomeScreen() {
                     contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
                     ListHeaderComponent={
                         <Text className="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-5">
-                            We found <Text className="font-bold text-slate-900 dark:text-white">{patterns.length} recurring pattern{patterns.length !== 1 ? 's' : ''}</Text> in your income history. Tap "Add" to create a tracked source.
+                            We found <Text className="font-bold text-slate-900 dark:text-white">{patterns.length} recurring pattern{patterns.length !== 1 ? 's' : ''}</Text> in your income history. Tap &quot;Add&quot; to create a tracked source.
                         </Text>
                     }
                     renderItem={({ item: p, index }) => {

@@ -3,6 +3,7 @@ import { AutomationRule } from '../types/automation';
 import { Category, FulizaTransaction, SpendingSummary, Transaction } from '../types/transaction';
 import { evaluateTransaction } from '../utils/automationEngine';
 import { DatabaseChangeType, generateUUID, getDb, initDatabase, notifyListeners, notifyListenersImmediate, subscribeToDatabaseChanges } from './core/db';
+import { ledgerService } from './ledgerService';
 
 export { DatabaseChangeType, generateUUID, initDatabase, notifyListeners, notifyListenersImmediate, subscribeToDatabaseChanges };
 
@@ -215,7 +216,7 @@ export const getFulizaTransactionIdsInRange = async (sinceDate?: Date): Promise<
     return new Set(results.map(r => r.id));
 };
 
-export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
+export const saveFulizaTransaction = async (fuliza: FulizaTransaction, shouldNotify: boolean = true) => {
     await initDatabase();
     const database = getDb();
     await database.runAsync(
@@ -234,7 +235,9 @@ export const saveFulizaTransaction = async (fuliza: FulizaTransaction) => {
             fuliza.rawSms
         ]
     );
-    notifyListeners('TRANSACTIONS');
+    if (shouldNotify) {
+        notifyListeners('TRANSACTIONS');
+    }
 };
 
 export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
@@ -247,13 +250,16 @@ export const fulizaTransactionExists = async (id: string): Promise<boolean> => {
     return (result?.count || 0) > 0;
 };
 
-export const saveTransaction = async (transaction: Transaction, shouldNotify: boolean = true) => {
+export const saveTransaction = async (
+    transaction: Transaction,
+    shouldNotify: boolean = true,
+    preloadedEnabledRules?: AutomationRule[]
+) => {
     await initDatabase();
     const database = getDb();
 
     if (!transaction.categoryId) {
-        const rules = await getAutomationRules();
-        const enabledRules = rules.filter(r => r.isEnabled);
+        const enabledRules = preloadedEnabledRules ?? (await getAutomationRules()).filter(r => r.isEnabled);
         const matchedRule = evaluateTransaction(transaction, enabledRules);
 
         if (matchedRule) {
@@ -303,9 +309,18 @@ export const getTransactions = async (): Promise<Transaction[]> => {
     await initDatabase();
     const database = getDb();
     const result = await database.getAllAsync<any>(`
-        SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, c.description as categoryDescription 
+        SELECT 
+            t.*,
+            c.name as categoryName,
+            c.icon as categoryIcon,
+            c.color as categoryColor,
+            c.description as categoryDescription,
+            a.name as accountName,
+            a.type as accountType
         FROM transactions t 
         LEFT JOIN categories c ON t.category_id = c.id 
+        LEFT JOIN accounts a ON t.account_id = a.id
+        WHERE t.is_deleted = 0
         ORDER BY t.date DESC
     `);
 
@@ -339,6 +354,8 @@ export const getTransactions = async (): Promise<Transaction[]> => {
             categoryIcon: row.categoryIcon,
             categoryColor: row.categoryColor,
             categoryDescription: row.categoryDescription,
+            accountName: row.accountName,
+            accountType: row.accountType,
             linkedDebtId: row.linked_debt_id,
             linkedGoalId: row.linked_goal_id,
             referenceId: row.reference_id
@@ -572,9 +589,5 @@ export const getCategorySpending = async (month: string): Promise<Record<number,
 };
 
 export const deleteTransaction = async (id: string) => {
-    await initDatabase();
-    const database = getDb();
-    await database.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
-    notifyListenersImmediate('TRANSACTIONS');
+    await ledgerService.reverseTransaction(id);
 };
-

@@ -37,16 +37,7 @@ export default function BudgetScreen() {
     const monthKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`;
     const monthName = selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    useFocusEffect(
-        useCallback(() => {
-            const task = InteractionManager.runAfterInteractions(() => {
-                loadData();
-            });
-            return () => task.cancel();
-        }, [monthKey])
-    );
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const [cats, budget, spent] = await Promise.all([
@@ -73,7 +64,16 @@ export default function BudgetScreen() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [monthKey]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const task = InteractionManager.runAfterInteractions(() => {
+                loadData();
+            });
+            return () => task.cancel();
+        }, [loadData])
+    );
 
     const handleSave = async () => {
         setSaving(true);

@@ -1,7 +1,7 @@
 import { Transaction } from '../types/transaction';
 import { generateUUID } from '../utils/uuid';
 import { accountService } from './accountService';
-import { getDb, initDatabase } from './core/db';
+import { getDb, initDatabase, notifyListeners } from './core/db';
 
 interface TransferPayload {
     fromAccountId: string;
@@ -75,6 +75,8 @@ export const ledgerService = {
                 now, now, payload.linkedDebtId || null
             ]);
         });
+
+        notifyListeners('TRANSACTIONS');
 
         // Fetch back full object (simplified)
         return {
@@ -173,33 +175,62 @@ export const ledgerService = {
         const now = new Date().toISOString();
 
         await db.withTransactionAsync(async () => {
-            const tx = await db.getFirstAsync<{ account_id: string, amount: number, type: string, is_deleted: number }>(
-                'SELECT account_id, amount, type, is_deleted FROM transactions WHERE id = ?',
+            const tx = await db.getFirstAsync<{
+                account_id: string | null;
+                amount: number;
+                type: string;
+                is_deleted: number;
+                linked_debt_id: string | null;
+                linked_goal_id: string | null;
+            }>(
+                'SELECT account_id, amount, type, is_deleted, linked_debt_id, linked_goal_id FROM transactions WHERE id = ?',
                 [transactionId]
             );
 
             if (!tx) throw new Error("Transaction not found");
             if (tx.is_deleted) throw new Error("Transaction already deleted");
 
-            // Prevent deletion if linked to a debt
-            const linkedTx = await db.getFirstAsync<{ linked_debt_id: string }>('SELECT linked_debt_id FROM transactions WHERE id = ?', [transactionId]);
-            if (linkedTx?.linked_debt_id) {
+            // Prevent deletion when transaction is linked to core business entities.
+            if (tx.linked_debt_id) {
                 throw new Error("Cannot delete a transaction linked to a debt. Unlink it from the Debt screen first.");
+            }
+            if (tx.linked_goal_id) {
+                throw new Error("Cannot delete a transaction linked to a savings goal. Unlink it from the Savings screen first.");
+            }
+
+            const linkedIncomeLog = await db.getFirstAsync<{ id: string }>(
+                'SELECT id FROM income_logs WHERE transaction_id = ? LIMIT 1',
+                [transactionId]
+            );
+            if (linkedIncomeLog) {
+                throw new Error("Cannot delete a transaction linked to an income source. Unlink it from the Income screen first.");
+            }
+
+            const linkedDebtPayment = await db.getFirstAsync<{ id: string }>(
+                'SELECT id FROM debt_payments WHERE transaction_id = ? LIMIT 1',
+                [transactionId]
+            );
+            if (linkedDebtPayment) {
+                throw new Error("Cannot delete a transaction linked to a debt payment. Unlink it from the Debt screen first.");
             }
 
             // 1. Reverse Balance
             const reverseAmount = tx.type === 'SENT' ? tx.amount : -tx.amount; // Add back expense, subtract income
 
-            await db.runAsync(
-                'UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE id = ?',
-                [reverseAmount, now, tx.account_id]
-            );
+            if (tx.account_id) {
+                await db.runAsync(
+                    'UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE id = ?',
+                    [reverseAmount, now, tx.account_id]
+                );
+            }
 
             // 2. Mark as Deleted
             await db.runAsync(
-                'UPDATE transactions SET is_deleted = 1, deleted_at = ? WHERE id = ?',
-                [now, transactionId]
+                'UPDATE transactions SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?',
+                [now, now, transactionId]
             );
         });
+
+        notifyListeners('TRANSACTIONS');
     }
 };

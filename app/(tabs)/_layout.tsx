@@ -1,15 +1,12 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Tabs } from 'expo-router';
-import { useColorScheme } from 'nativewind';
 import React from 'react';
 import { View } from 'react-native';
 import CustomTabBar from '../../components/CustomTabBar';
 import { useAuth } from '../../services/AuthContext';
 
 export default function TabLayout() {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const { user } = useAuth();
 
   return (
@@ -33,6 +30,13 @@ export default function TabLayout() {
               contentFit="contain"
             />
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="income"
+        options={{
+          href: null,
         }}
       />
 

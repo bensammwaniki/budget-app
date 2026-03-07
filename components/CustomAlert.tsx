@@ -27,7 +27,7 @@ const CustomAlert: React.FC = () => {
             opacity.value = withTiming(0, { duration: 200 });
             scale.value = withTiming(0.8, { duration: 200 });
         }
-    }, [isVisible]);
+    }, [isVisible, opacity, scale]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -70,7 +70,7 @@ const CustomAlert: React.FC = () => {
                 </Animated.View>
 
                 <Animated.View style={[animatedStyle, { width: width * 0.85, maxWidth: 340 }]}>
-                    <View className="bg-white dark:bg-[#1e293b] rounded-3xl p-6 shadow-2xl items-center border border-gray-100 dark:border-slate-700">
+                    <View className="bg-white dark:bg-[#1e293b] rounded-2xl p-6 shadow-2xl items-center border border-gray-100 dark:border-slate-700">
                         <View className="mb-4">
                             {getIcon()}
                         </View>

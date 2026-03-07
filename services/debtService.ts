@@ -224,8 +224,9 @@ export const debtService = {
 
             await db.runAsync('DELETE FROM debt_payments WHERE id = ?', [link.id]);
 
-            const tx = await db.getFirstAsync<any>('SELECT amount FROM transactions WHERE id = ?', [transactionId]);
-            const kind = (tx?.amount || 0) < 0 ? 'EXPENSE' : 'INCOME';
+            const tx = await db.getFirstAsync<{ type: string }>('SELECT type FROM transactions WHERE id = ?', [transactionId]);
+            if (!tx) throw new Error("Linked transaction not found");
+            const kind = tx.type === 'SENT' ? 'EXPENSE' : 'INCOME';
 
             await db.runAsync(`
                 UPDATE transactions
@@ -282,7 +283,7 @@ export const debtService = {
             // Unlink all repayments so they become normal expenses/incomes again
             await db.runAsync(`
                 UPDATE transactions 
-                SET transaction_kind = CASE WHEN amount < 0 THEN 'EXPENSE' ELSE 'INCOME' END,
+                SET transaction_kind = CASE WHEN type = 'SENT' THEN 'EXPENSE' ELSE 'INCOME' END,
                     linked_debt_id = NULL,
                     category_id = NULL
                 WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_REPAYMENT'
@@ -432,7 +433,7 @@ export const debtService = {
         return mapRowToDebt(debt);
     },
 
-    async increaseDebtAmount(debtId: string, amount: number) {
+    async increaseDebtAmount(debtId: string, amount: number, shouldNotify: boolean = true) {
         await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
@@ -440,10 +441,10 @@ export const debtService = {
             "UPDATE debts SET current_balance = current_balance + ?, updated_at = ? WHERE id = ?",
             [amount, now, debtId]
         );
-        notifyListeners('DEBTS');
+        if (shouldNotify) notifyListeners('DEBTS');
     },
 
-    async reduceDebtAmount(debtId: string, amount: number) {
+    async reduceDebtAmount(debtId: string, amount: number, shouldNotify: boolean = true) {
         await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
@@ -451,10 +452,10 @@ export const debtService = {
             "UPDATE debts SET current_balance = MAX(0, current_balance - ?), updated_at = ? WHERE id = ?",
             [amount, now, debtId]
         );
-        notifyListeners('DEBTS');
+        if (shouldNotify) notifyListeners('DEBTS');
     },
 
-    async updateDebtBalance(debtId: string, balance: number) {
+    async updateDebtBalance(debtId: string, balance: number, shouldNotify: boolean = true) {
         await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
@@ -462,7 +463,7 @@ export const debtService = {
             "UPDATE debts SET current_balance = ?, updated_at = ? WHERE id = ?",
             [balance, now, debtId]
         );
-        notifyListeners('DEBTS');
+        if (shouldNotify) notifyListeners('DEBTS');
     },
 
     /**

@@ -95,7 +95,7 @@ export default function PrivacyPolicyScreen() {
                     </View>
 
                     <Text className="text-slate-700 dark:text-slate-300 text-sm leading-6 font-bold mb-3">
-                        THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+                        THIS SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
                     </Text>
 
                     <Text className="text-slate-600 dark:text-slate-400 text-xs leading-5 mb-3">

@@ -52,27 +52,6 @@ export default function DebtsScreen() {
     }
   }, [statusFilter, typeFilter]);
 
-  // Show tab bar when screen mounts
-  useEffect(() => {
-    showTabBar();
-  }, [showTabBar]);
-
-  // Load debts when filters change or database updates
-  useEffect(() => {
-    loadDebts();
-
-    const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'DEBTS' || type === 'TRANSACTIONS') {
-        InteractionManager.runAfterInteractions(() => {
-          loadDebts();
-          loadTotals(); // also refresh totals on database changes
-        });
-      }
-    });
-
-    return unsubscribe;
-  }, [loadDebts]);
-
   // Load totals for both types based on status (ACTIVE or PAID)
   const loadTotals = useCallback(async () => {
     try {
@@ -92,6 +71,27 @@ export default function DebtsScreen() {
       setReceivableTotal(0);
     }
   }, [statusFilter]);
+
+  // Show tab bar when screen mounts
+  useEffect(() => {
+    showTabBar();
+  }, [showTabBar]);
+
+  // Load debts when filters change or database updates
+  useEffect(() => {
+    loadDebts();
+
+    const unsubscribe = subscribeToDatabaseChanges((type) => {
+      if (type === 'DEBTS' || type === 'TRANSACTIONS') {
+        InteractionManager.runAfterInteractions(() => {
+          loadDebts();
+          loadTotals(); // also refresh totals on database changes
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [loadDebts, loadTotals]);
 
   useEffect(() => {
     loadTotals();

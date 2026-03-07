@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,8 @@ export default function IncomeDetailScreen() {
     const [logs, setLogs] = useState<IncomeLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [openingLinkModal, setOpeningLinkModal] = useState(false);
+    const openingLinkModalRef = useRef(false);
     const [linkableTx, setLinkableTx] = useState<Transaction[]>([]);
     const [linking, setLinking] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +43,16 @@ export default function IncomeDetailScreen() {
     const [manualChannel, setManualChannel] = useState<string | null>(null);
     const [manualNotes, setManualNotes] = useState('');
     const [recordingManual, setRecordingManual] = useState(false);
+    const [markingPaidOff, setMarkingPaidOff] = useState(false);
+
+    const parseAmountValue = (value: unknown): number => {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+        if (typeof value === 'string') {
+            const parsed = parseFloat(value.replace(/,/g, '').trim());
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    };
 
     const formatWithCommas = (value: string) => {
         const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
@@ -83,6 +95,9 @@ export default function IncomeDetailScreen() {
     useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
     const fetchLinkable = async () => {
+        if (showModal || openingLinkModal || openingLinkModalRef.current) return;
+        openingLinkModalRef.current = true;
+        setOpeningLinkModal(true);
         try {
             const all = await getTransactions();
             // Already linked transactions have an income log with their id
@@ -93,8 +108,11 @@ export default function IncomeDetailScreen() {
             );
             setLinkableTx(eligible);
             setShowModal(true);
-        } catch (e) {
+        } catch {
             Alert.alert('Error', 'Failed to fetch transactions.');
+        } finally {
+            openingLinkModalRef.current = false;
+            setOpeningLinkModal(false);
         }
     };
 
@@ -166,7 +184,57 @@ export default function IncomeDetailScreen() {
         }
     };
 
+    const handleMarkPaidOff = () => {
+        const currentStatus = (source?.status || '').toUpperCase();
+        if (!source || markingPaidOff || currentStatus === 'INACTIVE') return;
+        Alert.alert(
+            'Mark as Paid Off',
+            'This will mark the source as fully paid off without deleting history. Continue?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Mark Paid Off',
+                    onPress: async () => {
+                        setMarkingPaidOff(true);
+                        try {
+                            const currentTotal = logs.reduce((sum, l) => sum + l.amount, 0);
+                            const expectedTotal = parseAmountValue(source.expectedAmount);
+                            const remainingToFull = Number((expectedTotal - currentTotal).toFixed(2));
+
+                            if (remainingToFull > 0) {
+                                await incomeService.logIncome(
+                                    source.id,
+                                    remainingToFull,
+                                    new Date().toISOString(),
+                                    undefined,
+                                    'Auto top-up: source marked as paid off'
+                                );
+                            }
+
+                            await incomeService.updateSource(source.id, { status: 'INACTIVE' });
+                            setShowManualModal(false);
+                            setManualAmount('');
+                            setManualChannel(null);
+                            setManualNotes('');
+                            await loadData();
+                            if (remainingToFull > 0) {
+                                Alert.alert('Updated', `Marked as paid off and added KES ${remainingToFull.toLocaleString()} to reach the full amount.`);
+                            } else {
+                                Alert.alert('Updated', 'Income source marked as paid off.');
+                            }
+                        } catch (e: any) {
+                            Alert.alert('Error', e.message || 'Failed to update source status.');
+                        } finally {
+                            setMarkingPaidOff(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const openManualModal = () => {
+        if (showManualModal || recordingManual || markingPaidOff) return;
         setManualAmount('');
         setManualChannel(null);
         setManualNotes('');
@@ -191,6 +259,12 @@ export default function IncomeDetailScreen() {
 
     const themeColor = source.color || '#10b981';
     const totalReceived = logs.reduce((sum, l) => sum + l.amount, 0);
+    const expectedAmountValue = parseAmountValue(source.expectedAmount);
+    const hasExpectedAmount = expectedAmountValue > 0;
+    const isPaidOff = (source.status || '').toUpperCase() === 'INACTIVE';
+    const displayTotalReceived = isPaidOff && hasExpectedAmount
+        ? Math.max(totalReceived, expectedAmountValue)
+        : totalReceived;
     const FREQ_LABELS: Record<string, string> = {
         MONTHLY: 'Monthly', WEEKLY: 'Weekly', BI_WEEKLY: 'Bi-weekly', IRREGULAR: 'Irregular'
     };
@@ -224,22 +298,26 @@ export default function IncomeDetailScreen() {
                     <View className="flex-row justify-between items-start mb-4">
                         <View>
                             <Text className="text-slate-400 text-sm mb-1">Total Received</Text>
-                            <Text className="text-4xl font-bold text-slate-900 dark:text-white">KES {totalReceived.toLocaleString()}</Text>
+                            <Text className="text-4xl font-bold text-slate-900 dark:text-white">KES {displayTotalReceived.toLocaleString()}</Text>
                         </View>
                         <View className="px-3 py-1 rounded-full" style={{ backgroundColor: `${themeColor}20` }}>
-                            <Text className="text-xs font-bold" style={{ color: themeColor }}>{source.status}</Text>
+                            <Text className="text-xs font-bold" style={{ color: themeColor }}>
+                                {isPaidOff ? 'PAID OFF' : 'ACTIVE'}
+                            </Text>
                         </View>
                     </View>
 
                     <View className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl gap-2 border border-slate-100 dark:border-slate-700/50">
-                        <View className="flex-row justify-between">
-                            <Text className="text-slate-500 text-xs">Frequency</Text>
-                            <Text className="text-slate-900 dark:text-white font-bold text-xs">{FREQ_LABELS[source.frequency]}</Text>
-                        </View>
-                        {source.expectedAmount && (
+                        {source.isRecurring && (
+                            <View className="flex-row justify-between">
+                                <Text className="text-slate-500 text-xs">Frequency</Text>
+                                <Text className="text-slate-900 dark:text-white font-bold text-xs">{FREQ_LABELS[source.frequency]}</Text>
+                            </View>
+                        )}
+                        {hasExpectedAmount && (
                             <View className="flex-row justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
                                 <Text className="text-slate-500 text-xs">Expected per period</Text>
-                                <Text className="text-slate-900 dark:text-white font-bold text-xs">KES {source.expectedAmount.toLocaleString()}</Text>
+                                <Text className="text-slate-900 dark:text-white font-bold text-xs">KES {expectedAmountValue.toLocaleString()}</Text>
                             </View>
                         )}
                         <View className="flex-row justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
@@ -253,6 +331,7 @@ export default function IncomeDetailScreen() {
                 <View className="flex-row gap-3 mb-8">
                     <TouchableOpacity
                         onPress={fetchLinkable}
+                        disabled={openingLinkModal || showModal}
                         className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2 border-2"
                         style={{ borderColor: themeColor, backgroundColor: `${themeColor}15` }}
                     >
@@ -267,6 +346,7 @@ export default function IncomeDetailScreen() {
 
                     <TouchableOpacity
                         onPress={openManualModal}
+                        disabled={showManualModal || recordingManual}
                         className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2"
                         style={{ backgroundColor: themeColor }}
                     >
@@ -455,7 +535,7 @@ export default function IncomeDetailScreen() {
                             {/* Confirm */}
                             <TouchableOpacity
                                 onPress={handleRecordManual}
-                                disabled={recordingManual}
+                                disabled={recordingManual || markingPaidOff}
                                 className="p-4 rounded-xl flex-row justify-center items-center gap-2"
                                 style={{ backgroundColor: themeColor }}
                             >
@@ -469,6 +549,35 @@ export default function IncomeDetailScreen() {
                                             contentFit="contain"
                                         />
                                         <Text className="text-white font-bold text-lg">Confirm</Text>
+                                    </>
+                                }
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={handleMarkPaidOff}
+                                disabled={recordingManual || markingPaidOff || isPaidOff}
+                                className="mt-3 p-4 rounded-xl flex-row justify-center items-center gap-2 border"
+                                style={{
+                                    borderColor: isPaidOff ? '#94a3b8' : '#0f766e',
+                                    backgroundColor: isPaidOff
+                                        ? (isDark ? 'rgba(51,65,85,0.4)' : '#f1f5f9')
+                                        : (isDark ? 'rgba(15,118,110,0.2)' : '#f0fdfa')
+                                }}
+                            >
+                                {markingPaidOff
+                                    ? <ActivityIndicator color="#0f766e" />
+                                    : <>
+                                        <FontAwesome
+                                            name={isPaidOff ? 'check-circle' : 'flag-checkered'}
+                                            size={16}
+                                            color={isPaidOff ? '#94a3b8' : '#0f766e'}
+                                        />
+                                        <Text
+                                            className="font-bold text-base"
+                                            style={{ color: isPaidOff ? '#94a3b8' : '#0f766e' }}
+                                        >
+                                            {isPaidOff ? 'Paid Off' : 'Mark as Paid Off'}
+                                        </Text>
                                     </>
                                 }
                             </TouchableOpacity>

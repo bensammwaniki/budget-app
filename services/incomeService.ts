@@ -68,6 +68,8 @@ export const incomeService = {
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
+        const normalizedFrequency: IncomeFrequency = data.isRecurring ? data.frequency : 'IRREGULAR';
+        const normalizedExpectedAmount = data.isRecurring ? (data.expectedAmount ?? null) : null;
 
         await db.runAsync(`
             INSERT INTO income_sources(id, user_id, name, category_id, is_recurring, expected_amount, frequency, color, status, created_at, updated_at)
@@ -75,8 +77,8 @@ export const incomeService = {
         `, [
             id, userId, data.name, data.categoryId ?? null,
             data.isRecurring ? 1 : 0,
-            data.expectedAmount ?? null,
-            data.frequency,
+            normalizedExpectedAmount,
+            normalizedFrequency,
             data.color ?? null,
             now, now
         ]);
@@ -100,10 +102,13 @@ export const incomeService = {
         const now = new Date().toISOString();
         const setClauses: string[] = [];
         const values: any[] = [];
+        const effectiveRecurring = updates.isRecurring !== undefined ? updates.isRecurring : undefined;
+        const normalizedFrequency = effectiveRecurring === false ? 'IRREGULAR' : updates.frequency;
+        const normalizedExpectedAmount = effectiveRecurring === false ? null : updates.expectedAmount;
 
         if (updates.name !== undefined) { setClauses.push('name = ?'); values.push(updates.name); }
-        if (updates.expectedAmount !== undefined) { setClauses.push('expected_amount = ?'); values.push(updates.expectedAmount); }
-        if (updates.frequency !== undefined) { setClauses.push('frequency = ?'); values.push(updates.frequency); }
+        if (normalizedExpectedAmount !== undefined) { setClauses.push('expected_amount = ?'); values.push(normalizedExpectedAmount); }
+        if (normalizedFrequency !== undefined) { setClauses.push('frequency = ?'); values.push(normalizedFrequency); }
         if (updates.color !== undefined) { setClauses.push('color = ?'); values.push(updates.color); }
         if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
         if (updates.isRecurring !== undefined) { setClauses.push('is_recurring = ?'); values.push(updates.isRecurring ? 1 : 0); }
@@ -121,7 +126,11 @@ export const incomeService = {
     async deleteSource(id: string): Promise<void> {
         await initDatabase();
         const db = getDb();
-        await db.runAsync('DELETE FROM income_sources WHERE id = ?', [id]);
+        await db.withTransactionAsync(async () => {
+            await db.runAsync('DELETE FROM income_logs WHERE source_id = ?', [id]);
+            await db.runAsync('DELETE FROM income_sources WHERE id = ?', [id]);
+        });
+        notifyListeners('INCOME_LOGS');
         notifyListeners('INCOME_SOURCES');
     },
 
@@ -131,8 +140,17 @@ export const incomeService = {
         await initDatabase();
         const db = getDb();
         const query = sourceId
-            ? 'SELECT * FROM income_logs WHERE source_id = ? ORDER BY received_at DESC'
-            : 'SELECT * FROM income_logs ORDER BY received_at DESC';
+            ? `SELECT l.*
+               FROM income_logs l
+               INNER JOIN income_sources s ON s.id = l.source_id
+               WHERE l.source_id = ?
+               AND COALESCE(l.notes, '') NOT LIKE 'Initial backdated amount%'
+               ORDER BY l.received_at DESC`
+            : `SELECT l.*
+               FROM income_logs l
+               INNER JOIN income_sources s ON s.id = l.source_id
+               WHERE COALESCE(l.notes, '') NOT LIKE 'Initial backdated amount%'
+               ORDER BY l.received_at DESC`;
         const rows = await db.getAllAsync<any>(query, sourceId ? [sourceId] : []);
         return rows.map(this.mapDbToLog);
     },
@@ -176,6 +194,23 @@ export const incomeService = {
         const receivedAt = tx.date ?? new Date().toISOString();
         await this.logIncome(sourceId, tx.amount, receivedAt, transactionId);
         notifyListeners('INCOME_LOGS');
+    },
+
+    async clearSourceLogs(sourceId: string): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+
+        await db.withTransactionAsync(async () => {
+            await db.runAsync('DELETE FROM income_logs WHERE source_id = ?', [sourceId]);
+            await db.runAsync(
+                'UPDATE income_sources SET last_received = NULL, updated_at = ? WHERE id = ?',
+                [now, sourceId]
+            );
+        });
+
+        notifyListeners('INCOME_LOGS');
+        notifyListeners('INCOME_SOURCES');
     },
 
     // ─── Auto-Detect ────────────────────────────────────────────────────────

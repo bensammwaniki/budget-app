@@ -13,6 +13,40 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
     const isBankTransaction = tx.id.startsWith('IM_') ||
         tx.id.includes('VCSA') ||
         tx.id.includes('OIGG');
+    const accountType = tx.accountType || (
+        tx.accountId === 'ACC-CASH-DEFAULT'
+            ? 'CASH'
+            : tx.accountId === 'ACC-MPESA-DEFAULT'
+                ? 'M-PESA'
+                : undefined
+    );
+    const sourceLabel = isBankTransaction
+        ? 'I&M BANK'
+        : accountType === 'CASH'
+            ? 'CASH'
+            : accountType === 'BANK'
+                ? (tx.accountName || 'BANK').toUpperCase()
+                : accountType === 'DEBT'
+                    ? 'DEBT'
+                    : 'M-PESA';
+    const sourceBadgeClass = isBankTransaction
+        ? 'bg-blue-100 dark:bg-blue-900/30'
+        : accountType === 'CASH'
+            ? 'bg-amber-100 dark:bg-amber-900/30'
+            : accountType === 'BANK'
+                ? 'bg-indigo-100 dark:bg-indigo-900/30'
+                : accountType === 'DEBT'
+                    ? 'bg-rose-100 dark:bg-rose-900/30'
+                    : 'bg-green-100 dark:bg-green-900/30';
+    const sourceTextClass = isBankTransaction
+        ? 'text-blue-700 dark:text-blue-400'
+        : accountType === 'CASH'
+            ? 'text-amber-700 dark:text-amber-400'
+            : accountType === 'BANK'
+                ? 'text-indigo-700 dark:text-indigo-400'
+                : accountType === 'DEBT'
+                    ? 'text-rose-700 dark:text-rose-400'
+                    : 'text-green-700 dark:text-green-400';
 
     return (
         <TouchableOpacity
@@ -34,9 +68,9 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                     {tx.recipientName}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
-                    <View className={`px-1.5 py-0.5 rounded mr-2 ${isBankTransaction ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                        <Text className={`text-[8px] font-bold ${isBankTransaction ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'}`}>
-                            {isBankTransaction ? 'I&M BANK' : 'M-PESA'}
+                    <View className={`px-1.5 py-0.5 rounded mr-2 ${sourceBadgeClass}`}>
+                        <Text className={`text-[8px] font-bold ${sourceTextClass}`}>
+                            {sourceLabel}
                         </Text>
                     </View>
                     {tx.categoryName && (

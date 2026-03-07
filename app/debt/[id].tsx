@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,8 @@ export default function DebtDetailScreen() {
 
     // Link Modal State
     const [modalVisible, setModalVisible] = useState(false);
+    const [openingLinkModal, setOpeningLinkModal] = useState(false);
+    const openingLinkModalRef = useRef(false);
     const [potentialMatches, setPotentialMatches] = useState<any[]>([]);
     const [matchesLoading, setMatchesLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -53,7 +55,7 @@ export default function DebtDetailScreen() {
         };
     });
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         if (!id) return;
         try {
             const debtData = await debtService.getDebts('local_user');
@@ -70,16 +72,18 @@ export default function DebtDetailScreen() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useFocusEffect(
         useCallback(() => {
             loadData();
-        }, [id])
+        }, [loadData])
     );
 
     const openLinkModal = async () => {
-        if (!debt) return;
+        if (!debt || modalVisible || openingLinkModal || openingLinkModalRef.current) return;
+        openingLinkModalRef.current = true;
+        setOpeningLinkModal(true);
         setModalVisible(true);
         setMatchesLoading(true);
         try {
@@ -89,6 +93,8 @@ export default function DebtDetailScreen() {
             console.error(error);
         } finally {
             setMatchesLoading(false);
+            openingLinkModalRef.current = false;
+            setOpeningLinkModal(false);
         }
     };
 
@@ -123,7 +129,7 @@ export default function DebtDetailScreen() {
                             await debtService.settleDebt(debt.id);
                             Alert.alert("Success", "Debt marked as paid.");
                             loadData();
-                        } catch (error) {
+                        } catch {
                             Alert.alert("Error", "Failed to clear debt.");
                         }
                     }
@@ -293,6 +299,7 @@ export default function DebtDetailScreen() {
                             <TouchableOpacity
                                 className="bg-blue-600 flex-1 p-3 rounded-xl items-center shadow-lg shadow-blue-500/30 flex-row justify-center gap-2"
                                 onPress={openLinkModal}
+                                disabled={openingLinkModal || modalVisible}
                             >
                                 <FontAwesome name="link" size={16} color="white" />
                                 <Text className="text-white font-bold text-lg">Link</Text>
@@ -339,7 +346,7 @@ export default function DebtDetailScreen() {
                                     {payment.raw_sms && (
                                         <View className="mt-1 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
                                             <Text className="text-slate-500 dark:text-slate-400 text-[10px] italic" numberOfLines={2}>
-                                                "{payment.raw_sms}"
+                                                &quot;{payment.raw_sms}&quot;
                                             </Text>
                                         </View>
                                     )}

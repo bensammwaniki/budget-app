@@ -32,6 +32,8 @@ const mapRowToTransaction = (row: any): Transaction => {
         uuid: row.uuid,
         userId: row.user_id,
         accountId: row.account_id,
+        accountName: row.account_name,
+        accountType: row.account_type,
         categoryId: row.category_id,
         amount: row.amount,
         type: row.type as 'SENT' | 'RECEIVED',

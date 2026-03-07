@@ -298,6 +298,13 @@ async function performInitialization() {
         await database.execAsync(`
             CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
             CREATE INDEX IF NOT EXISTS idx_tx_uuid ON transactions(uuid);
+            CREATE INDEX IF NOT EXISTS idx_tx_active_date ON transactions(is_deleted, date);
+            CREATE INDEX IF NOT EXISTS idx_tx_type_date ON transactions(type, date);
+            CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, date);
+            CREATE INDEX IF NOT EXISTS idx_tx_recipient_type_date ON transactions(recipient_id, type, date);
+            CREATE INDEX IF NOT EXISTS idx_tx_linked_debt ON transactions(linked_debt_id);
+            CREATE INDEX IF NOT EXISTS idx_tx_linked_goal ON transactions(linked_goal_id);
+            CREATE INDEX IF NOT EXISTS idx_income_logs_transaction_id ON income_logs(transaction_id);
         `);
 
         // Recipients migration
@@ -378,6 +385,8 @@ async function performInitialization() {
                 FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE, 
                 FOREIGN KEY (transaction_id) REFERENCES transactions(id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_debt_payments_transaction_id ON debt_payments(transaction_id);
         `);
 
         // Migration for automation_rules is_enabled and monthly_budgets total_income

@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accountService } from '../../services/accountService';
@@ -27,6 +27,7 @@ function AddDebtScreen() {
     const [expectedPayDate, setExpectedPayDate] = useState<Date | undefined>(undefined);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+    const [dueDatePickerYear, setDueDatePickerYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(false);
 
     const scrollY = useSharedValue(0);
@@ -90,6 +91,23 @@ function AddDebtScreen() {
         const lastDay = new Date(year, month + 1, 0);
         setExpectedPayDate(lastDay);
     };
+
+    const openDueDatePicker = () => {
+        const base = expectedPayDate ?? new Date();
+        setDueDatePickerYear(base.getFullYear());
+        setShowDueDatePicker(true);
+    };
+
+    const monthLabels = useMemo(() => {
+        const fallback = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        try {
+            return Array.from({ length: 12 }, (_, i) =>
+                new Date(Date.UTC(2024, i, 1)).toLocaleString(undefined, { month: 'short', timeZone: 'UTC' })
+            );
+        } catch {
+            return fallback;
+        }
+    }, []);
 
     const projectedInterestValue = useMemo(() => {
         const principal = parseFloat(amount.replace(/,/g, '')) || 0;
@@ -164,13 +182,20 @@ function AddDebtScreen() {
                 </View>
             </Animated.View>
 
-            <Animated.ScrollView
-                className="flex-1"
-                onScroll={scrollHandler}
-                scrollEventThrottle={16}
-                contentContainerStyle={{ paddingTop: insets.top + 70, paddingBottom: 100 }}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 20 : 0}
             >
-                <View className="p-6">
+                <Animated.ScrollView
+                    className="flex-1"
+                    onScroll={scrollHandler}
+                    scrollEventThrottle={16}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                    contentContainerStyle={{ paddingTop: insets.top + 70, paddingBottom: 100 }}
+                >
+                    <View className="p-6">
                     {/* Type Selection */}
                     <View style={{ flexDirection: 'row', backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#e6edf3', padding: 4, borderRadius: 50, marginBottom: 24 }}>
                         <TouchableOpacity
@@ -292,7 +317,7 @@ function AddDebtScreen() {
 
                         {/* Expected Pay Date Selector */}
                         <TouchableOpacity
-                            onPress={() => setShowDueDatePicker(true)}
+                            onPress={openDueDatePicker}
                             className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-2 border border-purple-50 dark:border-purple-900/20"
                         >
                             <Text className="text-sm font-semibold text-slate-500 mb-2">Expected Pay Date</Text>
@@ -338,7 +363,7 @@ function AddDebtScreen() {
                                 activeOpacity={1}
                                 onPress={() => setShowDueDatePicker(false)}
                             >
-                                <View className="bg-white dark:bg-[#0f172a] w-full rounded-3xl p-6 shadow-2xl">
+                                <View className="bg-white dark:bg-[#0f172a] w-full rounded-[12px] p-6 shadow-2xl">
                                     <View className="flex-row justify-between items-center mb-6">
                                         <Text className="text-l uppercase font-bold text-slate-900 dark:text-white text-center flex-1 ml-6">Select Month</Text>
                                         <TouchableOpacity onPress={() => setShowDueDatePicker(false)}>
@@ -354,8 +379,10 @@ function AddDebtScreen() {
                                     <View className="flex-row flex-wrap justify-between">
                                         {Array.from({ length: 12 }).map((_, i) => {
                                             const now = new Date();
-                                            const displayYear = expectedPayDate ? expectedPayDate.getFullYear() : now.getFullYear();
-                                            const currentMonth = expectedPayDate ? expectedPayDate.getMonth() : -1;
+                                            const displayYear = dueDatePickerYear;
+                                            const currentMonth = expectedPayDate && expectedPayDate.getFullYear() === displayYear
+                                                ? expectedPayDate.getMonth()
+                                                : -1;
                                             // Disable months before the current month if we're displaying the current year
                                             const isPastMonth = displayYear === now.getFullYear() && i < now.getMonth();
 
@@ -364,13 +391,12 @@ function AddDebtScreen() {
                                                     key={i}
                                                     disabled={isPastMonth}
                                                     onPress={() => {
-                                                        const year = expectedPayDate ? expectedPayDate.getFullYear() : now.getFullYear();
-                                                        handleMonthYearSelect(i, year);
+                                                        handleMonthYearSelect(i, displayYear);
                                                     }}
-                                                    className={`w-[30%] py-3 mb-2 rounded-xl items-center ${currentMonth === i ? 'bg-blue-600' : isPastMonth ? 'opacity-20' : 'bg-slate-50 dark:bg-slate-800'}`}
+                                                    className={`w-[30%] py-2 mb-2 rounded-[8px] items-center ${currentMonth === i ? 'bg-blue-600' : isPastMonth ? 'opacity-20' : 'bg-slate-50 dark:bg-slate-800'}`}
                                                 >
-                                                    <Text className={`font-bold ${currentMonth === i ? 'text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-                                                        {new Date(0, i).toLocaleString('default', { month: 'short' })}
+                                                    <Text className={`font-medium uppercase text-sm ${currentMonth === i ? 'text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                                                        {monthLabels[i]}
                                                     </Text>
                                                 </TouchableOpacity>
                                             );
@@ -379,24 +405,16 @@ function AddDebtScreen() {
 
                                     <View className="flex-row justify-center items-center gap-6 mt-4 pt-6 border-t border-slate-100 dark:border-slate-800">
                                         <TouchableOpacity
-                                            onPress={() => {
-                                                const currentYear = expectedPayDate ? expectedPayDate.getFullYear() : new Date().getFullYear();
-                                                const currentMon = expectedPayDate ? expectedPayDate.getMonth() : new Date().getMonth();
-                                                handleMonthYearSelect(currentMon, currentYear - 1);
-                                            }}
+                                            onPress={() => setDueDatePickerYear(prev => prev - 1)}
                                             className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full items-center justify-center"
                                         >
                                             <FontAwesome name="minus" size={10} color="#3b82f6" />
                                         </TouchableOpacity>
                                         <Text className="text-xl font-black text-slate-900 dark:text-white">
-                                            {expectedPayDate ? expectedPayDate.getFullYear() : new Date().getFullYear()}
+                                            {dueDatePickerYear}
                                         </Text>
                                         <TouchableOpacity
-                                            onPress={() => {
-                                                const currentYear = expectedPayDate ? expectedPayDate.getFullYear() : new Date().getFullYear();
-                                                const currentMon = expectedPayDate ? expectedPayDate.getMonth() : new Date().getMonth();
-                                                handleMonthYearSelect(currentMon, currentYear + 1);
-                                            }}
+                                            onPress={() => setDueDatePickerYear(prev => prev + 1)}
                                             className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full items-center justify-center"
                                         >
                                             <FontAwesome name="plus" size={10} color="#3b82f6" />
@@ -405,9 +423,9 @@ function AddDebtScreen() {
 
                                     <TouchableOpacity
                                         onPress={() => setShowDueDatePicker(false)}
-                                        className="bg-blue-600 mt-8 py-4 rounded-2xl items-center"
+                                        className="bg-blue-600 mt-4 py-4 rounded-[10px] items-center"
                                     >
-                                        <Text className="text-white font-bold text-lg">Confirm</Text>
+                                        <Text className="text-white font-bold text-[14px]">Confirm</Text>
                                     </TouchableOpacity>
                                 </View>
                             </TouchableOpacity>
@@ -471,8 +489,9 @@ function AddDebtScreen() {
                                 />
                                 <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text></View>}
                     </TouchableOpacity>
-                </View>
-            </Animated.ScrollView>
+                    </View>
+                </Animated.ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }

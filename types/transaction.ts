@@ -5,6 +5,8 @@ export interface Transaction {
     uuid: string; // Redundant but explicit in reqs, often same as ID
     userId: string;
     accountId: string;
+    accountName?: string;
+    accountType?: 'M-PESA' | 'BANK' | 'CASH' | 'DEBT';
     categoryId?: number;
 
     amount: number;

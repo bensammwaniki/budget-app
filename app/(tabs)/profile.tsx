@@ -5,8 +5,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, InteractionManager, Modal, RefreshControl, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
@@ -18,7 +18,6 @@ export default function ProfileScreen() {
     const { signOut, user, phoneNumber, updateUserProfile } = useAuth();
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const router = useRouter();
-    const firstName = user?.displayName?.split(' ')[0] || 'User';
 
     const { showTabBar, hideTabBar } = useScrollVisibility();
     const lastScrollY = useSharedValue(0);
@@ -53,6 +52,19 @@ export default function ProfileScreen() {
     const [smsParseStartDate, setSmsParseStartDate] = useState<Date | null>(null);
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
     const [showSmsDatePicker, setShowSmsDatePicker] = useState(false);
+    const [isThemeSwitching, setIsThemeSwitching] = useState(false);
+    const themeToggleLockRef = useRef(false);
+
+    const handleToggleTheme = useCallback(() => {
+        if (themeToggleLockRef.current || isThemeSwitching) return;
+        themeToggleLockRef.current = true;
+        setIsThemeSwitching(true);
+        toggleColorScheme();
+        setTimeout(() => {
+            themeToggleLockRef.current = false;
+            setIsThemeSwitching(false);
+        }, 250);
+    }, [isThemeSwitching, toggleColorScheme]);
 
     // Load categories when screen is focused
     useFocusEffect(
@@ -229,56 +241,64 @@ export default function ProfileScreen() {
                 <View className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {/* Dark Mode Toggle */}
                     <View className="flex-row items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
-                        <View className="flex-row items-center">
+                        <TouchableOpacity
+                            onPress={handleToggleTheme}
+                            disabled={isThemeSwitching}
+                            activeOpacity={0.8}
+                            className="flex-row items-center flex-1"
+                        >
                             <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700">
                                 <FontAwesome name={colorScheme === 'dark' ? 'moon-o' : 'sun-o'} size={18} color={colorScheme === 'dark' ? '#8b5cf6' : '#f59e0b'} />
                             </View>
                             <Text className="text-slate-800 dark:text-white font-semibold text-base">Dark Mode</Text>
-                        </View>
+                        </TouchableOpacity>
                         <Switch
                             value={colorScheme === 'dark'}
-                            onValueChange={toggleColorScheme}
+                            onValueChange={handleToggleTheme}
+                            disabled={isThemeSwitching}
                             trackColor={{ false: '#e2e8f0', true: '#8b5cf6' }}
                             thumbColor={'#ffffff'}
                         />
                     </View>
 
-                    {[
-                        { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/income') },
-                        { icon: require('../../assets/svg/budget.svg'), label: 'Create Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
-                        { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
-                        { icon: require('../../assets/svg/automation.svg'), label: 'Create An Automation Rule', color: '#8b5cf6', action: () => router.push('/automation') },
-                        {
-                            icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
-                            value: `Day ${financialMonthStart}`
-                        },
-                        {
-                            icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
-                            value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
-                        },
-                        { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
-                        { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
-                    ].map((item, index, arr) => (
-                        <TouchableOpacity
-                            key={index}
-                            onPress={item.action ? item.action : undefined}
-                            className={`flex-row items-center p-4 ${index !== arr.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}
-                        >
-                            <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-gray-50 dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700">
-                                <Image
-                                    source={item.icon as any}
-                                    style={{ width: 20, height: 20 }}
-                                    tintColor={item.color}
-                                    resizeMode="contain"
-                                />
-                            </View>
-                            <View className="flex-1">
-                                <Text className="text-slate-800 dark:text-white font-semibold text-base">{item.label}</Text>
-                                {item.value && <Text className="text-slate-500 dark:text-slate-400 text-xs">{item.value}</Text>}
-                            </View>
-                            <FontAwesome name="angle-right" size={20} color="#94a3b8" />
-                        </TouchableOpacity>
-                    ))}
+                    <View className="p-3 flex-row flex-wrap justify-between">
+                        {[
+                            { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/(tabs)/income') },
+                            { icon: require('../../assets/svg/budget.svg'), label: 'Create Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
+                            { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
+                            { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
+                            {
+                                icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
+                                value: `Day ${financialMonthStart}`
+                            },
+                            {
+                                icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
+                                value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
+                            },
+                            { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
+                            { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
+                        ].map((item, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                onPress={item.action ? item.action : undefined}
+                                className="w-[48.5%] mb-3 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a]"
+                            >
+                                <View className="flex-row justify-between items-start mb-3">
+                                    <View className="w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-slate-700">
+                                        <Image
+                                            source={item.icon as any}
+                                            style={{ width: 18, height: 18 }}
+                                            tintColor={item.color}
+                                            contentFit="contain"
+                                        />
+                                    </View>
+                                    <FontAwesome name="angle-right" size={16} color="#94a3b8" />
+                                </View>
+                                <Text className="text-slate-800 dark:text-white font-semibold text-[13px] leading-4">{item.label}</Text>
+                                {item.value && <Text className="text-slate-500 dark:text-slate-400 text-[11px] mt-1">{item.value}</Text>}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </View>
 
                 {/* Manage Categories Section */}
@@ -336,88 +356,99 @@ export default function ProfileScreen() {
                     transparent={true}
                     onRequestClose={() => setEditProfileVisible(false)}
                 >
-                    <View className="flex-1 justify-end bg-black/50">
-                        <View className="bg-white dark:bg-[#1e293b] rounded-t-[32px] p-6 h-[85%]">
-                            <View className="flex-row justify-between items-center mb-6">
-                                <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
-                                <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
-                                    <ExpoImage
-                                        source={require('../../assets/svg/close.svg')}
-                                        style={{ width: 20, height: 20 }}
-                                        contentFit="contain"
-                                        tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-
-                            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-                                {/* Profile Image */}
-                                <View className="items-center mb-8">
-                                    <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-                                        {editImage ? (
-                                            <Image source={{ uri: editImage }} className="w-full h-full" style={{ width: '100%', height: '100%' }} />
-                                        ) : (
-                                            <Text className="text-5xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
-                                        )}
-                                    </View>
-                                    <View className="flex-row gap-4">
-                                        <TouchableOpacity
-                                            onPress={handleTakePhoto}
-                                            className="bg-blue-500 px-4 py-2 rounded-full flex-row items-center"
-                                        >
-                                            <FontAwesome name="camera" size={14} color="white" />
-                                            <Text className="text-white font-bold ml-2">Camera</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={handlePickImage}
-                                            className="bg-purple-500 px-4 py-2 rounded-full flex-row items-center"
-                                        >
-                                            <FontAwesome name="image" size={14} color="white" />
-                                            <Text className="text-white font-bold ml-2">Gallery</Text>
-                                        </TouchableOpacity>
-                                    </View>
+                    <KeyboardAvoidingView
+                        style={{ flex: 1 }}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+                    >
+                        <View className="flex-1 justify-end bg-black/50">
+                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[32px] p-6 h-[85%]">
+                                <View className="flex-row justify-between items-center mb-6">
+                                    <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
+                                    <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
+                                        <ExpoImage
+                                            source={require('../../assets/svg/close.svg')}
+                                            style={{ width: 20, height: 20 }}
+                                            contentFit="contain"
+                                            tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
+                                        />
+                                    </TouchableOpacity>
                                 </View>
 
-                                {/* Name Input */}
-                                <View className="mb-6">
-                                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Full Name</Text>
-                                    <TextInput
-                                        value={editName}
-                                        onChangeText={setEditName}
-                                        placeholder="Enter your name"
-                                        placeholderTextColor="#94a3b8"
-                                        className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
-                                    />
-                                </View>
-
-                                {/* Phone Input */}
-                                <View className="mb-6">
-                                    <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Phone Number</Text>
-                                    <TextInput
-                                        value={editPhone}
-                                        onChangeText={setEditPhone}
-                                        placeholder="e.g., +254 712 345 678"
-                                        placeholderTextColor="#94a3b8"
-                                        keyboardType="phone-pad"
-                                        className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
-                                    />
-                                </View>
-
-                                {/* Save Button */}
-                                <TouchableOpacity
-                                    onPress={handleUpdateProfile}
-                                    disabled={isUpdating}
-                                    className={`bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30 ${isUpdating ? 'opacity-50' : ''}`}
+                                <ScrollView
+                                    className="flex-1"
+                                    showsVerticalScrollIndicator={false}
+                                    keyboardShouldPersistTaps="handled"
+                                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                                 >
-                                    {isUpdating ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <Text className="text-white text-center font-bold text-lg">Save Changes</Text>
-                                    )}
-                                </TouchableOpacity>
-                            </ScrollView>
+                                    {/* Profile Image */}
+                                    <View className="items-center mb-8">
+                                        <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                                            {editImage ? (
+                                                <Image source={{ uri: editImage }} className="w-full h-full" style={{ width: '100%', height: '100%' }} />
+                                            ) : (
+                                                <Text className="text-5xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
+                                            )}
+                                        </View>
+                                        <View className="flex-row gap-4">
+                                            <TouchableOpacity
+                                                onPress={handleTakePhoto}
+                                                className="bg-blue-500 px-4 py-2 rounded-full flex-row items-center"
+                                            >
+                                                <FontAwesome name="camera" size={14} color="white" />
+                                                <Text className="text-white font-bold ml-2">Camera</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={handlePickImage}
+                                                className="bg-purple-500 px-4 py-2 rounded-full flex-row items-center"
+                                            >
+                                                <FontAwesome name="image" size={14} color="white" />
+                                                <Text className="text-white font-bold ml-2">Gallery</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
+                                    {/* Name Input */}
+                                    <View className="mb-6">
+                                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Full Name</Text>
+                                        <TextInput
+                                            value={editName}
+                                            onChangeText={setEditName}
+                                            placeholder="Enter your name"
+                                            placeholderTextColor="#94a3b8"
+                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
+                                        />
+                                    </View>
+
+                                    {/* Phone Input */}
+                                    <View className="mb-6">
+                                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Phone Number</Text>
+                                        <TextInput
+                                            value={editPhone}
+                                            onChangeText={setEditPhone}
+                                            placeholder="e.g., +254 712 345 678"
+                                            placeholderTextColor="#94a3b8"
+                                            keyboardType="phone-pad"
+                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
+                                        />
+                                    </View>
+
+                                    {/* Save Button */}
+                                    <TouchableOpacity
+                                        onPress={handleUpdateProfile}
+                                        disabled={isUpdating}
+                                        className={`bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30 ${isUpdating ? 'opacity-50' : ''}`}
+                                    >
+                                        {isUpdating ? (
+                                            <ActivityIndicator color="white" />
+                                        ) : (
+                                            <Text className="text-white text-center font-bold text-lg">Save Changes</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </ScrollView>
+                            </View>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </Modal>
 
                 {/* Sign Out Button */}

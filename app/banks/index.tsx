@@ -96,7 +96,7 @@ export default function MyBanksScreen() {
                     buttons: [{ text: 'OK', style: 'cancel' }]
                 });
             }
-        } catch (error) {
+        } catch {
             showAlert({
                 title: 'Sync Error',
                 message: 'An error occurred while syncing. Please try again.',
@@ -185,7 +185,7 @@ export default function MyBanksScreen() {
                         <View className="flex-1">
                             <Text className="text-slate-900 dark:text-white font-semibold">Sync All-Time SMS</Text>
                             <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                                Parse every M-PESA &amp; bank SMS from your phone's inbox (may take a while)
+                                Parse every M-PESA &amp; bank SMS from your phone&apos;s inbox (may take a while)
                             </Text>
                         </View>
                         {isSyncingAll ? (

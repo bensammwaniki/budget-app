@@ -59,11 +59,9 @@ export default function AddIncomeSourceScreen() {
             await incomeService.createSource({
                 name: name.trim(),
                 expectedAmount: amount,
-                frequency,
+                frequency: isRecurring ? frequency : 'IRREGULAR',
                 color: selectedColor,
                 isRecurring,
-                initialAmount: amount, // Use the expected amount as initial log if provided
-                initialDate: incomeDate.toISOString(),
             });
             router.back();
         } catch (e) {
@@ -120,27 +118,6 @@ export default function AddIncomeSourceScreen() {
                         />
                     </View>
 
-                    {/* Frequency */}
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Frequency</Text>
-                    <View className="flex-row flex-wrap gap-3 mb-6">
-                        {FREQUENCIES.map(f => (
-                            <TouchableOpacity
-                                key={f.value}
-                                onPress={() => setFrequency(f.value)}
-                                className={`flex-row items-center px-4 py-1 rounded-full border gap-1 ${frequency === f.value
-                                    ? 'border-emerald-600'
-                                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
-                                    }`}
-                                style={frequency === f.value ? { backgroundColor: `${selectedColor}20`, borderColor: selectedColor } : {}}
-                            >
-                                <FontAwesome name={f.icon as any} size={10} color={frequency === f.value ? selectedColor : '#94a3b8'} />
-                                <Text className={`font-semibold text-[10px] ${frequency === f.value ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}
-                                    style={frequency === f.value ? { color: selectedColor } : {}}
-                                >{f.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
                     {/* Income Date */}
                     <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Income Date</Text>
                     <TouchableOpacity
@@ -171,21 +148,61 @@ export default function AddIncomeSourceScreen() {
                     )}
 
                     {/* Recurring Toggle */}
-                    <View className="flex-row items-center justify-between mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <View>
-                            <Text className="font-bold text-slate-900 dark:text-white">Recurring Income</Text>
-                            <Text className="text-slate-400 text-xs mt-0.5">Track this as a regular income stream</Text>
+                    <View className="mb-6 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800/40">
+                        <View className="px-4 py-3 flex-row items-center justify-between">
+                            <View className="flex-row items-center flex-1 pr-3">
+                                <View className="flex-1">
+                                    <Text className="font-bold text-slate-900 dark:text-white">Recurring Income</Text>
+                                    <Text className="text-slate-400 text-xs mt-0.5">
+                                        {isRecurring
+                                            ? 'Track this as a repeating income stream.'
+                                            : 'One-time source for the selected month.'}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Switch
+                                value={isRecurring}
+                                onValueChange={setIsRecurring}
+                                trackColor={{
+                                    false: isDark ? '#334155' : '#cbd5e1',
+                                    true: selectedColor,
+                                }}
+                                thumbColor="#ffffff"
+                            />
                         </View>
-                        <Switch
-                            value={isRecurring}
-                            onValueChange={setIsRecurring}
-                            trackColor={{
-                                false: '#cbd5e1',
-                                true: selectedColor,
-                            }}
-                            thumbColor="#ffffff"
-                        />
+                        <View className="px-4 py-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/20">
+                            <Text className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+                                {isRecurring
+                                    ? `Mode: Recurring (${FREQUENCIES.find(f => f.value === frequency)?.label || frequency})`
+                                    : 'Mode: One-time (Selected month only)'}
+                            </Text>
+                        </View>
                     </View>
+
+                    {/* Frequency */}
+                    {isRecurring && (
+                        <>
+                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Frequency</Text>
+                            <View className="flex-row flex-wrap gap-3 mb-6">
+                                {FREQUENCIES.map(f => (
+                                    <TouchableOpacity
+                                        key={f.value}
+                                        onPress={() => setFrequency(f.value)}
+                                        className={`flex-row items-center px-4 py-1 rounded-full border gap-1 ${frequency === f.value
+                                            ? 'border-emerald-600'
+                                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
+                                            }`}
+                                        style={frequency === f.value ? { backgroundColor: `${selectedColor}20`, borderColor: selectedColor } : {}}
+                                    >
+                                        <FontAwesome name={f.icon as any} size={10} color={frequency === f.value ? selectedColor : '#94a3b8'} />
+                                        <Text className={`font-semibold text-[10px] ${frequency === f.value ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}
+                                            style={frequency === f.value ? { color: selectedColor } : {}}
+                                        >{f.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </>
+                    )}
 
                     {/* Color */}
                     <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Theme Color</Text>

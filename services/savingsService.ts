@@ -91,9 +91,17 @@ export const savingsService = {
         const goal = await this.getGoalById(goalId);
 
         if (!goal) throw new Error('Goal not found');
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error('Amount must be greater than zero');
 
         await db.withTransactionAsync(async () => {
             const savingsCategoryId = await getCategoryIdByName('Savings');
+            const account = await db.getFirstAsync<{ id: string; balance: number }>(
+                'SELECT id, balance FROM accounts WHERE id = ? AND is_active = 1',
+                [sourceAccountId]
+            );
+            if (!account) throw new Error('Source account not found');
+            if ((account.balance ?? 0) < amount) throw new Error('Insufficient funds in selected account');
+            const newAccountBalance = account.balance - amount;
 
             // 1. Create a transaction for the deposit
             await db.runAsync(`
@@ -108,8 +116,8 @@ export const savingsService = {
 
             // 2. Deduct from source account
             await db.runAsync(
-                'UPDATE accounts SET balance = balance - ?, updated_at = ? WHERE id = ?',
-                [amount, now, sourceAccountId]
+                'UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?',
+                [newAccountBalance, now, sourceAccountId]
             );
 
             // 3. Update goal balance and status

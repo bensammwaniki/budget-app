@@ -6,7 +6,7 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import CustomAlert from "../components/CustomAlert";
-import PermissionGuard from "../components/PermissionGuard";
+import { PermissionGuard } from "../components/PermissionGuard";
 import { AlertProvider } from "../context/AlertContext";
 import { AuthProvider, useAuth } from "../services/AuthContext";
 import { ScrollProvider } from "../services/ScrollContext";
@@ -27,7 +27,7 @@ function RootLayoutContent() {
     } else if (user && inAuthGroup) {
       router.replace("/(tabs)");
     }
-  }, [user, authLoading, segments]);
+  }, [user, authLoading, segments, router]);
 
   // ⚠️ Always render Stack.
   // Do NOT block navigation tree.

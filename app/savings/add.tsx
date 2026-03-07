@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { savingsService } from '../../services/savingsService';
 
@@ -94,9 +94,19 @@ export default function AddGoalScreen() {
                 <Text className="text-l font-bold text-slate-900 dark:text-white ml-2 uppercase">Add a New Savings Goal</Text>
             </View>
 
-            <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
-                {/* Form Wrapper */}
-                <View className="bg-white dark:bg-[#0f172a] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 20 : 0}
+            >
+                <ScrollView
+                    className="flex-1"
+                    contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                >
+                    {/* Form Wrapper */}
+                    <View className="bg-white dark:bg-[#0f172a] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
 
                     {/* Goal Name */}
                     <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">What are you saving for ?</Text>
@@ -186,8 +196,9 @@ export default function AddGoalScreen() {
                             </>
                         )}
                     </TouchableOpacity>
-                </View>
-            </ScrollView>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Date Picker using React Native Community to resolve errors and provide native feel */}
             {showDatePicker && (

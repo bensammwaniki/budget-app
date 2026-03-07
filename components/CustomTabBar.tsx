@@ -39,7 +39,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                         return !HIDDEN_TABS.includes(route.name);
                     }).map((route, index) => {
                         const { options } = descriptors[route.key];
-                        const isFocused = state.index === index;
+                        const routeIndex = state.routes.findIndex(r => r.key === route.key);
+                        const isFocused = state.index === routeIndex;
 
                         const onPress = () => {
                             const event = navigation.emit({

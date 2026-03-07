@@ -4,12 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { PieChart } from "react-native-gifted-charts";
-import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { getTransactions, initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { ForecastResult, forecastService } from '../../services/forecastService';
 import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
-import { useScrollVisibility } from '../../services/ScrollContext';
 import { Transaction } from '../../types/transaction';
 
 
@@ -33,21 +32,6 @@ export default function AnalyticsScreen() {
   const [insightsTab, setInsightsTab] = useState<'overview' | 'trends' | 'forecast'>('overview');
   const [refreshing, setRefreshing] = useState(false);
 
-  const { tabBarVisible } = useScrollVisibility();
-  const lastScrollY = useSharedValue(0); const handleScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      const currentY = event.contentOffset.y;
-      const diff = currentY - lastScrollY.value;
-
-      if (currentY <= 0) {
-        tabBarVisible.value = 0;
-      } else if (diff > 5) {
-        tabBarVisible.value = 1;
-      }
-
-      lastScrollY.value = currentY;
-    },
-  });
   const loadData = useCallback(async () => {
     try {
       await initDatabase();
@@ -118,19 +102,11 @@ export default function AnalyticsScreen() {
   }, [transactions, selectedDate]);
 
   // Calculate statistics
-  const { thisMonthTotal, lastMonthTotal } = useMemo(() => {
+  const { thisMonthTotal } = useMemo(() => {
     const now = new Date();
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-
     const thisTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth).reduce((sum, l) => sum + l.amount, 0);
-    const lastTotal = logs.filter(l => {
-      const d = new Date(l.receivedAt);
-      return d >= startOfLastMonth && d <= endOfLastMonth;
-    }).reduce((sum, l) => sum + l.amount, 0);
-
-    return { thisMonthTotal: thisTotal, lastMonthTotal: lastTotal };
+    return { thisMonthTotal: thisTotal };
   }, [logs]);
 
   //  old method   
@@ -514,7 +490,7 @@ export default function AnalyticsScreen() {
                         ~{forecast.daysUntilExhaustion} days remaining
                       </Text>
                       <Text className="text-amber-600 dark:text-amber-400 text-xs mt-0.5">
-                        At your current spend rate, you'll reach this month's projected budget in {forecast.daysUntilExhaustion} days
+                        At your current spend rate, you&apos;ll reach this month&apos;s projected budget in {forecast.daysUntilExhaustion} days
                       </Text>
                     </View>
                   </View>
@@ -572,7 +548,7 @@ export default function AnalyticsScreen() {
       <View className="px-6 mt-6">
         <View className="flex-row gap-3 mb-4">
           {/*income card*/}
-          <TouchableOpacity onPress={() => router.push('/income')}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/income')}>
             <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
               <View className="flex-row items-center mb-2">
                 <Image

@@ -3,8 +3,10 @@ import { PermissionsAndroid, Platform } from 'react-native';
 import SmsAndroid from 'react-native-get-sms-android';
 import { extractMpesaRefFromBankSms, parseBankSms } from '../utils/bankParser';
 import { parseFulizaLoan, parseFulizaRepayment, parseMpesaSms } from '../utils/smsParser';
-import { notifyListeners } from './core/db';
+import { getDb, notifyListeners } from './core/db';
 import {
+    getAutomationRules,
+    getCategoryIdByName,
     getFulizaTransactionIdsInRange,
     getTransactionIdsInRange,
     getUserSettings,
@@ -22,6 +24,42 @@ export interface SMSMessage {
     date: number;
     type: number;
 }
+
+const cleanupMirroredBankTransfers = async (knownMpesaRefs: Set<string>, sinceDate?: Date): Promise<number> => {
+    const database = getDb();
+    const rows = sinceDate
+        ? await database.getAllAsync<{ id: string; raw_sms: string | null }>(
+            `SELECT id, raw_sms
+             FROM transactions
+             WHERE is_deleted = 0
+             AND id LIKE 'IM_TRANSFER_%'
+             AND date >= ?`,
+            [sinceDate.toISOString()]
+        )
+        : await database.getAllAsync<{ id: string; raw_sms: string | null }>(
+            `SELECT id, raw_sms
+             FROM transactions
+             WHERE is_deleted = 0
+             AND id LIKE 'IM_TRANSFER_%'`
+        );
+
+    if (rows.length === 0) return 0;
+
+    let cleaned = 0;
+    const now = new Date().toISOString();
+    for (const row of rows) {
+        const ref = row.raw_sms ? extractMpesaRefFromBankSms(row.raw_sms) : null;
+        if (ref && knownMpesaRefs.has(ref)) {
+            await database.runAsync(
+                'UPDATE transactions SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?',
+                [now, now, row.id]
+            );
+            cleaned++;
+        }
+    }
+
+    return cleaned;
+};
 
 /**
  * Request SMS permissions on Android
@@ -116,6 +154,23 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
             : undefined;
         const existingTxIds = await getTransactionIdsInRange(sinceDate);
         const existingFulizaIds = await getFulizaTransactionIdsInRange(sinceDate);
+        const enabledRules = (await getAutomationRules()).filter(r => r.isEnabled);
+        const debtRepaymentCategoryId = await getCategoryIdByName('Debt Repayment');
+        const mpesaRefsInBatch = new Set<string>();
+
+        // Pre-scan MPESA messages so bank mirror messages can be skipped regardless of processing order.
+        for (const msg of messages) {
+            if (msg.address !== 'MPESA') continue;
+            const parsed = parseMpesaSms(msg.body);
+            if (parsed?.id) {
+                mpesaRefsInBatch.add(parsed.id);
+            }
+        }
+        const knownMpesaRefs = new Set<string>([...existingTxIds, ...mpesaRefsInBatch]);
+        const cleanedMirrors = await cleanupMirroredBankTransfers(knownMpesaRefs, sinceDate);
+        if (cleanedMirrors > 0) {
+            console.log(`🧹 Removed ${cleanedMirrors} mirrored bank-to-MPESA transfer entries.`);
+        }
 
         let newTransactionsCount = 0;
         let processedCount = 0;
@@ -139,7 +194,7 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
                     if (!existingTxIds.has(parsed.id)) {
-                        await saveTransaction(parsed, false);
+                        await saveTransaction(parsed, false, enabledRules);
                         existingTxIds.add(parsed.id);
                         newTransactionsCount++;
                     }
@@ -147,16 +202,16 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                     const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
                     if (fulizaLoan) {
                         if (!existingFulizaIds.has(fulizaLoan.id)) {
-                            await saveFulizaTransaction(fulizaLoan);
+                            await saveFulizaTransaction(fulizaLoan, false);
                             existingFulizaIds.add(fulizaLoan.id);
                             const fulizaDebt = await debtService.getOrCreateFulizaDebt();
 
                             if (fulizaLoan.outstandingBalance !== undefined) {
-                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaLoan.outstandingBalance);
+                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaLoan.outstandingBalance, false);
                             } else {
-                                await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.amount);
+                                await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.amount, false);
                                 if (fulizaLoan.accessFee && fulizaLoan.accessFee > 0) {
-                                    await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.accessFee);
+                                    await debtService.increaseDebtAmount(fulizaDebt.id, fulizaLoan.accessFee, false);
                                 }
                             }
                         }
@@ -166,14 +221,14 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                     const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
                     if (fulizaRepayment) {
                         if (!existingFulizaIds.has(fulizaRepayment.id)) {
-                            await saveFulizaTransaction(fulizaRepayment);
+                            await saveFulizaTransaction(fulizaRepayment, false);
                             existingFulizaIds.add(fulizaRepayment.id);
                             const fulizaDebt = await debtService.getOrCreateFulizaDebt();
 
                             if (fulizaRepayment.outstandingBalance !== undefined) {
-                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaRepayment.outstandingBalance);
+                                await debtService.updateDebtBalance(fulizaDebt.id, fulizaRepayment.outstandingBalance, false);
                             } else {
-                                await debtService.reduceDebtAmount(fulizaDebt.id, fulizaRepayment.amount);
+                                await debtService.reduceDebtAmount(fulizaDebt.id, fulizaRepayment.amount, false);
                             }
 
                             if (fulizaRepayment.accountBalance !== undefined) {
@@ -192,13 +247,13 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                                         date: fulizaRepayment.date,
                                         balance: fulizaRepayment.accountBalance,
                                         transactionCost: 0,
-                                        categoryId: 12,
+                                        categoryId: debtRepaymentCategoryId ?? undefined,
                                         rawSms: fulizaRepayment.rawSms,
                                         createdAt: new Date(),
                                         updatedAt: new Date(),
                                         isDeleted: false,
                                         linkedDebtId: fulizaDebt.id
-                                    }, false);
+                                    }, false, enabledRules);
                                     existingTxIds.add(mpesaTxId);
                                     newTransactionsCount++;
                                 }
@@ -218,11 +273,14 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                 const parsed = parseBankSms(msg.body, msg.address);
                 if (parsed) {
                     const mpesaRef = extractMpesaRefFromBankSms(msg.body);
-                    if (mpesaRef && existingTxIds.has(mpesaRef)) continue;
+                    // Bank-to-MPESA transfer alerts are mirror events. Keep canonical MPESA transaction only.
+                    if (mpesaRef && knownMpesaRefs.has(mpesaRef)) {
+                        continue;
+                    }
 
                     if (!existingTxIds.has(parsed.id)) {
                         parsed.date = new Date(msg.date);
-                        await saveTransaction(parsed, false);
+                        await saveTransaction(parsed, false, enabledRules);
                         existingTxIds.add(parsed.id);
                         newTransactionsCount++;
                     }
@@ -297,7 +355,7 @@ export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
 
             if (batch.length === 0) break;
 
-            allMessages = [...allMessages, ...batch];
+            allMessages.push(...batch);
             indexFrom += batch.length;
 
             if (batch.length < batchSize) break;

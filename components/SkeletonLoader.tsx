@@ -12,7 +12,7 @@ export const Shimmer = ({ width, height, borderRadius = 8, style }: SkeletonProp
     const opacity = useRef(new Animated.Value(0.3)).current;
 
     useEffect(() => {
-        Animated.loop(
+        const loop = Animated.loop(
             Animated.sequence([
                 Animated.timing(opacity, {
                     toValue: 0.7,
@@ -25,8 +25,10 @@ export const Shimmer = ({ width, height, borderRadius = 8, style }: SkeletonProp
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
-    }, []);
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [opacity]);
 
     return (
         <Animated.View

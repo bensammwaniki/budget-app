@@ -3,9 +3,9 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
 import TransactionItem from '../../components/TransactionItem';
@@ -13,7 +13,6 @@ import { useAlert } from '../../context/AlertContext';
 import { useTransactions } from '../../hooks/useDatabase';
 import { useAuth } from '../../services/AuthContext';
 import {
-  deleteTransaction,
   getUserSettings,
   initDatabase,
   saveRecipientCategory,
@@ -24,6 +23,7 @@ import {
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
 import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
+import { ledgerService } from '../../services/ledgerService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
@@ -51,15 +51,17 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
-  const [appIsLaunching, setAppIsLaunching] = useState(true);
-  const [hasPerformedSyncOnce, setHasPerformedSyncOnce] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchActive, setIsSearchActive] = useState(false);
-  const searchWidth = useSharedValue(0);
+  const [cashModalVisible, setCashModalVisible] = useState(false);
+  const openingCashModalRef = useRef(false);
+  const [cashType, setCashType] = useState<'SENT' | 'RECEIVED'>('SENT');
+  const [cashAmount, setCashAmount] = useState('');
+  const [cashNote, setCashNote] = useState('');
+  const [savingCashTx, setSavingCashTx] = useState(false);
 
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString(undefined, {
@@ -68,21 +70,6 @@ export default function HomeScreen() {
     });
   };
 
-  // Calculate statistics
-  const { thisMonthTotal, lastMonthTotal } = useMemo(() => {
-    const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-
-    const thisTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth).reduce((sum, l) => sum + l.amount, 0);
-    const lastTotal = logs.filter(l => {
-      const d = new Date(l.receivedAt);
-      return d >= startOfLastMonth && d <= endOfLastMonth;
-    }).reduce((sum, l) => sum + l.amount, 0);
-
-    return { thisMonthTotal: thisTotal, lastMonthTotal: lastTotal };
-  }, [logs]);
   // Categorization State
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -202,8 +189,6 @@ export default function HomeScreen() {
           console.log('🚀 First launch: Starting Quick Start sync (30 days)...');
           await syncMessages(30);
           await debtService.updateFulizaFees();
-          setHasPerformedSyncOnce(true);
-          setAppIsLaunching(false);
 
           // Then deep sync in background (1 year)
           console.log('⏳ Quick start complete. Starting Background Deep Sync (366 days)...');
@@ -220,8 +205,6 @@ export default function HomeScreen() {
           // syncMessages already uses last_sync_timestamp to compute the gap — avoids re-parsing old messages
           await initDatabase();
           await debtService.updateFulizaFees();
-          setHasPerformedSyncOnce(true);
-          setAppIsLaunching(false);
 
           // Run incremental sync silently in background (only new SMS since last sync)
           syncMessages().then(() => {
@@ -235,7 +218,6 @@ export default function HomeScreen() {
       } catch (error) {
         console.error('Error in progressive sync:', error);
         setIsSyncing(false);
-        setAppIsLaunching(false);
       }
     };
     runProgressiveSync();
@@ -251,6 +233,59 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const resetCashForm = () => {
+    setCashType('SENT');
+    setCashAmount('');
+    setCashNote('');
+  };
+
+  const handleSaveCashTransaction = async () => {
+    const amount = parseFloat(cashAmount.replace(/,/g, '').trim());
+    if (!amount || amount <= 0) {
+      showAlert({
+        title: 'Invalid Amount',
+        message: 'Enter a valid amount greater than 0.',
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'cancel' }],
+      });
+      return;
+    }
+
+    const recipient = cashNote.trim() || (cashType === 'SENT' ? 'Cash expense' : 'Cash income');
+
+    setSavingCashTx(true);
+    try {
+      await ledgerService.recordTransaction({
+        accountId: 'ACC-CASH-DEFAULT',
+        amount,
+        type: cashType,
+        kind: cashType === 'SENT' ? 'EXPENSE' : 'INCOME',
+        date: new Date(),
+        recipientName: recipient,
+        rawSms: `Manual cash ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
+        userId: 'local_user',
+      });
+
+      setCashModalVisible(false);
+      resetCashForm();
+      showAlert({
+        title: 'Saved',
+        message: 'Cash transaction added successfully.',
+        type: 'success',
+        buttons: [{ text: 'OK' }],
+      });
+    } catch (error: any) {
+      showAlert({
+        title: 'Save Failed',
+        message: error?.message || 'Could not save cash transaction.',
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'cancel' }],
+      });
+    } finally {
+      setSavingCashTx(false);
+    }
+  };
 
   // Calculate date boundaries once
   const dateRange = useMemo(() => {
@@ -322,11 +357,25 @@ export default function HomeScreen() {
 
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(t =>
-        (t.recipientName && t.recipientName.toLowerCase().includes(q)) ||
-        (t.amount.toString().includes(q)) ||
-        (t.categoryName && t.categoryName.toLowerCase().includes(q))
-      );
+      filtered = filtered.filter((t) => {
+        const recipient = (t.recipientName || '').toLowerCase();
+        const categoryName = (t.categoryName || '').toLowerCase();
+        const categoryType = t.type === 'SENT' ? 'expense' : 'income';
+        const kind = (t.transactionKind || '').toLowerCase().replace(/_/g, ' ');
+        const amount = t.amount.toString();
+        const account = `${t.accountName || ''} ${t.accountType || ''}`.toLowerCase();
+        const categoryId = t.categoryId ? String(t.categoryId) : '';
+
+        return (
+          recipient.includes(q) ||
+          amount.includes(q) ||
+          categoryName.includes(q) ||
+          categoryType.includes(q) ||
+          kind.includes(q) ||
+          account.includes(q) ||
+          categoryId.includes(q)
+        );
+      });
     }
 
     // Debug: Count bank transactions
@@ -412,6 +461,7 @@ export default function HomeScreen() {
   };
 
   const handleTransactionPress = (tx: Transaction) => {
+    if (modalVisible) return;
     // Fuliza transactions are automated and should not be manually categorized
     const isFuliza = tx.recipientId === 'FULIZA_REPAYMENT' ||
       tx.id?.startsWith('FULIZA-FEES-') ||
@@ -421,6 +471,13 @@ export default function HomeScreen() {
 
     setSelectedTransaction(tx);
     setModalVisible(true);
+  };
+
+  const openCashModal = () => {
+    if (cashModalVisible || openingCashModalRef.current || savingCashTx) return;
+    openingCashModalRef.current = true;
+    setCashModalVisible(true);
+    openingCashModalRef.current = false;
   };
 
   const handleCategorySelect = async (category: Category) => {
@@ -465,14 +522,14 @@ export default function HomeScreen() {
             try {
               setModalVisible(false);
               setSelectedTransaction(null);
-              await deleteTransaction(tx.id);
+              await ledgerService.reverseTransaction(tx.id);
 
               // Optional: Show success alert or toast
             } catch (error) {
               console.error("Failed to delete transaction:", error);
               showAlert({
                 title: 'Error',
-                message: 'Could not delete transaction.',
+                message: error instanceof Error ? error.message : 'Could not delete transaction.',
                 type: 'error'
               });
             }
@@ -585,28 +642,6 @@ export default function HomeScreen() {
     },
   });
 
-  const searchAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      width: searchWidth.value,
-      opacity: searchWidth.value > 0 ? 1 : 0,
-      overflow: 'hidden',
-    };
-  });
-
-  const toggleSearch = () => {
-    if (isSearchActive) {
-      searchWidth.value = withTiming(0, { duration: 300 });
-      setTimeout(() => {
-        setIsSearchActive(false);
-        setSearchQuery('');
-      }, 300);
-    } else {
-      setIsSearchActive(true);
-      searchWidth.value = withTiming(200, { duration: 300 });
-    }
-  };
-
-
   const renderHeader = () => (
     <View>
       <View className="px-6 pt-16 pb-4 bg-white dark:bg-[#0f172a] rounded-b-[12px]">
@@ -633,6 +668,14 @@ export default function HomeScreen() {
 
             <Text className="text-slate-900 dark:text-white text-xl font-bold mt-1">{firstName}! 👋</Text>
           </View>
+          <TouchableOpacity
+            onPress={openCashModal}
+            disabled={cashModalVisible || savingCashTx}
+            className="ml-3 px-4 py-2 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 flex-row items-center"
+          >
+            <FontAwesome name="plus" size={12} color={isDark ? '#93c5fd' : '#2563eb'} />
+            <Text className="ml-2 text-xs font-bold text-blue-700 dark:text-blue-200 uppercase">Add Cash TXN</Text>
+          </TouchableOpacity>
         </View>
 
         <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
@@ -754,45 +797,38 @@ export default function HomeScreen() {
       )}
 
       {/* search bar */}
-      <View className="flex-row items-center flex-1 h-10 ml-4 mr-4 ">
-        <TouchableOpacity onPress={toggleSearch} className="w-9 h-9 items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-[10px] mr-2">
-          {isSearchActive && <Image
-            source={require('../../assets/svg/close.svg')}
-            style={{ width: 12, height: 12 }}
-            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-            contentFit="contain"
-          />}
-          {!isSearchActive && (
+      <View className="mx-4 mt-6">
+        <View className="h-12 px-3 rounded-[12px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] flex-row items-center shadow-sm">
+          <View className="w-8 h-8 rounded-[8px] bg-blue-50 dark:bg-blue-900/30 items-center justify-center mr-2">
             <Image
               source={require('../../assets/svg/search.svg')}
-              style={{ width: 24, height: 24 }}
-              tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+              style={{ width: 26, height: 26 }}
+              tintColor={colorScheme === 'dark' ? '#93c5fd' : '#2563eb'}
               contentFit="contain"
             />
-          )}
-        </TouchableOpacity>
-
-        <Animated.View style={[searchAnimatedStyle, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }]}
-        >
+          </View>
           <TextInput
-            placeholder="Search Transactions..."
+            placeholder="Search for amount, category, or recipient..."
             placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            className="flex-1 text-slate-900 dark:text-white h-full text-[12px] p-2"
+            className="flex-1 h-full text-[10PX] text-slate-900 dark:text-white"
             autoCapitalize="none"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} className="ml-2 py-2">
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center ml-2"
+            >
               <Image
                 source={require('../../assets/svg/close.svg')}
-                style={{ width: 12, height: 12, backgroundColor: 'white', borderRadius: 20 }}
-                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                style={{ width: 8, height: 8 }}
+                tintColor={colorScheme === 'dark' ? '#cbd5e1' : '#475569'}
                 contentFit="contain"
               />
             </TouchableOpacity>
           )}
-        </Animated.View>
+        </View>
       </View>
       {/* end search bar */}
 
@@ -838,6 +874,118 @@ export default function HomeScreen() {
         onClose={handleCloseModal}
       />
 
+      <Modal
+        transparent
+        animationType="fade"
+        visible={cashModalVisible}
+        onRequestClose={() => !savingCashTx && setCashModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+        >
+          <TouchableOpacity
+            className="flex-1 bg-black/50 justify-center items-center p-6"
+            activeOpacity={1}
+            onPress={() => !savingCashTx && setCashModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => { }}
+              className="w-full max-h-[85%] bg-white dark:bg-[#0f172a] rounded-xl p-6 border border-slate-200 dark:border-slate-800"
+            >
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View className="flex-row justify-between items-center mb-5">
+                  <Text className="text-slate-900 dark:text-white text-xl font-black">Add Cash Transaction</Text>
+                  <TouchableOpacity onPress={() => !savingCashTx && setCashModalVisible(false)}>
+                    <Image
+                      source={require('../../assets/svg/close.svg')}
+                      style={{ width: 14, height: 14 }}
+                      tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
+                      contentFit="contain"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Transaction Type</Text>
+                <View className="flex-row gap-2 mb-4">
+                  <TouchableOpacity
+                    onPress={() => setCashType('SENT')}
+                    className={`flex-1 py-3 rounded-xl items-center border ${cashType === 'SENT'
+                      ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                      }`}
+                  >
+                    <Text className={`font-bold ${cashType === 'SENT' ? 'text-red-600 dark:text-red-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                      Expense
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCashType('RECEIVED')}
+                    className={`flex-1 py-3 rounded-xl items-center border ${cashType === 'RECEIVED'
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                      }`}
+                  >
+                    <Text className={`font-bold ${cashType === 'RECEIVED' ? 'text-green-600 dark:text-green-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                      Income
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Amount (KES)</Text>
+                <View className="h-12 rounded-xl px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 justify-center mb-4">
+                  <TextInput
+                    value={cashAmount}
+                    onChangeText={setCashAmount}
+                    placeholder="0"
+                    placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
+                    keyboardType="numeric"
+                    className="text-base font-semibold text-slate-900 dark:text-white"
+                  />
+                </View>
+
+                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Note (Optional)</Text>
+                <View className="rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-5">
+                  <TextInput
+                    value={cashNote}
+                    onChangeText={setCashNote}
+                    placeholder={cashType === 'SENT' ? 'What was this expense for?' : 'Where did this cash come from?'}
+                    placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
+                    className="text-slate-900 dark:text-white"
+                  />
+                </View>
+
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCashModalVisible(false);
+                      resetCashForm();
+                    }}
+                    disabled={savingCashTx}
+                    className="flex-1 py-3 rounded-xl items-center bg-slate-100 dark:bg-slate-800"
+                  >
+                    <Text className="font-bold text-slate-700 dark:text-slate-200">Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSaveCashTransaction}
+                    disabled={savingCashTx}
+                    className="flex-1 py-3 rounded-xl items-center bg-blue-600"
+                  >
+                    {savingCashTx ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="font-bold text-white">Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Animated.FlatList
         data={filteredTransactions
           .filter(t => !t.id.startsWith('FULIZA-FEES-'))
@@ -853,6 +1001,8 @@ export default function HomeScreen() {
         ListFooterComponent={renderFooter()}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={15}
@@ -952,7 +1102,9 @@ export default function HomeScreen() {
                     </View>
                     <View>
                       <Text className="font-bold text-slate-900 dark:text-white">{src.name}</Text>
-                      <Text className="text-xs text-slate-500 mt-0.5">{src.frequency}</Text>
+                      {src.isRecurring && (
+                        <Text className="text-xs text-slate-500 mt-0.5">{src.frequency}</Text>
+                      )}
                     </View>
                   </View>
                   {linkingIncome === src.id
