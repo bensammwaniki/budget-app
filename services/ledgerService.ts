@@ -176,6 +176,7 @@ export const ledgerService = {
 
         await db.withTransactionAsync(async () => {
             const tx = await db.getFirstAsync<{
+                id: string;
                 account_id: string | null;
                 amount: number;
                 type: string;
@@ -183,16 +184,26 @@ export const ledgerService = {
                 linked_debt_id: string | null;
                 linked_goal_id: string | null;
             }>(
-                'SELECT account_id, amount, type, is_deleted, linked_debt_id, linked_goal_id FROM transactions WHERE id = ?',
+                'SELECT id, account_id, amount, type, is_deleted, linked_debt_id, linked_goal_id FROM transactions WHERE id = ?',
                 [transactionId]
             );
 
             if (!tx) throw new Error("Transaction not found");
             if (tx.is_deleted) throw new Error("Transaction already deleted");
 
-            // Prevent deletion when transaction is linked to core business entities.
+            // Prevent deletion when transaction is linked to active debt entities.
+            // If linked debt is missing or not active, treat as stale metadata and clean it up.
+            let shouldNormalizeDebtLink = false;
             if (tx.linked_debt_id) {
-                throw new Error("Cannot delete a transaction linked to a debt. Unlink it from the Debt screen first.");
+                const linkedDebt = await db.getFirstAsync<{ id: string; status: string; current_balance: number }>(
+                    'SELECT id, status, current_balance FROM debts WHERE id = ? LIMIT 1',
+                    [tx.linked_debt_id]
+                );
+                const debtIsActive = !!linkedDebt && linkedDebt.status === 'ACTIVE' && Number(linkedDebt.current_balance || 0) > 0;
+                if (debtIsActive) {
+                    throw new Error("Cannot delete a transaction linked to a debt. Unlink it from the Debt screen first.");
+                }
+                shouldNormalizeDebtLink = true;
             }
             if (tx.linked_goal_id) {
                 throw new Error("Cannot delete a transaction linked to a savings goal. Unlink it from the Savings screen first.");
@@ -206,12 +217,34 @@ export const ledgerService = {
                 throw new Error("Cannot delete a transaction linked to an income source. Unlink it from the Income screen first.");
             }
 
-            const linkedDebtPayment = await db.getFirstAsync<{ id: string }>(
-                'SELECT id FROM debt_payments WHERE transaction_id = ? LIMIT 1',
+            const linkedDebtPayment = await db.getFirstAsync<{ id: string; debt_id: string }>(
+                'SELECT id, debt_id FROM debt_payments WHERE transaction_id = ? LIMIT 1',
                 [transactionId]
             );
             if (linkedDebtPayment) {
-                throw new Error("Cannot delete a transaction linked to a debt payment. Unlink it from the Debt screen first.");
+                const paymentDebt = await db.getFirstAsync<{ id: string; status: string; current_balance: number }>(
+                    'SELECT id, status, current_balance FROM debts WHERE id = ? LIMIT 1',
+                    [linkedDebtPayment.debt_id]
+                );
+                const paymentDebtIsActive = !!paymentDebt && paymentDebt.status === 'ACTIVE' && Number(paymentDebt.current_balance || 0) > 0;
+                if (paymentDebtIsActive) {
+                    throw new Error("Cannot delete a transaction linked to a debt payment. Unlink it from the Debt screen first.");
+                }
+
+                await db.runAsync('DELETE FROM debt_payments WHERE id = ?', [linkedDebtPayment.id]);
+                shouldNormalizeDebtLink = true;
+            }
+
+            if (shouldNormalizeDebtLink) {
+                await db.runAsync(
+                    `UPDATE transactions
+                     SET linked_debt_id = NULL,
+                         category_id = NULL,
+                         transaction_kind = CASE WHEN type = 'SENT' THEN 'EXPENSE' ELSE 'INCOME' END,
+                         updated_at = ?
+                     WHERE id = ?`,
+                    [now, tx.id]
+                );
             }
 
             // 1. Reverse Balance

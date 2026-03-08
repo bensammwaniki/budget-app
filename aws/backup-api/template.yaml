@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Fanga Budget AWS backup API (Firebase-authenticated, S3-backed)
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+  BackupKeyPrefix:
+    Type: String
+    Default: backups
+  FirebaseServiceAccountJson:
+    Type: String
+    NoEcho: true
+    Description: Firebase service account JSON (plain JSON or base64-encoded JSON)
+
+Resources:
+  BackupHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+        AllowMethods:
+          - GET
+          - PUT
+          - OPTIONS
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  BackupApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          BACKUP_BUCKET_NAME: !Ref BackupBucket
+          BACKUP_KEY_PREFIX: !Ref BackupKeyPrefix
+          FIREBASE_SERVICE_ACCOUNT_JSON: !Ref FirebaseServiceAccountJson
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: !Sub '${BackupBucket.Arn}/*'
+      Events:
+        GetBackup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BackupHttpApi
+            Path: /backup/{uid}
+            Method: GET
+        PutBackup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BackupHttpApi
+            Path: /backup/{uid}
+            Method: PUT
+        OptionsBackup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BackupHttpApi
+            Path: /backup/{uid}
+            Method: OPTIONS
+
+Outputs:
+  BackupApiBaseUrl:
+    Description: Base URL of the deployed backup API stage
+    Value: !Sub 'https://${BackupHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}'
+
+  BackupDownloadUrlTemplate:
+    Description: Set EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL to this value
+    Value: !Sub 'https://${BackupHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/backup/{uid}'
+
+  BackupUploadUrlTemplate:
+    Description: Set EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL to this value
+    Value: !Sub 'https://${BackupHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/backup/{uid}'
+
+  BackupBucketName:
+    Description: S3 bucket that stores backup payloads
+    Value: !Ref BackupBucket

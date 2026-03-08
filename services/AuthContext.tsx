@@ -1,6 +1,7 @@
 import { signOut as firebaseSignOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { backupNowToAws, isAwsBackupConfigured, startAwsBackupSession, stopAwsBackupSession } from './cloudBackupService';
 import { getUserSettings, saveUserSettings } from './database';
 import { auth, storage } from './firebaseConfig';
 
@@ -40,16 +41,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 } catch (error) {
                     console.error('Error loading user settings:', error);
                 }
+
+                if (isAwsBackupConfigured()) {
+                    try {
+                        await startAwsBackupSession(currentUser);
+                    } catch (error) {
+                        console.error('AWS backup sync failed on login:', error);
+                    }
+                }
             } else {
+                try {
+                    await stopAwsBackupSession();
+                } catch (error) {
+                    console.error('Failed to stop AWS backup session:', error);
+                }
                 setPhoneNumber(null);
             }
             setLoading(false);
         });
 
-        return unsubscribe;
+        return () => {
+            unsubscribe();
+            void stopAwsBackupSession();
+        };
     }, []);
 
     const signOut = async () => {
+        if (isAwsBackupConfigured()) {
+            try {
+                await backupNowToAws();
+            } catch (error) {
+                console.warn('Unable to flush AWS backup before sign-out:', error);
+            }
+        }
         await firebaseSignOut(auth);
     };
 

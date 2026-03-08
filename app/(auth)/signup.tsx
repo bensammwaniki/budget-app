@@ -29,7 +29,6 @@ export default function SignupScreen() {
             await updateProfile(userCredential.user, {
                 displayName: name
             });
-            router.replace('/(tabs)');
         } catch (error: any) {
             Alert.alert('Signup Failed', error.message);
         } finally {

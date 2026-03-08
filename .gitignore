@@ -2,6 +2,9 @@
 
 # dependencies
 node_modules/
+.npm_cache/
+
+.npm_cache_local/
 
 # Expo
 .expo/

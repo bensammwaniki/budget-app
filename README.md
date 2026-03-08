@@ -8,6 +8,7 @@ A modern, feature-rich budget tracking application built with React Native and E
   - Email/Password authentication via Firebase
   - Protected routes with automatic redirection
   - Persistent user sessions with AsyncStorage
+  - Optional AWS cloud backup restore on sign-in
 
 - **🎨 Premium UI/UX**
   - Glassmorphism design with foggy glass effects
@@ -88,6 +89,8 @@ A modern, feature-rich budget tracking application built with React Native and E
      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
      EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id_here
      EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+     EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL=https://your-api.example.com/backup/{uid}
+     EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL=https://your-api.example.com/backup/{uid}
      ```
    
    > **Note**: The `.env` file is gitignored and will not be committed. Never commit sensitive credentials to version control.
@@ -164,6 +167,28 @@ const firebaseConfig = {
 ```
 
 > **Security**: Never commit your `.env` file. Use `.env.example` as a template for team members.
+
+### AWS Backup Endpoints
+
+If `EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL` and `EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL` are set:
+- Login triggers cloud sync automatically:
+  - If cloud backup is newer, local DB is restored from AWS.
+  - If local DB is newer, local snapshot is uploaded.
+- DB changes trigger debounced auto-backup uploads.
+- URLs can include `{uid}` placeholder for per-user key routing.
+
+### Deploy AWS Backup API
+
+A ready-to-deploy backend is included at:
+- `aws/backup-api`
+
+It includes:
+- Lambda handler with Firebase token verification
+- S3-backed backup storage
+- SAM template (`aws/backup-api/template.yaml`) for API Gateway + Lambda + S3
+
+Deployment steps are documented in:
+- `aws/backup-api/README.md`
 
 ## 🚀 Available Scripts
 

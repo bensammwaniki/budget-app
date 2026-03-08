@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Image } from 'expo-image';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { useColorScheme } from 'nativewind';
@@ -12,7 +12,6 @@ import { auth } from '../../services/firebaseConfig';
 
 export default function LoginScreen() {
     const { colorScheme } = useColorScheme();
-    const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -34,7 +33,6 @@ export default function LoginScreen() {
         setLoading(true);
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            router.replace('/(tabs)');
         } catch (error: any) {
             Alert.alert('Login Failed', error.message);
         } finally {
@@ -56,7 +54,6 @@ export default function LoginScreen() {
 
             // Sign in to Firebase with the credential
             await signInWithCredential(auth, googleCredential);
-            router.replace('/(tabs)');
         } catch (error: any) {
             if (error.code === 'sign_in_cancelled') {
                 // User cancelled the sign-in flow

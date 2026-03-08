@@ -280,19 +280,14 @@ export const debtService = {
         const db = getDb();
 
         await db.withTransactionAsync(async () => {
-            // Unlink all repayments so they become normal expenses/incomes again
+            // Unlink every transaction tied to this debt so no stale debt-link references remain.
+            // This avoids post-delete blockers if transaction_kind was changed over time.
             await db.runAsync(`
                 UPDATE transactions 
                 SET transaction_kind = CASE WHEN type = 'SENT' THEN 'EXPENSE' ELSE 'INCOME' END,
                     linked_debt_id = NULL,
                     category_id = NULL
-                WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_REPAYMENT'
-            `, [debtId]);
-
-            // Delete principal transactions (which represented the initial loan transfer)
-            await db.runAsync(`
-                DELETE FROM transactions
-                WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_PRINCIPAL'
+                WHERE linked_debt_id = ?
             `, [debtId]);
 
             // Delete payment records

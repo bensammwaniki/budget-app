@@ -30,7 +30,7 @@ export default function PrivacyPolicyScreen() {
 
             <ScrollView className="flex-1 px-6 pt-6" contentContainerStyle={{ paddingBottom: 40 }}>
                 <View className="mb-8">
-                    <Text className="text-slate-500 dark:text-slate-400 text-sm mb-2 uppercase font-bold tracking-wider">Last Updated: December 2025</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-sm mb-2 uppercase font-bold tracking-wider">Last Updated: March 2026</Text>
                     <Text className="text-slate-900 dark:text-white text-3xl font-bold mb-4">Privacy Policy</Text>
                     <Text className="text-slate-600 dark:text-slate-300 text-base leading-6">
                         We value your privacy and are committed to protecting your personal data. This Privacy Policy explains how Fanga Budget handles your information.
@@ -46,12 +46,12 @@ export default function PrivacyPolicyScreen() {
                         <Text className="text-slate-900 dark:text-white text-lg font-bold">1. Local Data Storage</Text>
                     </View>
                     <Text className="text-slate-600 dark:text-slate-400 text-sm leading-6">
-                        Fanga Budget operates accurately on a <Text className="font-bold text-slate-900 dark:text-white">Local-First</Text> basis.
-                        All your financial data, including transaction history, categories, and budgets, are stored <Text className="font-bold text-slate-900 dark:text-white">exclusively on your physical device</Text> using an encrypted SQLite database.
+                        Fanga Budget operates on a <Text className="font-bold text-slate-900 dark:text-white">Local-First</Text> basis.
+                        All your financial data, including transaction history, categories, and budgets, are stored on your physical device using an encrypted SQLite database.
                     </Text>
                     <View className="mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50">
                         <Text className="text-green-800 dark:text-green-300 text-xs font-medium">
-                            We do not transmit, sync, or back up your financial transaction data to any external server or cloud storage. You retain full ownership and control of your data at all times.
+                            Optional AWS backup can be enabled for signed-in users. When enabled, backup payloads are synced so data can be restored on login across devices.
                         </Text>
                     </View>
                 </View>
@@ -109,7 +109,7 @@ export default function PrivacyPolicyScreen() {
                             2. You are solely responsible for verifying the accuracy of your financial records. This app is a tool for estimation and organization, not a certified accounting service.
                         </Text>
                         <Text className="text-slate-600 dark:text-slate-400 text-xs leading-5">
-                            3. You are responsible for backing up your own device data. If you lose your phone or delete the app, your data cannot be recovered by us.
+                            3. Cloud backup depends on your configured AWS service availability and credentials. Keep your account access secure and verify backups periodically.
                         </Text>
                     </View>
                 </View>

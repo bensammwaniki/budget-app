@@ -11,6 +11,7 @@ import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories, getUserSettings, initDatabase, saveUserSettings } from '../../services/database';
+import { exportFinancialCsv } from '../../services/exportService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
 
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
     const [showSmsDatePicker, setShowSmsDatePicker] = useState(false);
     const [isThemeSwitching, setIsThemeSwitching] = useState(false);
+    const [isExportingCsv, setIsExportingCsv] = useState(false);
     const themeToggleLockRef = useRef(false);
 
     const handleToggleTheme = useCallback(() => {
@@ -213,6 +215,24 @@ export default function ProfileScreen() {
         );
     };
 
+    const handleExportCsv = async () => {
+        if (isExportingCsv) return;
+        try {
+            setIsExportingCsv(true);
+            const fileUri = await exportFinancialCsv();
+
+            Alert.alert(
+                'Export Complete',
+                `CSV downloaded successfully.\n\nFile reference:\n${fileUri}`
+            );
+        } catch (error: any) {
+            console.error('Export failed:', error);
+            Alert.alert('Export Failed', error?.message || 'Could not export CSV.');
+        } finally {
+            setIsExportingCsv(false);
+        }
+    };
+
     return (
         <Animated.ScrollView
             className="flex-1 bg-gray-50 dark:bg-[#020617]"
@@ -275,13 +295,22 @@ export default function ProfileScreen() {
                                 icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
                                 value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
                             },
+                            {
+                                icon: require('../../assets/svg/graph.svg'),
+                                label: 'Export CSV',
+                                color: '#0ea5e9',
+                                action: handleExportCsv,
+                                value: isExportingCsv ? 'Generating export...' : 'Download full dataset',
+                                disabled: isExportingCsv,
+                            },
                             { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                             { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
                         ].map((item, index) => (
                             <TouchableOpacity
                                 key={index}
                                 onPress={item.action ? item.action : undefined}
-                                className="w-[48.5%] mb-3 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a]"
+                                disabled={!!item.disabled}
+                                className={`w-[48.5%] mb-3 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a] ${item.disabled ? 'opacity-60' : ''}`}
                             >
                                 <View className="flex-row justify-between items-start mb-3">
                                     <View className="w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-slate-700">

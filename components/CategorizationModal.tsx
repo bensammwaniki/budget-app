@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCategories } from '../services/database';
@@ -24,6 +24,8 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
     const insets = useSafeAreaInsets();
     const [showAddCategory, setShowAddCategory] = useState(false);
 
@@ -31,7 +33,9 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
         if (visible) {
             loadCategories();
             if (transaction) {
-                setCurrentDate(new Date(transaction.date));
+                const txDate = new Date(transaction.date);
+                setCurrentDate(txDate);
+                setCalendarMonth(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
             }
         }
     }, [visible, transaction]);
@@ -45,11 +49,74 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
         }
     };
 
-    const handleDateChange = (days: number) => {
-        const newDate = new Date(currentDate);
-        newDate.setDate(newDate.getDate() + days);
-        setCurrentDate(newDate);
+    const today = useMemo(() => new Date(), []);
+    const todayStart = useMemo(
+        () => new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+        [today]
+    );
+
+    const sameDay = (a: Date, b: Date) =>
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
+
+    const isFutureDay = (date: Date) =>
+        new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() > todayStart.getTime();
+
+    const applyDate = (selectedDate: Date) => {
+        if (isFutureDay(selectedDate)) return;
+
+        // Keep current time, only replace calendar date.
+        const updatedDate = new Date(currentDate);
+        updatedDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+        setCurrentDate(updatedDate);
+        setCalendarMonth(new Date(updatedDate.getFullYear(), updatedDate.getMonth(), 1));
+        onDateChange?.(updatedDate);
     };
+
+    const goToMonth = (offset: number) => {
+        setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+    };
+
+    const quickDateOptions = useMemo(() => {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const lastWeek = new Date(today);
+        lastWeek.setDate(today.getDate() - 7);
+        const lastMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        const daysInLastMonth = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0).getDate();
+        lastMonth.setDate(Math.min(today.getDate(), daysInLastMonth));
+        return [
+            { key: 'yesterday', label: 'Yesterday', date: yesterday },
+            { key: 'lastweek', label: 'Last Week', date: lastWeek },
+            { key: 'lastmonth', label: 'Last Month', date: lastMonth },
+        ];
+    }, [today]);
+
+    const calendarDays = useMemo(() => {
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const firstOfMonth = new Date(year, month, 1);
+        const mondayBasedOffset = (firstOfMonth.getDay() + 6) % 7; // Monday = 0
+
+        const startDate = new Date(year, month, 1 - mondayBasedOffset);
+        return Array.from({ length: 42 }, (_, i) => {
+            const d = new Date(startDate);
+            d.setDate(startDate.getDate() + i);
+            return {
+                key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
+                date: d,
+                inCurrentMonth: d.getMonth() === month,
+            };
+        });
+    }, [calendarMonth]);
+
+    const currentMonthStart = useMemo(
+        () => new Date(todayStart.getFullYear(), todayStart.getMonth(), 1),
+        [todayStart]
+    );
+    const canGoToNextMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getTime() < currentMonthStart.getTime();
 
     const handleCategoryAdded = (newCategory: Category) => {
         setCategories(prev => [...prev, newCategory]);
@@ -90,43 +157,111 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                     <ScrollView className="flex-1 p-6">
                         {/* Date Editor */}
                         <View className="mb-8 bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-700">
-                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mb-3 uppercase tracking-wider">Change Transaction Date</Text>
                             <View className="flex-row items-center justify-between">
-                                <TouchableOpacity
-                                    onPress={() => handleDateChange(-1)}
-                                    className="w-10 h-10 bg-white dark:bg-slate-700 rounded-full items-center justify-center border border-gray-200 dark:border-slate-600 shadow-sm"
-                                >
-                                    <FontAwesome name="chevron-left" size={14} color="#64748b" />
-                                </TouchableOpacity>
-
-                                <View className="items-center">
-                                    <Text className="text-slate-900 dark:text-white font-bold text-lg">
+                                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mb-3 uppercase tracking-wider">Change Transaction Date</Text>
+                                <Text className="text-slate-400 text-xs">
+                                    {currentDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowDatePicker(prev => !prev)}
+                                className="bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 px-4 py-3 flex-row items-center justify-between"
+                            >
+                                <View className="flex-row items-center">
+                                    <FontAwesome name="calendar" size={14} color="#64748b" />
+                                    <Text className="text-slate-900 dark:text-white font-bold text-base ml-2">
                                         {currentDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                                     </Text>
-                                    <Text className="text-slate-400 text-xs">
-                                        {currentDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                    </Text>
                                 </View>
+                                <FontAwesome name={showDatePicker ? 'chevron-up' : 'chevron-down'} size={12} color="#64748b" />
+                            </TouchableOpacity>
+                            {showDatePicker && (
+                                <View className="mt-1 bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-slate-700 p-3">
+                                    <View className="flex-row gap-2 mb-3">
+                                        {quickDateOptions.map(option => {
+                                            const active = sameDay(currentDate, option.date);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={option.key}
+                                                    onPress={() => applyDate(option.date)}
+                                                    className={`flex-1 px-2 py-2 rounded-xl border ${active
+                                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+                                                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                                        }`}
+                                                >
+                                                    <Text className={`text-center text-[11px] font-bold ${active ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-300'}`}>
+                                                        {option.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
 
-                                <TouchableOpacity
-                                    onPress={() => handleDateChange(1)}
-                                    className="w-10 h-10 bg-white dark:bg-slate-700 rounded-full items-center justify-center border border-gray-200 dark:border-slate-600 shadow-sm"
-                                >
-                                    <FontAwesome name="chevron-right" size={14} color="#64748b" />
-                                </TouchableOpacity>
-                            </View>
+                                    <View className="flex-row items-center justify-between bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-2 mb-3">
+                                        <TouchableOpacity
+                                            onPress={() => goToMonth(-1)}
+                                            className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 items-center justify-center"
+                                        >
+                                            <FontAwesome name="chevron-left" size={12} color="#64748b" />
+                                        </TouchableOpacity>
+                                        <Text className="font-black text-slate-800 dark:text-white">
+                                            {calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={() => goToMonth(1)}
+                                            disabled={!canGoToNextMonth}
+                                            className={`w-8 h-8 rounded-lg border items-center justify-center ${canGoToNextMonth
+                                                ? 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600'
+                                                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-40'
+                                                }`}
+                                        >
+                                            <FontAwesome name="chevron-right" size={12} color="#64748b" />
+                                        </TouchableOpacity>
+                                    </View>
 
-                            {/* Save Date Button - Only show if date changed */}
-                            {transaction.date.toDateString() !== currentDate.toDateString() && (
-                                <TouchableOpacity
-                                    onPress={() => onDateChange && onDateChange(currentDate)}
-                                    className="mt-4 bg-blue-600 py-3 rounded-xl items-center shadow-lg shadow-blue-500/30"
-                                >
-                                    <Text className="text-white font-bold">Update Date</Text>
-                                </TouchableOpacity>
+                                    <View className="flex-row mb-1">
+                                        {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((label) => (
+                                            <Text key={label} className="flex-1 text-center text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+                                                {label}
+                                            </Text>
+                                        ))}
+                                    </View>
+
+                                    <View className="flex-row flex-wrap">
+                                        {calendarDays.map((day) => {
+                                            const isSelected = sameDay(day.date, currentDate);
+                                            const isToday = sameDay(day.date, todayStart);
+                                            const isFuture = isFutureDay(day.date);
+                                            return (
+                                                <View key={day.key} className="w-[14.285%] items-center py-1">
+                                                    <TouchableOpacity
+                                                        disabled={isFuture}
+                                                        onPress={() => applyDate(day.date)}
+                                                        className={`w-8 h-8 rounded-[10px] items-center justify-center ${isSelected
+                                                            ? 'bg-blue-600'
+                                                            : isToday
+                                                                ? 'border border-blue-300 dark:border-blue-700'
+                                                                : ''
+                                                            }`}
+                                                    >
+                                                        <Text className={`font-bold text-[12px] ${isSelected
+                                                            ? 'text-white'
+                                                            : isFuture
+                                                                ? 'text-slate-300 dark:text-slate-600'
+                                                            : day.inCurrentMonth
+                                                                ? 'text-slate-600 dark:text-slate-300'
+                                                                : 'text-slate-300 dark:text-slate-600'
+                                                            }`}>
+                                                            {day.date.getDate()}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
                             )}
                         </View>
-
                         <Text className="text-slate-500 dark:text-slate-300 font-medium text-[14px] mb-4">
                             {transaction.type === 'RECEIVED' ? 'What type of income is this?' : 'What type of expense is this?'}
                         </Text>
