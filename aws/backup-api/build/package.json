@@ -1,0 +1,14 @@
+{
+  "name": "fanga-aws-backup-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node -e \"console.log('No tests configured')\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.922.0",
+    "firebase-admin": "^13.0.2"
+  }
+}
