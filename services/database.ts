@@ -65,7 +65,7 @@ export const getUserSettings = async (key: string): Promise<string | null> => {
             [key]
         );
         return result?.value || null;
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -75,6 +75,48 @@ export const getRecipientCategory = async (recipientId: string, type: string): P
     const database = getDb();
     const result = await database.getAllAsync<{ category_id: number }>('SELECT category_id FROM recipients WHERE id = ? AND type = ?', [recipientId, type]);
     return result.length > 0 ? result[0].category_id : null;
+};
+
+const buildAutoRuleName = (recipientId: string, type: string): string => {
+    return `AUTO::RECIPIENT::${type}::${recipientId}`;
+};
+
+const upsertAutoCategoryRuleForRecipient = async (
+    recipientId: string,
+    categoryId: number,
+    type: string
+): Promise<void> => {
+    if (!recipientId || !type || categoryId === null || categoryId === undefined) return;
+
+    const database = getDb();
+    const ruleName = buildAutoRuleName(recipientId, type);
+    const ruleType = type === 'SENT' ? 'EXPENSE' : 'INCOME';
+    const conditions = JSON.stringify([
+        {
+            field: 'DESCRIPTION',
+            operator: 'CONTAINS',
+            value: recipientId
+        }
+    ]);
+    const action = JSON.stringify({ categoryId });
+
+    const existing = await database.getFirstAsync<{ id: number }>(
+        'SELECT id FROM automation_rules WHERE name = ?',
+        [ruleName]
+    );
+
+    if (existing?.id) {
+        await database.runAsync(
+            'UPDATE automation_rules SET type = ?, conditions = ?, action = ?, is_enabled = 1 WHERE id = ?',
+            [ruleType, conditions, action, existing.id]
+        );
+        return;
+    }
+
+    await database.runAsync(
+        'INSERT INTO automation_rules (name, type, conditions, action, is_enabled) VALUES (?, ?, ?, ?, 1)',
+        [ruleName, ruleType, conditions, action]
+    );
 };
 
 export const getFulizaTransactions = async (): Promise<FulizaTransaction[]> => {
@@ -107,6 +149,7 @@ export const saveRecipientCategory = async (recipientId: string, categoryId: num
         'UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND category_id IS NULL',
         [categoryId ?? null, recipientId, type]
     );
+    await upsertAutoCategoryRuleForRecipient(recipientId, categoryId, type);
     notifyListenersImmediate('TRANSACTIONS');
 };
 
@@ -160,6 +203,10 @@ export const updateTransactionCategoryByScope = async (
                 'UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND date > ?',
                 [newCategoryId ?? null, recipientId, type, transactionDate.toISOString()]
             );
+
+            if (newCategoryId !== null && newCategoryId !== undefined) {
+                await upsertAutoCategoryRuleForRecipient(recipientId, newCategoryId, type);
+            }
         }
     });
 
