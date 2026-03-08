@@ -817,7 +817,7 @@ export default function HomeScreen() {
             />
           </View>
           <TextInput
-            placeholder="Search for amount, rrtegory, or recipient..."
+            placeholder="Search for amount, category, or recipient..."
             placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
             value={searchQuery}
             onChangeText={setSearchQuery}
