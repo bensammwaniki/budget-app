@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DebtBreakdownChart, { DebtItem } from '../../components/DebtBreakdownChart';
 import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
@@ -136,6 +137,16 @@ export default function DebtsScreen() {
     }).catch(err => console.error('Failed to load router:', err));
   }, []);
 
+  const handleEditDebt = useCallback((debtId: string) => {
+    import('expo-router').then(({ router }) => {
+      try {
+        router.push({ pathname: '/debt/add', params: { editId: debtId } });
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }).catch(err => console.error('Failed to load router:', err));
+  }, []);
+
   const renderItem = useCallback(({ item }: { item: Debt }) => {
     const principal = Number(item.principalAmount || 0);
     const balance =
@@ -156,77 +167,138 @@ export default function DebtsScreen() {
     const isLiability = item.type === 'LIABILITY' || item.type === 'OVERDRAFT';
     const mainColor = isLiability ? '#ef4444' : '#22c55e'; // Red vs Green
     const bgColor = isLiability ? 'bg-red-100 dark:bg-red-900/20' : 'bg-green-100 dark:bg-green-900/20';
-    const progressBarColor = isLiability ? 'bg-red-500' : 'bg-green-500';
+    const clampedProgress = Math.max(0, Math.min(progress, 100));
+    const ringSize = 44;
+    const strokeWidth = 3.5;
+    const radius = (ringSize - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (clampedProgress / 100) * circumference;
 
     return (
       <TouchableOpacity
-        className="bg-white dark:bg-[#1e293b] p-4 rounded-2xl mb-3 shadow-sm border border-slate-100 dark:border-slate-800"
+        className="bg-white dark:bg-[#1e293b] p-3 rounded-2xl mb-4 mx-5 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden"
         onPress={() => handleDebtPress(item.id)}
       >
-        <View className="flex-row justify-between items-start mb-2">
-          <View className="flex-row items-center gap-3">
-            <View className={`w-10 h-10 rounded-full items-center justify-center ${bgColor}`}>
-              <FontAwesome
-                name={
-                  item.type === 'OVERDRAFT'
-                    ? 'warning'
-                    : item.name?.toLowerCase().includes('bank')
-                      ? 'bank'
-                      : isLiability ? 'money' : 'arrow-circle-down'
-                }
-                size={18}
-                color={mainColor}
-              />
+        <View
+          className="absolute left-0 top-0 bottom-0 w-1"
+          style={{ backgroundColor: mainColor }}
+        />
+
+        <View className="flex-row justify-between items-start mb-1.5">
+          <View className="flex-row items-start gap-2.5 flex-1 pr-2.5">
+            <View style={{ width: ringSize, height: ringSize }} className="items-center justify-center">
+              {!item.isRevolving && (
+                <Svg width={ringSize} height={ringSize} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+                  <Circle
+                    cx={ringSize / 2}
+                    cy={ringSize / 2}
+                    r={radius}
+                    stroke={colorScheme === 'dark' ? '#334155' : '#e2e8f0'}
+                    strokeWidth={strokeWidth}
+                    fill="none"
+                  />
+                  <Circle
+                    cx={ringSize / 2}
+                    cy={ringSize / 2}
+                    r={radius}
+                    stroke={mainColor}
+                    strokeWidth={strokeWidth}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${circumference}, ${circumference}`}
+                    strokeDashoffset={strokeDashoffset}
+                  />
+                </Svg>
+              )}
+              <View className={`w-9 h-9 rounded-full items-center justify-center ${bgColor}`}>
+                <FontAwesome
+                  name={
+                    item.type === 'OVERDRAFT'
+                      ? 'warning'
+                      : item.name?.toLowerCase().includes('bank')
+                        ? 'bank'
+                        : isLiability ? 'money' : 'arrow-circle-down'
+                  }
+                  size={15}
+                  color={mainColor}
+                />
+              </View>
             </View>
 
-            <View>
-              <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                {isLiability ? 'Borrowed From' : 'Owed By'}
-              </Text>
-              <Text className="text-slate-900 dark:text-white font-bold text-base">
+            <View className="flex-1">
+              <View className="flex-row items-center flex-wrap gap-1">
+                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-[1px]">
+                  {isLiability ? 'Borrowed From' : 'Owed By'}
+                </Text>
+                {item.interestRate !== undefined && item.interestRate !== null && (
+                  <View className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                    <Text className="text-[8px] text-slate-600 dark:text-slate-300 font-semibold">
+                      {item.interestRate}%
+                    </Text>
+                  </View>
+                )}
+                {item.isRevolving ? (
+                  <View className="px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30">
+                    <Text className="text-[8px] text-orange-700 dark:text-orange-300 font-semibold">Revolving</Text>
+                  </View>
+                ) : (
+                  <View className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                    <Text className="text-[8px] text-slate-600 dark:text-slate-300 font-semibold">
+                      {item.isReducingBalance ? 'Reducing' : 'Flat Interest'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text className="text-slate-900 dark:text-white font-black text-[15px] mt-0.5" numberOfLines={1}>
                 {item.name}
               </Text>
-
-              {dueDateFormatted && (
-                <Text className="text-slate-500 text-xs">
-                  Due: {dueDateFormatted}
-                </Text>
-              )}
             </View>
           </View>
 
           <View className="items-end">
-            <Text
-              className="font-bold text-lg"
-              style={{ color: mainColor }}
-            >
+            {item.type !== 'OVERDRAFT' && (
+              <TouchableOpacity
+                className="w-7 h-7 rounded-full items-center justify-center mb-3"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  handleEditDebt(item.id);
+                }}
+              >
+                <FontAwesome name="pencil" size={12} color={mainColor} />
+              </TouchableOpacity>
+            )}
+            <Text className="font-black text-base" style={{ color: mainColor }}>
               {formatCurrency(projectedFinal > balance ? projectedFinal : balance)}
             </Text>
             {projectedFinal > balance && (
-              <Text className="text-[10px] font-bold text-blue-500 uppercase tracking-tighter -mt-1">
+              <Text className="text-[9px] font-bold text-blue-500 uppercase tracking-[1px] -mt-0.5">
                 Projected Total
               </Text>
             )}
-
-            {!item.isRevolving && (
-              <Text className="text-slate-400 text-xs text-right">
-                of {formatCurrency(item.isReducingBalance ? principal : principal + (principal * (item.interestRate || 0) / 100))}
-              </Text>
-            )}
+            <Text className="text-slate-400 text-[10px] text-right mt-0.5">
+              Original {formatCurrency(originalAmount)}
+            </Text>
           </View>
         </View>
 
+        <View className="flex-row flex-wrap gap-1.5 mb-1">
+          {dueDateFormatted && (
+            <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+              <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">Due {dueDateFormatted}</Text>
+            </View>
+          )}
+        </View>
+
         {!item.isRevolving && (
-          <View className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mt-2">
-            <View
-              className={`h-full ${progressBarColor}`}
-              style={{ width: `${progress}%` }}
-            />
+          <View className="mt-[-20px] ml-[5px]">
+            <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+              Repayment Progress: <Text style={{ color: mainColor }} className="font-bold">{progress.toFixed(1)}%</Text>
+            </Text>
           </View>
         )}
       </TouchableOpacity>
     );
-  }, [handleDebtPress]);
+  }, [handleDebtPress, handleEditDebt, colorScheme]);
 
   return (
     <View

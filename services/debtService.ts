@@ -269,6 +269,103 @@ export const debtService = {
         return results.map(mapRowToDebt);
     },
 
+    async getDebtById(debtId: string): Promise<Debt | null> {
+        await initDatabase();
+        const db = getDb();
+        const row = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [debtId]);
+        return row ? mapRowToDebt(row) : null;
+    },
+
+    async updateDebt(payload: {
+        debtId: string;
+        name: string;
+        amount: number;
+        interestRate?: number;
+        isReducingBalance?: boolean;
+        startDate?: Date;
+        dueDate?: Date | null;
+    }): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+
+        const existing = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [payload.debtId]);
+        if (!existing) throw new Error('Debt not found');
+        if (existing.type === 'OVERDRAFT') throw new Error('System overdraft debts cannot be edited');
+
+        const trimmedName = payload.name.trim();
+        if (!trimmedName) throw new Error('Debt name cannot be empty');
+        if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error('Amount must be greater than zero');
+
+        const nextPrincipal = payload.amount;
+        const nextInterestRate = payload.interestRate !== undefined ? payload.interestRate : existing.interest_rate;
+        const nextIsReducingBalance = payload.isReducingBalance !== undefined
+            ? (payload.isReducingBalance ? 1 : 0)
+            : existing.is_reducing_balance;
+        const nextStartDate = payload.startDate ? payload.startDate.toISOString() : existing.start_date;
+        const nextDueDate = payload.dueDate === undefined
+            ? existing.due_date
+            : payload.dueDate
+                ? payload.dueDate.toISOString()
+                : null;
+
+        const oldFlatInterest = (!existing.is_reducing_balance && existing.interest_rate)
+            ? existing.principal_amount * (existing.interest_rate / 100)
+            : 0;
+        const oldTotal = existing.is_reducing_balance
+            ? existing.principal_amount
+            : existing.principal_amount + oldFlatInterest;
+
+        const paidSoFar = Math.max(0, oldTotal - existing.current_balance);
+        const newFlatInterest = (!nextIsReducingBalance && nextInterestRate)
+            ? nextPrincipal * (nextInterestRate / 100)
+            : 0;
+        const newTotal = nextIsReducingBalance ? nextPrincipal : nextPrincipal + newFlatInterest;
+        const newCurrentBalance = Math.max(0, newTotal - paidSoFar);
+
+        const newStatus: DebtStatus = newCurrentBalance <= 0
+            ? 'PAID'
+            : existing.status === 'DEFAULTED'
+                ? 'DEFAULTED'
+                : 'ACTIVE';
+
+        await db.withTransactionAsync(async () => {
+            await db.runAsync(`
+                UPDATE debts
+                SET name = ?,
+                    principal_amount = ?,
+                    current_balance = ?,
+                    is_reducing_balance = ?,
+                    interest_rate = ?,
+                    status = ?,
+                    start_date = ?,
+                    due_date = ?,
+                    updated_at = ?
+                WHERE id = ?
+            `, [
+                trimmedName,
+                nextPrincipal,
+                newCurrentBalance,
+                nextIsReducingBalance,
+                nextInterestRate,
+                newStatus,
+                nextStartDate,
+                nextDueDate,
+                now,
+                payload.debtId
+            ]);
+
+            await db.runAsync(
+                `UPDATE transactions
+                 SET recipient_name = ?, updated_at = ?
+                 WHERE linked_debt_id = ? AND transaction_kind = 'DEBT_PRINCIPAL'`,
+                [trimmedName, now, payload.debtId]
+            );
+        });
+
+        notifyListeners('DEBTS');
+    },
+
     async getOutstandingTotal(userId: string = 'local_user'): Promise<number> {
         // Fetch mapped debts so accrued fees and flat interests are computed natively
         const debts = await this.getDebts(userId, 'ACTIVE');

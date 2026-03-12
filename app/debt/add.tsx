@@ -1,9 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,8 +13,11 @@ import { Account } from '../../types/account';
 
 function AddDebtScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ editId?: string }>();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
+    const editId = typeof params.editId === 'string' ? params.editId : undefined;
+    const isEditMode = Boolean(editId);
 
     const [type, setType] = useState<'LIABILITY' | 'RECEIVABLE'>('LIABILITY');
     const [name, setName] = useState('');
@@ -29,6 +32,7 @@ function AddDebtScreen() {
     const [showDueDatePicker, setShowDueDatePicker] = useState(false);
     const [dueDatePickerYear, setDueDatePickerYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(false);
+    const [loadingDebt, setLoadingDebt] = useState(false);
 
     const scrollY = useSharedValue(0);
 
@@ -51,6 +55,49 @@ function AddDebtScreen() {
             return () => { active = false; };
         }, [])
     );
+
+    useEffect(() => {
+        let active = true;
+        const loadForEdit = async () => {
+            if (!editId) return;
+            setLoadingDebt(true);
+            try {
+                const existing = await debtService.getDebtById(editId);
+                if (!existing) {
+                    Alert.alert('Error', 'Debt not found.');
+                    router.back();
+                    return;
+                }
+                if (existing.type === 'OVERDRAFT') {
+                    Alert.alert('Not Allowed', 'System overdraft debts cannot be edited here.');
+                    router.back();
+                    return;
+                }
+                if (!active) return;
+
+                setType(existing.type === 'RECEIVABLE' ? 'RECEIVABLE' : 'LIABILITY');
+                setName(existing.name);
+                setAmount(existing.principalAmount.toLocaleString());
+                setInterestRate(existing.interestRate !== undefined && existing.interestRate !== null ? String(existing.interestRate) : '');
+                setIsReducingBalance(!!existing.isReducingBalance);
+                setSelectedAccount(existing.accountId);
+                setStartDate(existing.startDate ? new Date(existing.startDate) : new Date());
+                setExpectedPayDate(existing.dueDate ? new Date(existing.dueDate) : undefined);
+                setDueDatePickerYear(existing.dueDate ? new Date(existing.dueDate).getFullYear() : new Date().getFullYear());
+            } catch (error) {
+                console.error('Failed to load debt for edit:', error);
+                Alert.alert('Error', 'Failed to load debt details.');
+                router.back();
+            } finally {
+                if (active) setLoadingDebt(false);
+            }
+        };
+
+        loadForEdit();
+        return () => {
+            active = false;
+        };
+    }, [editId, router]);
 
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
@@ -139,26 +186,46 @@ function AddDebtScreen() {
 
         setLoading(true);
         try {
-            await debtService.createDebt({
-                userId: 'local_user',
-                type,
-                name,
-                amount: parseFloat(amount.replace(/,/g, '')),
-                accountId: selectedAccount,
-                interestRate: interestRate ? parseFloat(interestRate) : undefined,
-                isReducingBalance,
-                startDate: startDate,
-                dueDate: expectedPayDate
-            });
+            if (editId) {
+                await debtService.updateDebt({
+                    debtId: editId,
+                    name,
+                    amount: parseFloat(amount.replace(/,/g, '')),
+                    interestRate: interestRate ? parseFloat(interestRate) : undefined,
+                    isReducingBalance,
+                    startDate,
+                    dueDate: expectedPayDate,
+                });
+            } else {
+                await debtService.createDebt({
+                    userId: 'local_user',
+                    type,
+                    name,
+                    amount: parseFloat(amount.replace(/,/g, '')),
+                    accountId: selectedAccount,
+                    interestRate: interestRate ? parseFloat(interestRate) : undefined,
+                    isReducingBalance,
+                    startDate: startDate,
+                    dueDate: expectedPayDate
+                });
+            }
             router.back();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            Alert.alert('Error', `Failed to create debt: ${errorMessage}`);
-            console.error('Debt creation error:', error);
+            Alert.alert('Error', `Failed to save debt: ${errorMessage}`);
+            console.error('Debt save error:', error);
         } finally {
             setLoading(false);
         }
     };
+
+    if (loadingDebt) {
+        return (
+            <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
+                <ActivityIndicator size="large" color="#3b82f6" />
+            </View>
+        );
+    }
 
     return (
         <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
@@ -178,7 +245,9 @@ function AddDebtScreen() {
                             contentFit="contain"
                         />
                     </TouchableOpacity>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white ml-2">Add New {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text>
+                    <Text className="text-xl font-bold text-slate-900 dark:text-white ml-2">
+                        {isEditMode ? `Edit ${type === 'LIABILITY' ? 'Debt' : 'Loan'}` : `Add New ${type === 'LIABILITY' ? 'Debt' : 'Loan'}`}
+                    </Text>
                 </View>
             </Animated.View>
 
@@ -199,7 +268,7 @@ function AddDebtScreen() {
                     {/* Type Selection */}
                     <View style={{ flexDirection: 'row', backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#e6edf3', padding: 4, borderRadius: 50, marginBottom: 24 }}>
                         <TouchableOpacity
-                            onPress={() => setType('LIABILITY')}
+                            onPress={() => !isEditMode && setType('LIABILITY')}
                             style={{
                                 flex: 1,
                                 paddingVertical: 8,
@@ -213,11 +282,12 @@ function AddDebtScreen() {
                                 shadowRadius: type === 'LIABILITY' ? 4 : 0,
                                 elevation: type === 'LIABILITY' ? 1 : 0,
                             }}
+                            disabled={isEditMode}
                         >
                             <Text style={{ textAlign: 'center', fontWeight: '700', color: type === 'LIABILITY' ? (colorScheme === 'dark' ? '#ffffff' : '#0f172a') : '#64748b' }}>I Owe (Liability)</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            onPress={() => setType('RECEIVABLE')}
+                            onPress={() => !isEditMode && setType('RECEIVABLE')}
                             style={{
                                 flex: 1,
                                 paddingVertical: 8,
@@ -231,6 +301,7 @@ function AddDebtScreen() {
                                 shadowRadius: type === 'RECEIVABLE' ? 4 : 0,
                                 elevation: type === 'RECEIVABLE' ? 1 : 0,
                             }}
+                            disabled={isEditMode}
                         >
                             <Text style={{ textAlign: 'center', fontWeight: '700', color: type === 'RECEIVABLE' ? (colorScheme === 'dark' ? '#ffffff' : '#0f172a') : '#64748b' }}>Owed to Me</Text>
                         </TouchableOpacity>
@@ -442,7 +513,7 @@ function AddDebtScreen() {
                             <View className="mt-4 pt-4 border-t border-slate-800 dark:border-slate-100">
                                 <View className="flex-row justify-between mb-1">
                                     <Text className="text-slate-400 dark:text-slate-500 text-xs">Initial Principal</Text>
-                                    <Text className="text-slate-300 dark:text-slate-700 text-xs font-bold">KES {(parseFloat(amount) || 0).toLocaleString()}</Text>
+                                    <Text className="text-slate-300 dark:text-slate-700 text-xs font-bold">KES {(parseFloat(amount.replace(/,/g, '')) || 0).toLocaleString()}</Text>
                                 </View>
                                 <View className="flex-row justify-between">
                                     <Text className="text-slate-400 dark:text-slate-500 text-xs">Estimated Interest</Text>
@@ -452,6 +523,7 @@ function AddDebtScreen() {
                         </View>
                     )}
 
+                    {!isEditMode && (
                     <View className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-6">
                         <Text className="text-sm font-semibold text-slate-500 mb-2">
                             {type === 'LIABILITY' ? 'Money Received Into (Optional)' : 'Money Sent From (Optional)'}
@@ -473,6 +545,7 @@ function AddDebtScreen() {
                                 : 'Select an account if you sent this money from it (we create an Expense transaction).'}
                         </Text>
                     </View>
+                    )}
 
                     <TouchableOpacity
                         className="bg-blue-600 p-4 rounded-xl items-center shadow-lg shadow-blue-500/30"
@@ -487,7 +560,10 @@ function AddDebtScreen() {
                                     tintColor={"white"}
                                     contentFit="contain"
                                 />
-                                <Text className="text-white font-bold text-lg">Create {type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text></View>}
+                                <Text className="text-white font-bold text-lg">
+                                    {isEditMode ? `Save ${type === 'LIABILITY' ? 'Debt' : 'Loan'}` : `Create ${type === 'LIABILITY' ? 'Debt' : 'Loan'}`}
+                                </Text>
+                            </View>}
                     </TouchableOpacity>
                     </View>
                 </Animated.ScrollView>

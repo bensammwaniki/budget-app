@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, InteractionManager, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
@@ -55,65 +56,108 @@ export default function SavingsScreen() {
 
     const renderGoal = ({ item }: { item: SavingsGoal }) => {
         const progress = Math.min((item.currentAmount / item.targetAmount) * 100, 100);
+        const goalColor = item.color || '#3b82f6';
+        const ringSize = 44;
+        const strokeWidth = 3.5;
+        const radius = (ringSize - strokeWidth) / 2;
+        const circumference = 2 * Math.PI * radius;
+        const strokeDashoffset = circumference - (Math.max(0, Math.min(progress, 100)) / 100) * circumference;
 
         return (
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push(`/savings/${item.id}`)}
-                className="bg-white dark:bg-[#1e293b] p-5 rounded-3xl mb-4 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden"
+                className="bg-white dark:bg-[#1e293b] p-3 rounded-2xl mb-4 mx-1 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden"
             >
-                <View className="absolute top-0 right-0 w-32 h-32 rounded-bl-full opacity-10" style={{ backgroundColor: item.color || '#3b82f6' }} />
+                <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: goalColor }} />
+                <View className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10" style={{ backgroundColor: goalColor }} />
 
-                <View className="flex-row justify-between items-start mb-4">
-                    <View className="flex-row items-center flex-1 pr-4">
-                        <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${item.color || '#3b82f6'}20` }}>
-                            <Image
-                                source={require('../../assets/svg/savings-piggy.svg')}
-                                style={{ width: 26, height: 26 }}
-                                tintColor={item.color || '#3b82f6'}
-                                contentFit="contain"
-                            />
+                <View className="flex-row justify-between items-start mb-1.5">
+                    <View className="flex-row items-start flex-1 pr-2.5 gap-2.5">
+                        <View style={{ width: ringSize, height: ringSize }} className="items-center justify-center">
+                            <Svg width={ringSize} height={ringSize} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+                                <Circle
+                                    cx={ringSize / 2}
+                                    cy={ringSize / 2}
+                                    r={radius}
+                                    stroke={colorScheme === 'dark' ? '#334155' : '#e2e8f0'}
+                                    strokeWidth={strokeWidth}
+                                    fill="none"
+                                />
+                                <Circle
+                                    cx={ringSize / 2}
+                                    cy={ringSize / 2}
+                                    r={radius}
+                                    stroke={goalColor}
+                                    strokeWidth={strokeWidth}
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeDasharray={`${circumference}, ${circumference}`}
+                                    strokeDashoffset={strokeDashoffset}
+                                />
+                            </Svg>
+                            <View className="w-9 h-9 rounded-xl items-center justify-center" style={{ backgroundColor: `${goalColor}20` }}>
+                                <Image
+                                    source={require('../../assets/svg/savings-piggy.svg')}
+                                    style={{ width: 20, height: 20 }}
+                                    tintColor={goalColor}
+                                    contentFit="contain"
+                                />
+                            </View>
                         </View>
-                        <Text className="text-lg font-bold text-slate-900 dark:text-white" numberOfLines={1}>{item.name}</Text>
+
+                        <View className="flex-1">
+                            <View className="flex-row items-center gap-1">
+                                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-[1px]">Savings Goal</Text>
+                                {item.status === 'COMPLETED' && (
+                                    <View className="px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30">
+                                        <Text className="text-[8px] text-green-700 dark:text-green-300 font-semibold">Done</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text className="text-slate-900 dark:text-white font-black text-[15px] mt-0.5" numberOfLines={1}>
+                                {item.name}
+                            </Text>
+                        </View>
                     </View>
-                    {item.status === 'COMPLETED' && (
-                        <View className="bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-800/50">
-                            <Text className="text-green-600 dark:text-green-400 font-bold text-xs">DONE</Text>
-                        </View>
-                    )}
-                </View>
 
-                <View className="flex-row items-end justify-between mb-3">
-                    <View>
-                        <Text className="text-slate-500 dark:text-slate-400 text-xs mb-1">Saved</Text>
-                        <Text className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <View className="items-end">
+                        <TouchableOpacity
+                            className="w-7 h-7 rounded-full items-center justify-center mb-5"
+                            onPress={(event) => {
+                                event.stopPropagation();
+                                router.push({ pathname: '/savings/add', params: { editId: item.id } });
+                            }}
+                        >
+                            <FontAwesome name="pencil" size={12} color={goalColor} />
+                        </TouchableOpacity>
+                        <Text className="font-black text-base text-slate-900 dark:text-white mt-[30px]">
                             KES {item.currentAmount.toLocaleString()}
                         </Text>
-                    </View>
-                    <View className="items-end">
-                        <Text className="text-slate-400 dark:text-slate-500 text-xs mb-1">Target</Text>
-                        <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                            KES {item.targetAmount.toLocaleString()}
+                        <Text className="text-slate-400 text-[10px] text-right ">
+                            Target KES {item.targetAmount.toLocaleString()}
                         </Text>
                     </View>
                 </View>
 
-                {/* Progress Bar */}
-                <View className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <View
-                        className="h-full rounded-full"
-                        style={{ width: `${progress}%`, backgroundColor: item.color || '#3b82f6' }}
-                    />
-                </View>
-
-                {item.targetDate && (
-                    <View className="flex-row items-center mt-3 gap-1">
-                        <FontAwesome name="calendar" size={12} color="#94a3b8" />
-                        <Text className="text-slate-400 dark:text-slate-500 text-[10px]">
-                            Goal Date: {new Date(item.targetDate).toLocaleDateString()}
+                <View className="flex-row flex-wrap gap-1.5 mb-1 mt-[-35px]">
+                    {item.targetDate && (
+                        <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                            <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">
+                                Goal Date {new Date(item.targetDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                            </Text>
+                        </View>
+                    )}
+                    <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                        <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">
+                            Remaining KES {Math.max(0, item.targetAmount - item.currentAmount).toLocaleString()}
                         </Text>
                     </View>
-                )}
+                </View>
+
+                <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium ml-2">
+                    Progress: <Text style={{ color: goalColor }} className="font-bold">{progress.toFixed(1)}%</Text>
+                </Text>
             </TouchableOpacity>
         );
     };

@@ -25,10 +25,14 @@ export default function AutomationListScreen() {
     const [rules, setRules] = useState<AutomationRule[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const isSystemAutoRule = (rule: AutomationRule): boolean => {
+        return rule.name.startsWith('AUTO::RECIPIENT::');
+    };
+
     const loadRules = useCallback(async () => {
         try {
             const data = await getAutomationRules();
-            setRules(data);
+            setRules(data.filter((rule) => !isSystemAutoRule(rule)));
         } catch (error) {
             console.error('Failed to load rules:', error);
         } finally {

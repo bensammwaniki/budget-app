@@ -27,6 +27,7 @@ export default function DebtDetailScreen() {
     const [potentialMatches, setPotentialMatches] = useState<any[]>([]);
     const [matchesLoading, setMatchesLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [unlinkingTxId, setUnlinkingTxId] = useState<string | null>(null);
 
     const filteredMatches = useMemo(() => {
         if (!searchQuery.trim()) return potentialMatches;
@@ -162,6 +163,32 @@ export default function DebtDetailScreen() {
         );
     };
 
+    const handleUnlinkPayment = (transactionId: string) => {
+        Alert.alert(
+            'Unlink Payment',
+            'Remove this linked SMS/payment from this debt?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unlink',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setUnlinkingTxId(transactionId);
+                            await debtService.unlinkTransaction(transactionId);
+                            await loadData();
+                            Alert.alert('Success', 'Payment unlinked successfully.');
+                        } catch (error: any) {
+                            Alert.alert('Error', error?.message || 'Failed to unlink payment.');
+                        } finally {
+                            setUnlinkingTxId(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-[#020617]">
@@ -274,15 +301,10 @@ export default function DebtDetailScreen() {
                                         <Text className="text-slate-900 dark:text-white font-bold">KES {originalAmount.toLocaleString()}</Text>
                                     </View>
                                 </View>
-                                <View className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                                    <Text className="text-slate-500 text-xs text-center italic">
-                                        {progress.toFixed(1)}% of total clear
-                                    </Text>
-                                </View>
                             </>
                         )}
 
-                        <View className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800 flex-row justify-between items-center">
+                        <View className="mt-2 pt-4 border-t border-slate-50 dark:border-slate-800 flex-row justify-between items-center">
                             <View className="flex-row items-center gap-2">
                                 <FontAwesome name="calendar" size={12} color="#94a3b8" />
                                 <Text className="text-slate-400 text-xs font-medium uppercase tracking-wider">Debt Inception</Text>
@@ -330,7 +352,7 @@ export default function DebtDetailScreen() {
                                     key={payment.payment_id}
                                     className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-100 dark:border-slate-800"
                                 >
-                                    <View className="flex-row justify-between items-start mb-2">
+                                    <View className="flex-row justify-between items-start ">
                                         <View className="flex-1">
                                             <Text className="font-bold text-slate-900 dark:text-white">
                                                 {payment.recipient_name || 'Payment'}
@@ -339,17 +361,25 @@ export default function DebtDetailScreen() {
                                                 {new Date(payment.payment_date).toLocaleDateString()}
                                             </Text>
                                         </View>
-                                        <Text className="text-green-600 dark:text-green-400 font-bold text-lg">
-                                            -KES {Number(payment.payment_amount).toLocaleString()}
-                                        </Text>
-                                    </View>
-                                    {payment.raw_sms && (
-                                        <View className="mt-1 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                                            <Text className="text-slate-500 dark:text-slate-400 text-[10px] italic" numberOfLines={2}>
-                                                &quot;{payment.raw_sms}&quot;
+                                        <View className="items-end mt-[-5px]">
+                                            {payment.transaction_id && (
+                                            <TouchableOpacity
+                                                onPress={() => handleUnlinkPayment(payment.transaction_id)}
+                                                disabled={unlinkingTxId === payment.transaction_id}
+                                                className="py-1"
+                                            >
+                                                {unlinkingTxId === payment.transaction_id ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Text className="text-red-600 dark:text-red-400 font-semibold text-xs">Unlink</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                            )}
+                                            <Text className="text-green-600 dark:text-green-400 font-bold text-lg">
+                                                -KES {Number(payment.payment_amount).toLocaleString()}
                                             </Text>
                                         </View>
-                                    )}
+                                    </View>
                                 </View>
                             ))}
                         </View>

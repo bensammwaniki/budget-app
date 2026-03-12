@@ -1,10 +1,10 @@
 import { FontAwesome } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { savingsService } from '../../services/savingsService';
@@ -21,8 +21,11 @@ const COLORS = [
 
 export default function AddGoalScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ editId?: string }>();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
+    const editId = typeof params.editId === 'string' ? params.editId : undefined;
+    const isEditMode = useMemo(() => Boolean(editId), [editId]);
 
     const [name, setName] = useState('');
     const [targetAmount, setTargetAmount] = useState('');
@@ -30,6 +33,7 @@ export default function AddGoalScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [selectedColor, setSelectedColor] = useState(COLORS[0]);
     const [loading, setLoading] = useState(false);
+    const [loadingGoal, setLoadingGoal] = useState(false);
 
     const formatWithCommas = (value: string) => {
         const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
@@ -40,6 +44,38 @@ export default function AddGoalScreen() {
     const handleAmountChange = (text: string) => {
         setTargetAmount(formatWithCommas(text));
     };
+
+    useEffect(() => {
+        let mounted = true;
+        const loadGoalForEdit = async () => {
+            if (!editId) return;
+            setLoadingGoal(true);
+            try {
+                const goal = await savingsService.getGoalById(editId);
+                if (!goal) {
+                    Alert.alert('Error', 'Goal not found.');
+                    router.back();
+                    return;
+                }
+                if (!mounted) return;
+                setName(goal.name);
+                setTargetAmount(goal.targetAmount.toLocaleString());
+                setTargetDate(goal.targetDate ? new Date(goal.targetDate) : null);
+                setSelectedColor(goal.color || COLORS[0]);
+            } catch (error) {
+                console.error('Failed to load goal for edit:', error);
+                Alert.alert('Error', 'Failed to load goal details.');
+                router.back();
+            } finally {
+                if (mounted) setLoadingGoal(false);
+            }
+        };
+
+        loadGoalForEdit();
+        return () => {
+            mounted = false;
+        };
+    }, [editId, router]);
 
     const handleSave = async () => {
         if (!name.trim()) {
@@ -55,16 +91,25 @@ export default function AddGoalScreen() {
 
         setLoading(true);
         try {
-            await savingsService.createGoal({
-                name: name.trim(),
-                targetAmount: amount,
-                targetDate: targetDate ? targetDate.toISOString() : undefined,
-                color: selectedColor
-            });
+            if (editId) {
+                await savingsService.updateGoal(editId, {
+                    name: name.trim(),
+                    targetAmount: amount,
+                    targetDate: targetDate ? targetDate.toISOString() : null,
+                    color: selectedColor
+                });
+            } else {
+                await savingsService.createGoal({
+                    name: name.trim(),
+                    targetAmount: amount,
+                    targetDate: targetDate ? targetDate.toISOString() : undefined,
+                    color: selectedColor
+                });
+            }
             router.back();
         } catch (error) {
-            console.error('Failed to create goal:', error);
-            Alert.alert('Error', 'Failed to create goal. Please try again.');
+            console.error('Failed to save goal:', error);
+            Alert.alert('Error', isEditMode ? 'Failed to update goal. Please try again.' : 'Failed to create goal. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -76,6 +121,14 @@ export default function AddGoalScreen() {
             setTargetDate(selected);
         }
     };
+
+    if (loadingGoal) {
+        return (
+            <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
+                <ActivityIndicator size="large" color="#3b82f6" />
+            </View>
+        );
+    }
 
     return (
         <View className="flex-1 bg-gray-50 dark:bg-[#020617]" style={{ paddingTop: insets.top }}>
@@ -91,7 +144,9 @@ export default function AddGoalScreen() {
                         contentFit="contain"
                     />
                 </TouchableOpacity>
-                <Text className="text-l font-bold text-slate-900 dark:text-white ml-2 uppercase">Add a New Savings Goal</Text>
+                <Text className="text-l font-bold text-slate-900 dark:text-white ml-2 uppercase">
+                    {isEditMode ? 'Edit Savings Goal' : 'Add a New Savings Goal'}
+                </Text>
             </View>
 
             <KeyboardAvoidingView
@@ -119,7 +174,7 @@ export default function AddGoalScreen() {
                             value={name}
                             onChangeText={setName}
                             style={{ color: selectedColor }}
-                            autoFocus
+                            autoFocus={!isEditMode}
                         />
                     </View>
 
@@ -192,7 +247,9 @@ export default function AddGoalScreen() {
                                     tintColor={"white"}
                                     contentFit="contain"
                                 />
-                                <Text className="text-white font-bold text-[12px] uppercase tracking-wider ml-2">Create a Savings Goal</Text>
+                                <Text className="text-white font-bold text-[12px] uppercase tracking-wider ml-2">
+                                    {isEditMode ? 'Save Goal Changes' : 'Create a Savings Goal'}
+                                </Text>
                             </>
                         )}
                     </TouchableOpacity>

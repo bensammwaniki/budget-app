@@ -16,6 +16,7 @@ export interface SavingsGoal {
 }
 
 export type CreateSavingsGoalDTO = Omit<SavingsGoal, 'id' | 'userId' | 'currentAmount' | 'status' | 'createdAt' | 'updatedAt'>;
+export type UpdateSavingsGoalDTO = Partial<Omit<CreateSavingsGoalDTO, 'targetDate'> & { targetDate?: string | null } & { status: SavingsGoal['status'] }>;
 
 export const savingsService = {
     async getGoals(userId: string = 'local_user'): Promise<SavingsGoal[]> {
@@ -52,19 +53,44 @@ export const savingsService = {
         return (await this.getGoalById(id))!;
     },
 
-    async updateGoal(id: string, updates: Partial<CreateSavingsGoalDTO & { status: SavingsGoal['status'] }>): Promise<void> {
+    async updateGoal(id: string, updates: UpdateSavingsGoalDTO): Promise<void> {
         await initDatabase();
         const db = getDb();
         const now = new Date().toISOString();
+        const existingGoal = await this.getGoalById(id);
+
+        if (!existingGoal) throw new Error('Goal not found');
 
         const setClauses: string[] = [];
         const values: any[] = [];
 
-        if (updates.name !== undefined) { setClauses.push('name = ?'); values.push(updates.name); }
-        if (updates.targetAmount !== undefined) { setClauses.push('target_amount = ?'); values.push(updates.targetAmount); }
-        if (updates.targetDate !== undefined) { setClauses.push('target_date = ?'); values.push(updates.targetDate); }
+        if (updates.name !== undefined) {
+            const trimmed = updates.name.trim();
+            if (!trimmed) throw new Error('Goal name cannot be empty');
+            setClauses.push('name = ?');
+            values.push(trimmed);
+        }
+        if (updates.targetAmount !== undefined) {
+            if (!Number.isFinite(updates.targetAmount) || updates.targetAmount <= 0) {
+                throw new Error('Target amount must be greater than zero');
+            }
+            setClauses.push('target_amount = ?');
+            values.push(updates.targetAmount);
+        }
+        if (updates.targetDate !== undefined) { setClauses.push('target_date = ?'); values.push(updates.targetDate || null); }
         if (updates.color !== undefined) { setClauses.push('color = ?'); values.push(updates.color); }
-        if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
+
+        let resolvedStatus = updates.status;
+        if (!resolvedStatus && updates.targetAmount !== undefined) {
+            const isComplete = existingGoal.currentAmount >= updates.targetAmount;
+            resolvedStatus = isComplete
+                ? 'COMPLETED'
+                : (existingGoal.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE');
+        }
+        if (resolvedStatus !== undefined) {
+            setClauses.push('status = ?');
+            values.push(resolvedStatus);
+        }
 
         if (setClauses.length === 0) return;
 
