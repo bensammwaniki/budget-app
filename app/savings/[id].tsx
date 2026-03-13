@@ -220,7 +220,7 @@ export default function GoalDetailScreen() {
             >
                 <View className="p-6">
                     {/* Status Card */}
-                    <View className="bg-white dark:bg-[#0f172a] p-6 rounded-3xl shadow-sm mb-6 relative overflow-hidden border border-slate-100 dark:border-slate-800">
+                    <View className="bg-white dark:bg-[#0f172a] p-6 rounded-[12px] mb-6 relative overflow-hidden border border-slate-100 dark:border-slate-800">
                         <View className="absolute right-[-20] top-[-20] w-32 h-32 rounded-bl-full opacity-10" style={{ backgroundColor: themeColor }} />
 
                         <View className="flex-row justify-between items-start mb-6">
@@ -254,7 +254,7 @@ export default function GoalDetailScreen() {
                             <Text className="text-slate-400 dark:text-slate-500 font-medium tracking-wide">KES {goal.targetAmount.toLocaleString()}</Text>
                         </View>
 
-                        <View className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 gap-2">
+                        <View className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-[12px] border border-slate-100 dark:border-slate-700/50 gap-2">
                             <View className="flex-row justify-between items-center">
                                 <Text className="text-slate-500 dark:text-slate-400 text-xs">Remaining Amount</Text>
                                 <Text className="text-slate-900 dark:text-white font-bold text-sm">KES {remaining.toLocaleString()}</Text>
@@ -273,8 +273,8 @@ export default function GoalDetailScreen() {
                     <View className="flex-row gap-3 mb-8">
                         {goal.status !== 'COMPLETED' && (
                             <TouchableOpacity
-                                className="flex-1 p-4 rounded-2xl items-center shadow-lg flex-row justify-center gap-2"
-                                style={{ backgroundColor: themeColor, shadowColor: themeColor }}
+                                className="flex-1 p-4 rounded-[12px] items-center flex-row justify-center gap-2"
+                                style={{ backgroundColor: themeColor }}
                                 onPress={fetchLinkableTransactions}
                                 disabled={openingLinkModal || showLinkModal}>
                                 <Image
@@ -295,7 +295,7 @@ export default function GoalDetailScreen() {
                             {history.map((tx) => (
                                 <View
                                     key={tx.id}
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex-row justify-between items-center">
+                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800 flex-row justify-between items-center">
                                     <View className="flex-row items-center flex-1">
                                         <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">
                                             {/* <FontAwesome name={tx.transactionKind === 'SAVINGS_TRANSFER' ? 'arrow-down' : 'link'} size={14} color={themeColor} /> */}
@@ -327,7 +327,7 @@ export default function GoalDetailScreen() {
                             ))}
                         </View>
                     ) : (
-                        <View className="bg-white dark:bg-[#0f172a] p-8 rounded-3xl border border-slate-100 dark:border-slate-800 items-center justify-center">
+                        <View className="bg-white dark:bg-[#0f172a] p-8 rounded-[12px] border border-slate-100 dark:border-slate-800 items-center justify-center">
                             <FontAwesome name="inbox" size={48} color="#cbd5e1" />
                             <Text className="text-slate-500 dark:text-slate-400 mt-4 text-center font-medium">No deposits yet.</Text>
                             <Text className="text-slate-400 dark:text-slate-500 text-xs mt-2 text-center">Start saving to see your history here.</Text>
@@ -358,7 +358,7 @@ export default function GoalDetailScreen() {
 
                     {/* Search Bar */}
                     <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-[12px] border border-slate-200 dark:border-slate-700">
                             <FontAwesome name="search" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
                             <TextInput
                                 className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
@@ -391,7 +391,7 @@ export default function GoalDetailScreen() {
                                 <TouchableOpacity
                                     onPress={() => handleLinkTransaction(tx.id)}
                                     disabled={linking === tx.id}
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
+                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
                                 >
                                     <View className="flex-row items-center flex-1 pr-4">
                                         <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">

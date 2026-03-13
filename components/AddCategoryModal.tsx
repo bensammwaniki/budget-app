@@ -168,7 +168,7 @@ export default function AddCategoryModal({ visible, onClose, onCategoryAdded, de
                                         <TouchableOpacity
                                             key={color}
                                             onPress={() => setSelectedColor(color)}
-                                            className={`w-10 h-10 rounded-full border-2 ${selectedColor === color ? 'border-slate-900 dark:border-white' : 'border-transparent'}`}
+                                            className={`w-10 h-10 rounded-full border ${selectedColor === color ? 'border-slate-900 dark:border-white' : 'border-transparent'}`}
                                             style={{ backgroundColor: color }}
                                         />
                                     ))}

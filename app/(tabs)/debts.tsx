@@ -176,7 +176,7 @@ export default function DebtsScreen() {
 
     return (
       <TouchableOpacity
-        className="bg-white dark:bg-[#1e293b] p-3 rounded-2xl mb-4 mx-5 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden"
+        className="bg-white dark:bg-[#1e293b] p-3 rounded-[12px] mb-4 mx-5 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden"
         onPress={() => handleDebtPress(item.id)}
       >
         <View
@@ -357,7 +357,7 @@ export default function DebtsScreen() {
                   {liabilityCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('LIABILITY')}
-                      className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'LIABILITY'
+                      className={`rounded-[12px] p-5 border shadow-sm ${typeFilter === 'LIABILITY'
                         ? 'bg-red-500 border-red-500'
                         : 'bg-white border-slate-200'
                         }`}
@@ -378,7 +378,7 @@ export default function DebtsScreen() {
                   {receivableCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('RECEIVABLE')}
-                      className={`rounded-2xl p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
+                      className={`rounded-[12px] p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
                         ? 'bg-green-500 border-green-500'
                         : 'bg-white border-slate-200'
                         }`}>
@@ -396,7 +396,7 @@ export default function DebtsScreen() {
 
                   {/* Empty state — shown when both counts are zero */}
                   {liabilityCount === 0 && receivableCount === 0 && (
-                    <View className="w-full items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <View className="w-full items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-slate-200 dark:border-slate-800">
                       <FontAwesome name="inbox" size={36} color="#cbd5e1" />
                       <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
                         No active receivables or liabilities
@@ -413,7 +413,7 @@ export default function DebtsScreen() {
               )}
 
               {statusFilter === 'ACTIVE' && chartData.length > 0 && (
-                <View className="bg-white dark:bg-[#0f172a] p-6 rounded-2xl border border-slate-200 shadow-sm items-center">
+                <View className="bg-white dark:bg-[#0f172a] p-6 rounded-[12px] border border-slate-200 shadow-sm items-center">
                   <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
                     {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
                   </Text>

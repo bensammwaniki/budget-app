@@ -67,7 +67,7 @@ export default function PrivacyPolicyScreen() {
                     <Text className="text-slate-600 dark:text-slate-400 text-sm leading-6 mb-3">
                         The developer of Fanga Budget does not collect, track, or sell your personal information.
                     </Text>
-                    <View className="pl-2 border-l-2 border-slate-200 dark:border-slate-700 ml-1">
+                    <View className="pl-2 border-l border-slate-200 dark:border-slate-700 ml-1">
                         <Text className="text-slate-600 dark:text-slate-400 text-xs mb-2">• We do not track your location.</Text>
                         <Text className="text-slate-600 dark:text-slate-400 text-xs mb-2">• We do not read your SMS messages for any purpose other than local transaction categorization.</Text>
                         <Text className="text-slate-600 dark:text-slate-400 text-xs">• We do not have access to your bank credentials.</Text>

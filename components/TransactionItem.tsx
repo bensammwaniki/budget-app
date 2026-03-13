@@ -50,7 +50,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
 
     return (
         <TouchableOpacity
-            className="flex-row items-center bg-white dark:bg-[#1e293b] mx-6 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm mb-4 active:opacity-70"
+            className="flex-row items-center bg-white dark:bg-[#1e293b] mx-6 p-4 rounded-[12px] border border-gray-100 dark:border-slate-800 shadow-sm mb-4 active:opacity-70"
             onPress={() => onPress(tx)}
         >
             <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 border ${isBankTransaction

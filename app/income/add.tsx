@@ -211,7 +211,7 @@ export default function AddIncomeSourceScreen() {
                             <TouchableOpacity
                                 key={color}
                                 onPress={() => setSelectedColor(color)}
-                                className="w-8 h-8 rounded-full items-center justify-center border-2"
+                                className="w-8 h-8 rounded-full items-center justify-center border"
                                 style={{
                                     backgroundColor: color,
                                     borderColor: selectedColor === color ? (isDark ? 'white' : 'black') : 'transparent'

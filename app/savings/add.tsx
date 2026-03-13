@@ -161,11 +161,11 @@ export default function AddGoalScreen() {
                     keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 >
                     {/* Form Wrapper */}
-                    <View className="bg-white dark:bg-[#0f172a] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+                    <View className="bg-white dark:bg-[#0f172a] rounded-[12px] p-6 border border-slate-100 dark:border-slate-800">
 
                     {/* Goal Name */}
                     <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">What are you saving for ?</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
                         <Text className="text-slate-400 font-bold mr-1">GOAL  </Text>
                         <TextInput
                             className="flex-1 text-slate-900 dark:text-white font-semibold text-[14px]"
@@ -180,7 +180,7 @@ export default function AddGoalScreen() {
 
                     {/* Target Amount */}
                     <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Target Amount (KES)</Text>
-                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
+                    <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
                         <Text className="text-slate-400 font-bold mr-2">KES    </Text>
                         <TextInput
                             className="flex-1 text-slate-900 dark:text-white font-semibold text-[16px]"
@@ -196,7 +196,7 @@ export default function AddGoalScreen() {
                     {/* Target Date */}
                     <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Target Date (Optional)</Text>
                     <TouchableOpacity
-                        className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 border border-slate-200 dark:border-slate-700"
+                        className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-[12px] p-4 mb-6 border border-slate-200 dark:border-slate-700"
                         onPress={() => setShowDatePicker(true)}
                     >
                         <FontAwesome name="calendar" size={16} color="#94a3b8" />
@@ -217,7 +217,7 @@ export default function AddGoalScreen() {
                             <TouchableOpacity
                                 key={color}
                                 onPress={() => setSelectedColor(color)}
-                                className="w-8 h-8 rounded-full items-center justify-center border-2"
+                                className="w-8 h-8 rounded-full items-center justify-center border"
                                 style={{
                                     backgroundColor: color,
                                     borderColor: selectedColor === color ? (colorScheme === 'dark' ? 'white' : 'black') : 'transparent'
@@ -232,7 +232,7 @@ export default function AddGoalScreen() {
 
                     {/* Save Button */}
                     <TouchableOpacity
-                        className="bg-blue-600 p-4 rounded-xl flex-row justify-center items-center shadow-lg shadow-blue-500/30"
+                        className="bg-blue-600 p-4 rounded-[12px] flex-row justify-center items-center"
                         onPress={handleSave}
                         disabled={loading}
                         style={{ backgroundColor: selectedColor }} // Match the theme color

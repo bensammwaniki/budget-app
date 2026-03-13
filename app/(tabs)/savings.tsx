@@ -67,7 +67,7 @@ export default function SavingsScreen() {
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push(`/savings/${item.id}`)}
-                className="bg-white dark:bg-[#1e293b] p-3 rounded-2xl mb-4 mx-1 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden"
+                className="bg-white dark:bg-[#1e293b] p-3 rounded-[12px] mb-4 mx-1 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden"
             >
                 <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: goalColor }} />
                 <View className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10" style={{ backgroundColor: goalColor }} />
@@ -96,7 +96,7 @@ export default function SavingsScreen() {
                                     strokeDashoffset={strokeDashoffset}
                                 />
                             </Svg>
-                            <View className="w-9 h-9 rounded-xl items-center justify-center" style={{ backgroundColor: `${goalColor}20` }}>
+                            <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: `${goalColor}20` }}>
                                 <Image
                                     source={require('../../assets/svg/savings-piggy.svg')}
                                     style={{ width: 20, height: 20 }}
@@ -190,7 +190,7 @@ export default function SavingsScreen() {
             </View>
 
             {/* Overall Summary Card */}
-            <View className="mx-6 mt-4 mb-6 bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-500/20 overflow-hidden relative">
+            <View className="mx-6 mt-4 mb-6 bg-blue-600 rounded-[12px] p-6 shadow-xl shadow-blue-500/20 overflow-hidden relative">
                 <View className="absolute right-[-20] top-[-20] opacity-10">
                     <FontAwesome name="bank" size={150} color="white" />
                 </View>
@@ -218,7 +218,7 @@ export default function SavingsScreen() {
             </View>
 
             {goals.length === 0 ? (
-                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-slate-200 dark:border-slate-800">
                     <Image
                         source={require('../../assets/svg/savings.svg')}
                         style={{ width: 18, height: 18 }}

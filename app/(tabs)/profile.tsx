@@ -11,9 +11,20 @@ import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native
 import AddCategoryModal from '../../components/AddCategoryModal';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories, getUserSettings, initDatabase, saveUserSettings } from '../../services/database';
-import { exportFinancialCsv } from '../../services/exportService';
+import { exportFinancialSpreadsheet, ExportPeriod } from '../../services/exportService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
+
+const EXPORT_PERIOD_OPTIONS: { key: ExportPeriod; label: string; description: string }[] = [
+    { key: 'THIS_MONTH', label: 'This Month', description: 'Current month only' },
+    { key: 'LAST_MONTH', label: 'Last Month', description: 'Previous full month' },
+    { key: 'LAST_3_MONTHS', label: 'Last 3 Months', description: 'Current month + previous 2' },
+    { key: 'CURRENT_YEAR', label: 'Current Year', description: 'From January to today' },
+    { key: 'ALL_TIME', label: 'All Time', description: 'Everything in the app' },
+];
+
+const periodLabel = (period: ExportPeriod): string =>
+    EXPORT_PERIOD_OPTIONS.find((p) => p.key === period)?.label || 'All Time';
 
 export default function ProfileScreen() {
     const { signOut, user, phoneNumber, updateUserProfile } = useAuth();
@@ -54,7 +65,9 @@ export default function ProfileScreen() {
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
     const [showSmsDatePicker, setShowSmsDatePicker] = useState(false);
     const [isThemeSwitching, setIsThemeSwitching] = useState(false);
-    const [isExportingCsv, setIsExportingCsv] = useState(false);
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
+    const [exportPeriodModalVisible, setExportPeriodModalVisible] = useState(false);
+    const [selectedExportPeriod, setSelectedExportPeriod] = useState<ExportPeriod>('THIS_MONTH');
     const themeToggleLockRef = useRef(false);
 
     const handleToggleTheme = useCallback(() => {
@@ -215,22 +228,32 @@ export default function ProfileScreen() {
         );
     };
 
-    const handleExportCsv = async () => {
-        if (isExportingCsv) return;
+    const handleExportExcel = async () => {
+        if (isExportingExcel) return;
         try {
-            setIsExportingCsv(true);
-            const fileUri = await exportFinancialCsv();
+            setIsExportingExcel(true);
+            const fileUri = await exportFinancialSpreadsheet(selectedExportPeriod);
 
             Alert.alert(
                 'Export Complete',
-                `CSV downloaded successfully.\n\nFile reference:\n${fileUri}`
+                `Excel (.xlsx) export completed.\n\nPeriod: ${periodLabel(selectedExportPeriod)}\nFile:\n${fileUri}`
             );
         } catch (error: any) {
             console.error('Export failed:', error);
-            Alert.alert('Export Failed', error?.message || 'Could not export CSV.');
+            Alert.alert('Export Failed', error?.message || 'Could not export Excel file.');
         } finally {
-            setIsExportingCsv(false);
+            setIsExportingExcel(false);
         }
+    };
+
+    const handleOpenExportModal = () => {
+        if (isExportingExcel) return;
+        setExportPeriodModalVisible(true);
+    };
+
+    const handleConfirmExport = async () => {
+        setExportPeriodModalVisible(false);
+        await handleExportExcel();
     };
 
     return (
@@ -243,8 +266,8 @@ export default function ProfileScreen() {
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
-            <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[24px] border-b border-gray-200 dark:border-slate-800 shadow-lg">
-                <View className="w-24 h-24 bg-gray-100 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[12px] border-b border-gray-200 dark:border-slate-800">
+                <View className="w-24 h-24 bg-gray-100 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {user?.photoURL ? (
                         <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     ) : (
@@ -258,7 +281,7 @@ export default function ProfileScreen() {
 
             {/* Profile Options List */}
             <View className="px-6 mt-8">
-                <View className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+                <View className="bg-white dark:bg-[#1e293b] rounded-[12px] border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {/* Dark Mode Toggle */}
                     <View className="flex-row items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
                         <TouchableOpacity
@@ -284,7 +307,7 @@ export default function ProfileScreen() {
                     <View className="p-3 flex-row flex-wrap justify-between">
                         {[
                             { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/(tabs)/income') },
-                            { icon: require('../../assets/svg/budget.svg'), label: 'Create Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
+                            { icon: require('../../assets/svg/budget.svg'), label: 'Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                             { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
                             { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                             {
@@ -297,11 +320,11 @@ export default function ProfileScreen() {
                             },
                             {
                                 icon: require('../../assets/svg/graph.svg'),
-                                label: 'Export CSV',
+                                label: 'Export Excel',
                                 color: '#0ea5e9',
-                                action: handleExportCsv,
-                                value: isExportingCsv ? 'Generating export...' : 'Download full dataset',
-                                disabled: isExportingCsv,
+                                action: handleOpenExportModal,
+                                value: isExportingExcel ? 'Generating export...' : `Period: ${periodLabel(selectedExportPeriod)}`,
+                                disabled: isExportingExcel,
                             },
                             { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
                             { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
@@ -310,7 +333,7 @@ export default function ProfileScreen() {
                                 key={index}
                                 onPress={item.action ? item.action : undefined}
                                 disabled={!!item.disabled}
-                                className={`w-[48.5%] mb-3 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a] ${item.disabled ? 'opacity-60' : ''}`}
+                                className={`w-[48.5%] mb-3 p-4 rounded-[10px] border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a] ${item.disabled ? 'opacity-60' : ''}`}
                             >
                                 <View className="flex-row justify-between items-start mb-3">
                                     <View className="w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-slate-700">
@@ -342,13 +365,13 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden p-4">
+                    <View className="bg-white dark:bg-[#1e293b] rounded-[12px] border border-gray-200 dark:border-slate-700 overflow-hidden p-4">
                         {categories.filter(c => !!c.isCustom).length === 0 ? (
                             <Text className="text-slate-500 dark:text-slate-400 text-center py-4">No custom categories yet</Text>
                         ) : (
                             <View className="gap-3">
                                 {categories.filter(c => !!c.isCustom).map((cat) => (
-                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-xl border border-gray-100 dark:border-slate-800">
+                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-[12px] border border-gray-100 dark:border-slate-800">
                                         <View className="flex-row items-center flex-1">
                                             <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
                                                 <FontAwesome name={cat.icon as any} size={16} color={cat.color} />
@@ -391,7 +414,7 @@ export default function ProfileScreen() {
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
                     >
                         <View className="flex-1 justify-end bg-black/50">
-                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[32px] p-6 h-[85%]">
+                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[12px] p-6 h-[85%]">
                                 <View className="flex-row justify-between items-center mb-6">
                                     <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
                                     <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
@@ -412,7 +435,7 @@ export default function ProfileScreen() {
                                 >
                                     {/* Profile Image */}
                                     <View className="items-center mb-8">
-                                        <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                                        <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
                                             {editImage ? (
                                                 <Image source={{ uri: editImage }} className="w-full h-full" style={{ width: '100%', height: '100%' }} />
                                             ) : (
@@ -445,7 +468,7 @@ export default function ProfileScreen() {
                                             onChangeText={setEditName}
                                             placeholder="Enter your name"
                                             placeholderTextColor="#94a3b8"
-                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
+                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-[12px] text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
                                         />
                                     </View>
 
@@ -458,7 +481,7 @@ export default function ProfileScreen() {
                                             placeholder="e.g., +254 712 345 678"
                                             placeholderTextColor="#94a3b8"
                                             keyboardType="phone-pad"
-                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
+                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-[12px] text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
                                         />
                                     </View>
 
@@ -466,7 +489,7 @@ export default function ProfileScreen() {
                                     <TouchableOpacity
                                         onPress={handleUpdateProfile}
                                         disabled={isUpdating}
-                                        className={`bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30 ${isUpdating ? 'opacity-50' : ''}`}
+                                        className={`bg-blue-600 p-4 rounded-[12px] mb-8 ${isUpdating ? 'opacity-50' : ''}`}
                                     >
                                         {isUpdating ? (
                                             <ActivityIndicator color="white" />
@@ -483,7 +506,7 @@ export default function ProfileScreen() {
                 {/* Sign Out Button */}
                 <TouchableOpacity
                     onPress={handleSignOut}
-                    className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 rounded-2xl p-4 mt-8 mb-8 flex-row items-center justify-center"
+                    className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 rounded-[12px] p-4 mt-8 mb-8 flex-row items-center justify-center"
                 >
                     <FontAwesome name="sign-out" size={20} color="#ef4444" />
                     <Text className="text-red-500 font-bold text-base ml-2">Sign Out</Text>
@@ -495,7 +518,7 @@ export default function ProfileScreen() {
             {/* Financial Month Day Picker Modal */}
             <Modal visible={dayPickerVisible} transparent animationType="fade">
                 <View className="flex-1 justify-center items-center bg-black/60 px-6">
-                    <View className="bg-white dark:bg-slate-900 w-full rounded-3xl overflow-hidden shadow-2xl">
+                    <View className="bg-white dark:bg-slate-900 w-full rounded-[12px] overflow-hidden">
                         <View className="p-6 border-b border-gray-100 dark:border-slate-800">
                             <Text className="text-xl font-bold text-slate-900 dark:text-white">Month Start Day</Text>
                             <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">Select the day your financial month begins.</Text>
@@ -509,7 +532,7 @@ export default function ProfileScreen() {
                                         await saveUserSettings('financial_month_start_day', day.toString());
                                         setDayPickerVisible(false);
                                     }}
-                                    className={`w-[22%] mb-3 aspect-square items-center justify-center rounded-2xl border ${financialMonthStart === day ? 'bg-blue-500 border-blue-500' : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700'
+                                    className={`w-[22%] mb-3 aspect-square items-center justify-center rounded-[12px] border ${financialMonthStart === day ? 'bg-blue-500 border-blue-500' : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700'
                                         }`}
                                 >
                                     <Text className={`font-bold ${financialMonthStart === day ? 'text-white' : 'text-slate-800 dark:text-white'}`}>{day}</Text>
@@ -522,6 +545,71 @@ export default function ProfileScreen() {
                         >
                             <Text className="text-slate-600 dark:text-slate-300 font-bold">Cancel</Text>
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Excel Export Period Picker */}
+            <Modal
+                visible={exportPeriodModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setExportPeriodModalVisible(false)}
+            >
+                <View className="flex-1 justify-end bg-black/50 p-6">
+                    <View className="bg-white dark:bg-slate-900 rounded-[12px] border border-gray-200 dark:border-slate-700 p-5">
+                        <View className="flex-row items-center justify-between mb-4">
+                            <Text className="text-slate-900 dark:text-white text-lg font-bold">Export Excel (.xlsx)</Text>
+                            <TouchableOpacity onPress={() => setExportPeriodModalVisible(false)} className="p-1">
+                                <ExpoImage
+                                    source={require('../../assets/svg/close.svg')}
+                                    style={{ width: 14, height: 14 }}
+                                    contentFit="contain"
+                                    tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text className="text-slate-500 dark:text-slate-400 text-xs mb-3">
+                            Choose a period. Export creates one Excel workbook with multiple sheets.
+                        </Text>
+
+                        <View className="gap-2 mb-5">
+                            {EXPORT_PERIOD_OPTIONS.map((option) => {
+                                const selected = option.key === selectedExportPeriod;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.key}
+                                        onPress={() => setSelectedExportPeriod(option.key)}
+                                        className={`p-3 rounded-[12px] border ${selected
+                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                                            : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
+                                            }`}
+                                    >
+                                        <Text className={`font-semibold ${selected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-white'}`}>
+                                            {option.label}
+                                        </Text>
+                                        <Text className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{option.description}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        <View className="flex-row gap-3">
+                            <TouchableOpacity
+                                onPress={() => setExportPeriodModalVisible(false)}
+                                className="flex-1 py-3 rounded-[12px] bg-gray-100 dark:bg-slate-800 items-center"
+                            >
+                                <Text className="text-slate-700 dark:text-slate-200 font-semibold">Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={handleConfirmExport}
+                                disabled={isExportingExcel}
+                                className={`flex-1 py-3 rounded-[12px] items-center ${isExportingExcel ? 'bg-blue-400' : 'bg-blue-600'}`}
+                            >
+                                <Text className="text-white font-semibold">Export</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>

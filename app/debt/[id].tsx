@@ -244,7 +244,7 @@ export default function DebtDetailScreen() {
 
                 <View className="p-6">
                     {/* Status Card */}
-                    <View className="bg-white dark:bg-[#0f172a] p-6 rounded-3xl shadow-sm mb-6 relative overflow-hidden">
+                    <View className="bg-white dark:bg-[#0f172a] p-6 rounded-[12px] mb-6 relative overflow-hidden border border-slate-100 dark:border-slate-800">
                         <View className={`absolute right-0 top-0 w-24 h-24 rounded-bl-full opacity-10 ${debt.type === 'LIABILITY' ? 'bg-red-500' : 'bg-green-500'}`} />
 
                         <View className="flex-row justify-between items-start">
@@ -319,7 +319,7 @@ export default function DebtDetailScreen() {
                     {debt.status === 'ACTIVE' && debt.type !== 'OVERDRAFT' && (
                         <View className="flex-row gap-3 mb-8">
                             <TouchableOpacity
-                                className="bg-blue-600 flex-1 p-3 rounded-xl items-center shadow-lg shadow-blue-500/30 flex-row justify-center gap-2"
+                                className="bg-blue-600 flex-1 p-3 rounded-[12px] items-center flex-row justify-center gap-2"
                                 onPress={openLinkModal}
                                 disabled={openingLinkModal || modalVisible}
                             >
@@ -328,7 +328,7 @@ export default function DebtDetailScreen() {
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                className="bg-white dark:bg-slate-800 flex-1 p-3 rounded-xl items-center shadow-sm border border-slate-200 dark:border-slate-700 flex-row justify-center gap-2"
+                                className="bg-white dark:bg-slate-800 flex-1 p-3 rounded-[12px] items-center border border-slate-200 dark:border-slate-700 flex-row justify-center gap-2"
                                 onPress={handleSettle}
                             >
                                 <Image
@@ -350,7 +350,7 @@ export default function DebtDetailScreen() {
                             {paymentHistory.map((payment) => (
                                 <View
                                     key={payment.payment_id}
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-100 dark:border-slate-800"
+                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800"
                                 >
                                     <View className="flex-row justify-between items-start ">
                                         <View className="flex-1">
@@ -384,7 +384,7 @@ export default function DebtDetailScreen() {
                             ))}
                         </View>
                     ) : (
-                        <View className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl">
+                        <View className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800">
                             <Text className="text-slate-400 text-center py-4">No payments linked yet.</Text>
                         </View>
                     )}
@@ -408,7 +408,7 @@ export default function DebtDetailScreen() {
 
                     {/* Search Bar */}
                     <View className="px-4 py-2 border-b border-gray-200 dark:border-slate-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-[12px] border border-slate-200 dark:border-slate-700">
                             <Image
                                 source={require('../../assets/svg/search.svg')}
                                 style={{ width: 26, height: 26 }}
@@ -457,7 +457,7 @@ export default function DebtDetailScreen() {
                             }
                             renderItem={({ item }) => (
                                 <TouchableOpacity
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-xl mb-3 shadow-sm border border-slate-100 dark:border-slate-800"
+                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 border border-slate-100 dark:border-slate-800"
                                     onPress={() => handleLink(item.id)}
                                 >
                                     <View className="flex-row justify-between items-center mb-1">

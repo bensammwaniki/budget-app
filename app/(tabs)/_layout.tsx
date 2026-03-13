@@ -91,7 +91,7 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <View
-              className={`rounded-full overflow-hidden border-2 ${focused ? 'border-blue-500' : 'border-transparent'
+              className={`rounded-full overflow-hidden border ${focused ? 'border-blue-500' : 'border-transparent'
                 }`}
               style={{ padding: 1 }}
             >

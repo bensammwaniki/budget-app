@@ -87,7 +87,7 @@ export default function IncomeScreen() {
             <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => router.push(`/income/${item.id}`)}
-                className="bg-white dark:bg-[#1e293b] p-5 rounded-3xl mb-4 border border-slate-100 dark:border-slate-800 overflow-hidden relative"
+                className="bg-white dark:bg-[#1e293b] p-5 rounded-[12px] mb-4 border border-slate-100 dark:border-slate-800 overflow-hidden relative"
             >
                 <View className="absolute top-0 right-0 w-28 h-28 rounded-bl-full opacity-10" style={{ backgroundColor: themeColor }} />
 
@@ -173,7 +173,7 @@ export default function IncomeScreen() {
             </View>
 
             {/* Summary Card */}
-            <View className="mx-6 mt-4 mb-6 bg-emerald-600 rounded-3xl p-6 shadow-xl shadow-emerald-500/20 overflow-hidden relative">
+            <View className="mx-6 mt-4 mb-6 bg-emerald-600 rounded-[12px] p-6 shadow-xl shadow-emerald-500/20 overflow-hidden relative">
                 <View className="absolute right-[-20] top-[-20] opacity-10">
                     <FontAwesome name="line-chart" size={150} color="white" />
                 </View>
@@ -214,7 +214,7 @@ export default function IncomeScreen() {
                         />
                     }
                 >
-                    <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-slate-200 dark:border-slate-800">
                         <Image
                             source={require('../../assets/svg/income.svg')}
                             style={{ width: 24, height: 24 }}

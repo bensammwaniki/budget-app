@@ -651,7 +651,7 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
-      <View className="px-6 pt-16 pb-4 bg-white dark:bg-[#0f172a] rounded-b-[12px]">
+      <View className="px-6 pt-16 pb-4 bg-white dark:bg-[#0f172a] rounded-b-[10px]">
         <View className="flex-row justify-between items-center mb-4">
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
@@ -667,7 +667,7 @@ export default function HomeScreen() {
                     style={{ transform: [{ scale: 0.6 }] }}
                   />
                   <Text className="text-red-400 dark:text-red-400 text-[10px] font-bold ml-0.5">
-                    Please wait, Syncing SMS...
+                    Syncing SMS...
                   </Text>
                 </View>
               )}
@@ -678,7 +678,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={openCashModal}
             disabled={cashModalVisible || savingCashTx}
-            className="ml-3 px-4 py-2 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 flex-row items-center"
+            className="ml-3 px-4 py-2 rounded-[12px] bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 flex-row items-center"
           >
             <FontAwesome name="plus" size={12} color={isDark ? '#93c5fd' : '#2563eb'} />
             <Text className="ml-2 text-xs font-bold text-blue-700 dark:text-blue-200 uppercase">Add Cash TXN</Text>
@@ -686,7 +686,7 @@ export default function HomeScreen() {
         </View>
 
         {showTotalBalanceCard && (
-          <View className="bg-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
+          <View className="bg-blue-600 rounded-[12px] p-6 shadow-xl shadow-blue-900/20 overflow-hidden relative">
             <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
             <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
 
@@ -758,7 +758,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          <View className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 p-5 rounded-2xl border border-purple-200 dark:border-purple-800">
+          <View className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 p-5 rounded-[12px] border border-purple-200 dark:border-purple-800">
             <View className="flex-row justify-between items-start mb-1">
               <View className="flex-1">
                 <Text className="text-purple-800 dark:text-purple-200 font-bold text-base mb-1">Total Debt</Text>
@@ -777,7 +777,7 @@ export default function HomeScreen() {
 
 
             {debtSummary.activeDebts > 0 && (
-              <View className="flex-row justify-between items-center mb-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+              <View className="flex-row justify-between items-center mb-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[12px]">
                 <View>
                   <Text className="text-slate-500 text-xs font-bold uppercase mb-1">Debt Summary</Text>
                   <View className="flex-row items-center gap-4">
@@ -806,8 +806,8 @@ export default function HomeScreen() {
       )}
 
       {/* search bar */}
-      <View className="mx-4 mt-6">
-        <View className="h-12 px-3 rounded-[12px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] flex-row items-center shadow-sm">
+      <View className="mx-6 mt-6">
+        <View className="h-12 px-3 rounded-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] flex-row items-center shadow-sm">
           <View className="w-6 h-6 items-center justify-center mr-2">
             <Image
               source={require('../../assets/svg/search.svg')}
@@ -1058,7 +1058,7 @@ export default function HomeScreen() {
                     key={goal.id}
                     onPress={() => handleConfirmLinkToGoal(goal.id)}
                     disabled={linkingGoal === goal.id}
-                    className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-2xl flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
+                    className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-[12px] flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
                   >
                     <View className="flex-row items-center">
                       <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${goal.color || '#3b82f6'}20` }}>
@@ -1103,7 +1103,7 @@ export default function HomeScreen() {
                   key={src.id}
                   onPress={() => handleConfirmLinkToIncome(src.id)}
                   disabled={linkingIncome === src.id}
-                  className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-2xl flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
+                  className="bg-slate-50 dark:bg-[#1e293b] p-4 rounded-[12px] flex-row justify-between items-center mb-2 border border-slate-100 dark:border-slate-800"
                 >
                   <View className="flex-row items-center">
                     <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${src.color || '#10b981'}20` }}>
@@ -1152,7 +1152,7 @@ export default function HomeScreen() {
                   }
                   setSelectedTransaction(null);
                 }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
               >
                 <View className="flex-row items-center">
                   <View className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 items-center justify-center mr-3">
@@ -1184,7 +1184,7 @@ export default function HomeScreen() {
                   }
                   setSelectedTransaction(null);
                 }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
               >
                 <View className="flex-row items-center">
                   <View className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 items-center justify-center mr-3">
@@ -1216,7 +1216,7 @@ export default function HomeScreen() {
                   }
                   setSelectedTransaction(null);
                 }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex-row justify-between items-center"
+                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
               >
                 <View className="flex-row items-center">
                   <View className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 items-center justify-center mr-3">
@@ -1248,7 +1248,7 @@ export default function HomeScreen() {
                   }
                   setSelectedTransaction(null);
                 }}
-                className="bg-slate-50 dark:bg-slate-800  p-4 rounded-2xl flex-row justify-between items-center"
+                className="bg-slate-50 dark:bg-slate-800  p-4 rounded-[12px] flex-row justify-between items-center"
               >
                 <View className="flex-row items-center" >
                   <View className="w-8 h-8 rounded-lg bg-green-100 dark:bg-purple-900/30 items-center justify-center mr-3">

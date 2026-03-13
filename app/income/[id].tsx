@@ -332,7 +332,7 @@ export default function IncomeDetailScreen() {
                     <TouchableOpacity
                         onPress={fetchLinkable}
                         disabled={openingLinkModal || showModal}
-                        className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2 border-2"
+                        className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2 border"
                         style={{ borderColor: themeColor, backgroundColor: `${themeColor}15` }}
                     >
                         <Image
