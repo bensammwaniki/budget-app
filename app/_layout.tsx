@@ -8,35 +8,58 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CustomAlert from "../components/CustomAlert";
 import { PermissionGuard } from "../components/PermissionGuard";
 import { AlertProvider } from "../context/AlertContext";
+import { AppLockProvider, useAppLock } from "../context/AppLockContext";
 import { AuthProvider, useAuth } from "../services/AuthContext";
 import { ScrollProvider } from "../services/ScrollContext";
 import { initDatabase } from "../services/core/db";
 
 function RootLayoutContent() {
   const { user, loading: authLoading } = useAuth();
+  const { isSecurityReady, recordActivity } = useAppLock();
   const segments = useSegments();
   const router = useRouter();
+  const inAuthGroup = segments[0] === "(auth)";
 
   useEffect(() => {
     if (authLoading) return;
-
-    const inAuthGroup = segments[0] === "(auth)";
 
     if (!user && !inAuthGroup) {
       router.replace("/login");
     } else if (user && inAuthGroup) {
       router.replace("/(tabs)");
     }
-  }, [user, authLoading, segments, router]);
+  }, [user, authLoading, inAuthGroup, router]);
+
+  useEffect(() => {
+    recordActivity();
+  }, [recordActivity, segments]);
 
   // ⚠️ Always render Stack.
   // Do NOT block navigation tree.
   return (
     <PermissionGuard>
       <ScrollProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <View
+          style={{ flex: 1 }}
+          onTouchStart={recordActivity}
+          pointerEvents={user && !inAuthGroup && !isSecurityReady ? "none" : "auto"}
+        >
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
       </ScrollProvider>
     </PermissionGuard>
+  );
+}
+
+function LockAwareTree() {
+  const segments = useSegments();
+  const inAuthGroup = segments[0] === "(auth)";
+
+  return (
+    <AppLockProvider isAuthRoute={inAuthGroup}>
+      <RootLayoutContent />
+      <CustomAlert />
+    </AppLockProvider>
   );
 }
 
@@ -53,8 +76,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <AlertProvider>
-          <RootLayoutContent />
-          <CustomAlert />
+          <LockAwareTree />
 
           {dbLoading && (
             <View

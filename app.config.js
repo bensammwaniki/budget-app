@@ -12,6 +12,9 @@ export default {
         "newArchEnabled": true,
         "ios": {
             "supportsTablet": true,
+            "config": {
+                "usesNonExemptEncryption": false
+            },
             "bundleIdentifier": IS_DEV ? "com.bensammwaniki.budgetapp.dev" : "com.bensammwaniki.budgetapp"
         },
         "android": {
@@ -50,6 +53,19 @@ export default {
             ],
             "expo-build-properties",
             "expo-sqlite",
+            [
+                "expo-local-authentication",
+                {
+                    "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID to unlock your financial data."
+                }
+            ],
+            [
+                "expo-secure-store",
+                {
+                    "configureAndroidBackup": true,
+                    "faceIDPermission": "Allow $(PRODUCT_NAME) to securely access your Face ID biometric data."
+                }
+            ],
             "expo-web-browser"
         ],
         "experiments": {
