@@ -70,7 +70,7 @@ export default function SignupScreen() {
                     </View>
 
                     {/* Signup Card */}
-                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-xl">
+                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-sm">
 
                         {/* Name Input */}
                         <View className="mb-5">
@@ -145,7 +145,7 @@ export default function SignupScreen() {
 
                         {/* Signup Button */}
                         <TouchableOpacity
-                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50"
+                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-sm"
                             onPress={handleSignup}
                             disabled={loading}
                         >

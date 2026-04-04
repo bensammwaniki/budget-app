@@ -29,15 +29,6 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                 : accountType === 'DEBT'
                     ? 'DEBT'
                     : 'M-PESA';
-    const sourceBadgeClass = isBankTransaction
-        ? 'bg-blue-100 dark:bg-blue-900/30'
-        : accountType === 'CASH'
-            ? 'bg-amber-100 dark:bg-amber-900/30'
-            : accountType === 'BANK'
-                ? 'bg-indigo-100 dark:bg-indigo-900/30'
-                : accountType === 'DEBT'
-                    ? 'bg-rose-100 dark:bg-rose-900/30'
-                    : 'bg-green-100 dark:bg-green-900/30';
     const sourceTextClass = isBankTransaction
         ? 'text-blue-700 dark:text-blue-400'
         : accountType === 'CASH'
@@ -50,29 +41,24 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
 
     return (
         <TouchableOpacity
-            className="flex-row items-center bg-white dark:bg-[#1e293b] mx-6 p-4 rounded-[12px] border border-gray-100 dark:border-slate-800 shadow-sm mb-4 active:opacity-70"
+            className="app-card flex-row items-center mx-4 p-3 mb-3 active:opacity-70"
             onPress={() => onPress(tx)}
         >
-            <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 border ${isBankTransaction
+            <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 border ${isBankTransaction
                 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
                 : 'bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700'
                 }`}>
                 <FontAwesome
                     name={((tx.categoryIcon) || (isBankTransaction ? 'bank' : (tx.type === 'RECEIVED' ? 'arrow-down' : 'shopping-cart'))) as any}
-                    size={18}
+                    size={16}
                     color={tx.categoryColor || (isBankTransaction ? '#2563eb' : (tx.type === 'RECEIVED' ? '#4ade80' : '#94a3b8'))}
                 />
             </View>
             <View className="flex-1">
-                <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>
+                <Text className="text-slate-900 dark:text-white font-semibold text-[15px]" numberOfLines={1}>
                     {tx.recipientName}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
-                    <View className={`px-1.5 py-0.5 rounded mr-2 ${sourceBadgeClass}`}>
-                        <Text className={`text-[8px] font-bold ${sourceTextClass}`}>
-                            {sourceLabel}
-                        </Text>
-                    </View>
                     {tx.categoryName && (
                         <Text className="text-[10px] font-medium mr-2" style={{ color: tx.categoryColor }}>
                             {tx.categoryName}
@@ -83,9 +69,14 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                     </Text>
                 </View>
             </View>
-            <Text className={`font-bold ${tx.type === 'RECEIVED' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
-                {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
-            </Text>
+            <View className="items-end ml-2">
+                <Text className={`font-bold text-[14px] ${tx.type === 'RECEIVED' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
+                    {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
+                </Text>
+                <Text className={`text-[10px] font-semibold mt-1 ${sourceTextClass}`}>
+                    {sourceLabel}
+                </Text>
+            </View>
         </TouchableOpacity>
     );
 };

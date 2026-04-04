@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 // navigation will be imported dynamically in handlers to avoid requiring navigation context at render
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DebtBreakdownChart, { DebtItem } from '../../components/DebtBreakdownChart';
 import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { debtService } from '../../services/debtService';
 import { useScrollVisibility } from '../../services/ScrollContext';
@@ -103,20 +102,6 @@ export default function DebtsScreen() {
     await loadDebts();
   }, [loadDebts]);
 
-  const chartData: DebtItem[] = useMemo(() => {
-    const palette = typeFilter === 'LIABILITY'
-      ? ['#FF6B6B', '#FFD93D', '#FF9F43', '#EE5253', '#A55EEA'] // Red/Orange palette
-      : ['#6BCB77', '#4D96FF', '#10ac84', '#0fbcf9', '#05c46b']; // Green/Blue palette
-
-    return debts
-      .filter((d) => Number(d.currentBalance) > 0)
-      .map((d, index) => ({
-        label: d.name,
-        value: Number(d.currentBalance || 0),
-        color: palette[index % palette.length],
-      }));
-  }, [debts, typeFilter]);
-
   const handleDebtPress = useCallback((debtId: string) => {
     import('expo-router').then(({ router }) => {
       try {
@@ -169,14 +154,14 @@ export default function DebtsScreen() {
     const bgColor = isLiability ? 'bg-red-100 dark:bg-red-900/20' : 'bg-green-100 dark:bg-green-900/20';
     const clampedProgress = Math.max(0, Math.min(progress, 100));
     const ringSize = 44;
-    const strokeWidth = 3.5;
+    const strokeWidth = 2.5;
     const radius = (ringSize - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (clampedProgress / 100) * circumference;
 
     return (
       <TouchableOpacity
-        className="bg-white dark:bg-[#1e293b] p-3 rounded-[12px] mb-4 mx-5 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden"
+        className="app-card p-3 mb-4 mx-5 overflow-hidden"
         onPress={() => handleDebtPress(item.id)}
       >
         <View
@@ -231,23 +216,15 @@ export default function DebtsScreen() {
                   {isLiability ? 'Borrowed From' : 'Owed By'}
                 </Text>
                 {item.interestRate !== undefined && item.interestRate !== null && (
-                  <View className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                    <Text className="text-[8px] text-slate-600 dark:text-slate-300 font-semibold">
-                      {item.interestRate}%
-                    </Text>
-                  </View>
+                  <Text className="text-slate-400 text-[10px] font-medium">
+                    {item.interestRate}% {item.isRevolving ? 'Revolving' : item.isReducingBalance ? 'Reducing' : 'Flat Interest'}
+                  </Text>
                 )}
-                {item.isRevolving ? (
-                  <View className="px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                    <Text className="text-[8px] text-orange-700 dark:text-orange-300 font-semibold">Revolving</Text>
-                  </View>
-                ) : (
-                  <View className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                    <Text className="text-[8px] text-slate-600 dark:text-slate-300 font-semibold">
-                      {item.isReducingBalance ? 'Reducing' : 'Flat Interest'}
-                    </Text>
-                  </View>
-                )}
+                {item.interestRate === undefined || item.interestRate === null ? (
+                  <Text className="text-slate-400 text-[10px] font-medium">
+                    {item.isRevolving ? 'Revolving' : item.isReducingBalance ? 'Reducing' : 'Flat Interest'}
+                  </Text>
+                ) : null}
               </View>
               <Text className="text-slate-900 dark:text-white font-black text-[15px] mt-0.5" numberOfLines={1}>
                 {item.name}
@@ -258,7 +235,7 @@ export default function DebtsScreen() {
           <View className="items-end">
             {item.type !== 'OVERDRAFT' && (
               <TouchableOpacity
-                className="w-7 h-7 rounded-full items-center justify-center mb-3"
+                className="w-7 h-7 rounded-full items-center justify-center mb-5"
                 onPress={(event) => {
                   event.stopPropagation();
                   handleEditDebt(item.id);
@@ -267,35 +244,46 @@ export default function DebtsScreen() {
                 <FontAwesome name="pencil" size={12} color={mainColor} />
               </TouchableOpacity>
             )}
-            <Text className="font-black text-base" style={{ color: mainColor }}>
-              {formatCurrency(projectedFinal > balance ? projectedFinal : balance)}
-            </Text>
-            {projectedFinal > balance && (
-              <Text className="text-[9px] font-bold text-blue-500 uppercase tracking-[1px] -mt-0.5">
-                Projected Total
-              </Text>
-            )}
-            <Text className="text-slate-400 text-[10px] text-right mt-0.5">
-              Original {formatCurrency(originalAmount)}
-            </Text>
           </View>
         </View>
 
         <View className="flex-row flex-wrap gap-1.5 mb-1">
           {dueDateFormatted && (
-            <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-              <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">Due {dueDateFormatted}</Text>
+            <View className="app-pill">
+              <Text className="app-pill-text">Due {dueDateFormatted}</Text>
             </View>
           )}
         </View>
 
-        {!item.isRevolving && (
-          <View className="mt-[-20px] ml-[5px]">
+        <View className="flex-row justify-between items-end gap-3">
+          <View className="flex-row items-center flex-wrap gap-1 ml-[5px] flex-1">
             <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-              Repayment Progress: <Text style={{ color: mainColor }} className="font-bold">{progress.toFixed(1)}%</Text>
+              Paid:
+            </Text>
+            <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+              {formatCurrency(Math.max(0, originalAmount - balance))}
+            </Text>
+            {!item.isRevolving && (
+              <>
+                <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
+                <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Progress:
+                </Text>
+                <Text style={{ color: mainColor }} className="text-[10px] font-semibold">
+                  {progress.toFixed(1)}%
+                </Text>
+              </>
+            )}
+          </View>
+          <View className="items-end">
+            <Text className="font-black text-base" style={{ color: mainColor }}>
+              {formatCurrency(projectedFinal > balance ? projectedFinal : balance)}
+            </Text>
+            <Text className="text-slate-400 text-[10px] text-right mt-0.5">
+              {projectedFinal > balance ? 'Projected total' : `Original ${formatCurrency(originalAmount)}`}
             </Text>
           </View>
-        )}
+        </View>
       </TouchableOpacity>
     );
   }, [handleDebtPress, handleEditDebt, colorScheme]);
@@ -305,7 +293,7 @@ export default function DebtsScreen() {
       className="flex-1 bg-gray-50 dark:bg-[#020617]"
       style={{ paddingTop: insets.top }}
     >
-      <View className="px-6 py-4 flex-row justify-between items-center bg-white dark:bg-[#0f172a] shadow-sm">
+      <View className="px-6 py-4 flex-row justify-between items-center bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800">
         <Text className="text-l font-bold text-slate-900 dark:text-white">
           {typeFilter === 'LIABILITY' ? 'My Debts' : 'All my Loans and Receivables'}
         </Text>
@@ -334,7 +322,7 @@ export default function DebtsScreen() {
         ListHeaderComponent={
           <View className="px-6 mt-4 ">
             {/* Main Tabs (Active vs Paid) */}
-            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 2, borderRadius: 50, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 }}>
+            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 2, borderRadius: 50, marginBottom: 16 }}>
               {(['ACTIVE', 'PAID'] as const).map((f) => (
                 <TouchableOpacity
                   key={f}
@@ -348,79 +336,72 @@ export default function DebtsScreen() {
               ))}
             </View>
 
-            <View className="flex-row gap-4 mb-5">
-              {/* Sub Tabs (Debts vs Assets) - Only show in ACTIVE view */}
-              {statusFilter === 'ACTIVE' && (
-                <View className="flex-col gap-4 mb-5 flex-1">
-
-                  {/* I Owe Card — hidden when nothing is owed */}
+            {statusFilter === 'ACTIVE' && (
+              <>
+                <View className="flex-row gap-3 mb-4">
                   {liabilityCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('LIABILITY')}
-                      className={`rounded-[12px] p-5 border shadow-sm ${typeFilter === 'LIABILITY'
-                        ? 'bg-red-500 border-red-500'
-                        : 'bg-white border-slate-200'
+                      className={`flex-1 rounded-[12px] p-4 overflow-hidden relative ${typeFilter === 'LIABILITY'
+                        ? 'bg-red-500'
+                        : 'bg-white dark:bg-[#0f172a]'
                         }`}
                     >
-                      <Text className={`text-sm font-medium ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500'}`}>
-                        Total I Owe
+                      <View className="absolute right-[-10] top-[-10] opacity-10">
+                        <FontAwesome name="warning" size={72} color={typeFilter === 'LIABILITY' ? '#fff' : '#ef4444'} />
+                      </View>
+                      <Text className={`text-[10px] font-bold uppercase tracking-[1px] ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Debt Overview
                       </Text>
-                      <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '900', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
                         {formatCurrency(liabilityTotal)}
                       </Text>
-                      <Text className={`mt-2 text-sm ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`}>
-                        {liabilityCount} {statusFilter === 'ACTIVE' ? 'active' : ''} {liabilityCount === 1 ? 'debt' : 'debts'}
+                      <Text className={`mt-3 text-[11px] ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`}>
+                        {liabilityCount} {liabilityCount === 1 ? 'debt' : 'debts'}
                       </Text>
                     </TouchableOpacity>
                   )}
 
-                  {/* Owed To Me Card — hidden when nothing is owed */}
                   {receivableCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('RECEIVABLE')}
-                      className={`rounded-[12px] p-5 border shadow-sm ${typeFilter === 'RECEIVABLE'
-                        ? 'bg-green-500 border-green-500'
-                        : 'bg-white border-slate-200'
-                        }`}>
-                      <Text className={`text-sm font-medium ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500'}`}>
-                        Total Owed To Me
+                      className={`flex-1 rounded-[12px] p-4 overflow-hidden relative ${typeFilter === 'RECEIVABLE'
+                        ? 'bg-green-500'
+                        : 'bg-white dark:bg-[#0f172a]'
+                        }`}
+                    >
+                      <View className="absolute right-[-10] top-[-10] opacity-10">
+                        <FontAwesome name="arrow-circle-down" size={72} color={typeFilter === 'RECEIVABLE' ? '#fff' : '#22c55e'} />
+                      </View>
+                      <Text className={`text-[10px] font-bold uppercase tracking-[1px] ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Receivables Overview
                       </Text>
-                      <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '900', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
                         {formatCurrency(receivableTotal)}
                       </Text>
-                      <Text className={`mt-2 text-sm ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
-                        {receivableCount} {statusFilter === 'ACTIVE' ? (receivableCount === 1 ? 'person owes' : 'people owe') : 'past'} you
+                      <Text className={`mt-3 text-[11px] ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
+                        {receivableCount} {receivableCount === 1 ? 'person owes' : 'people owe'}
                       </Text>
                     </TouchableOpacity>
                   )}
-
-                  {/* Empty state — shown when both counts are zero */}
-                  {liabilityCount === 0 && receivableCount === 0 && (
-                    <View className="w-full items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-slate-200 dark:border-slate-800">
-                      <FontAwesome name="inbox" size={36} color="#cbd5e1" />
-                      <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
-                        No active receivables or liabilities
-                      </Text>
-                      <Text className="text-slate-400 text-sm mt-1 text-center">
-                        Press the{' '}
-                        <Text className="font-bold text-blue-500">+</Text>
-                        {' '}button to add a debt or loan.
-                      </Text>
-                    </View>
-                  )}
-
                 </View>
-              )}
 
-              {statusFilter === 'ACTIVE' && chartData.length > 0 && (
-                <View className="bg-white dark:bg-[#0f172a] p-6 rounded-[12px] border border-slate-200 shadow-sm items-center">
-                  <Text className="text-slate-500 text-xs font-bold uppercase mb-4 self-start">
-                    {typeFilter === 'LIABILITY' ? 'Debt Breakdown' : 'Receivables Portfolio'}
-                  </Text>
-                  <DebtBreakdownChart data={chartData} />
-                </View>
-              )}
-            </View>
+                {liabilityCount === 0 && receivableCount === 0 && (
+                  <View className="app-card-muted w-full items-center justify-center py-8 px-4 mb-4">
+                    <FontAwesome name="inbox" size={36} color="#cbd5e1" />
+                    <Text className="text-slate-700 dark:text-white font-bold text-base mt-4 text-center">
+                      No active receivables or liabilities
+                    </Text>
+                    <Text className="text-slate-400 text-sm mt-1 text-center">
+                      Press the{' '}
+                      <Text className="font-bold text-blue-500">+</Text>
+                      {' '}button to add a debt or loan.
+                    </Text>
+                  </View>
+                )}
+
+              </>
+            )}
 
           </View>
         }

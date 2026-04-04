@@ -204,7 +204,7 @@ export default function AutomationListScreen() {
 
             <TouchableOpacity
                 onPress={() => router.push('/automation/create')}
-                className="absolute right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg shadow-blue-600/30"
+                className="absolute right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-sm"
                 style={{ bottom: 24 + insets.bottom }}
             >
                 <Image

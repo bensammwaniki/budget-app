@@ -95,7 +95,7 @@ export default function LoginScreen() {
                     </View>
 
                     {/* Login Card */}
-                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-lg">
+                    <View className="w-full max-w-md bg-white dark:bg-[#1e293b] rounded-3xl p-8 border border-gray-200 dark:border-slate-700 shadow-sm">
                         <Text className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">Welcome Back</Text>
                         <Text className="text-slate-500 dark:text-slate-400 mb-8">Sign in to access your dashboard</Text>
 
@@ -151,7 +151,7 @@ export default function LoginScreen() {
 
                         {/* Login Button */}
                         <TouchableOpacity
-                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50"
+                            className="w-full bg-blue-600 rounded-xl py-4 items-center mb-6 shadow-sm"
                             onPress={handleLogin}
                             disabled={loading}
                         >

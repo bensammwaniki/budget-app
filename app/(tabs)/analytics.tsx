@@ -277,8 +277,8 @@ export default function AnalyticsScreen() {
                     backgroundColor: insightsTab === t.key ? (isDark ? '#334155' : '#ffffff') : 'transparent',
                     shadowColor: insightsTab === t.key ? '#000' : 'transparent',
                     shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 2,
+                    shadowOpacity: 0.03,
+                    shadowRadius: 1,
                     elevation: insightsTab === t.key ? 1 : 0
                   }}
                 >
@@ -298,7 +298,7 @@ export default function AnalyticsScreen() {
               {/* Key metric cards */}
               <View className="flex-row gap-3 mb-3">
                 {/* Savings Rate */}
-                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800">
+                <View className="app-card-muted flex-1 p-4">
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getSavingsRateColor(metrics.savingsRate)}20` }}>
                       <FontAwesome name="leaf" size={12} color={getSavingsRateColor(metrics.savingsRate)} />
@@ -310,7 +310,7 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {/* Debt-to-Income */}
-                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800">
+                <View className="app-card-muted flex-1 p-4">
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getDTIColor(metrics.debtToIncomeRatio)}20` }}>
                       <FontAwesome name="balance-scale" size={12} color={getDTIColor(metrics.debtToIncomeRatio)} />
@@ -322,7 +322,7 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {/* Spending Velocity */}
-                <View className="flex-1 bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800">
+                <View className="app-card-muted flex-1 p-4">
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="w-8 h-8 rounded-xl items-center justify-center bg-orange-50 dark:bg-orange-900/20">
                       <FontAwesome name="bolt" size={12} color="#f97316" />
@@ -335,9 +335,9 @@ export default function AnalyticsScreen() {
               </View>
 
               {/* Net Worth Card */}
-              <View className={`p-5 rounded-[12px] mb-3 overflow-hidden relative border ${metrics.netWorth >= 0
-                ? 'bg-emerald-600 border-emerald-500'
-                : 'bg-red-600 border-red-500'
+              <View className={`p-5 rounded-[12px] mb-3 overflow-hidden relative ${metrics.netWorth >= 0
+                ? 'bg-emerald-600'
+                : 'bg-red-600'
                 }`}>
                 <View className="absolute right-3 top-3 opacity-10">
                   <FontAwesome name="line-chart" size={80} color="white" />
@@ -360,7 +360,7 @@ export default function AnalyticsScreen() {
 
               {/* Savings Progress */}
               {metrics.totalSavingsTarget > 0 && (
-                <View className="bg-white dark:bg-[#0f172a] p-5 rounded-[12px] border border-slate-100 dark:border-slate-800">
+                <View className="app-card-muted p-5">
                   <View className="flex-row justify-between items-center mb-3">
                     <Text className="font-bold text-slate-900 dark:text-white">Savings Goals</Text>
                     <Text className="text-slate-400 text-xs">{metrics.savingsProgress.toFixed(0)}% achieved</Text>
@@ -382,7 +382,7 @@ export default function AnalyticsScreen() {
 
           {/* ── TRENDS TAB ── */}
           {insightsTab === 'trends' && (
-            <View className="bg-white dark:bg-[#0f172a] p-5 rounded-[12px] border border-slate-100 dark:border-slate-800">
+            <View className="app-card-muted p-5">
               <Text className="text-slate-900 dark:text-white font-bold mb-1">Spending by Category</Text>
               <Text className="text-slate-400 text-xs mb-5">This month vs last month</Text>
 
@@ -445,7 +445,7 @@ export default function AnalyticsScreen() {
           {insightsTab === 'forecast' && forecast && (
             <View className="gap-3">
               {/* Main forecast card */}
-              <View className="bg-white dark:bg-[#0f172a] p-5 rounded-[12px] border border-slate-100 dark:border-slate-800">
+              <View className="app-card-muted p-5">
                 <View className="flex-row justify-between items-start mb-4">
                   <View>
                     <Text className="text-slate-400 text-xs">Projected Next Month</Text>
@@ -453,8 +453,8 @@ export default function AnalyticsScreen() {
                       KES {forecast.projectedExpenses.toLocaleString()}
                     </Text>
                   </View>
-                  <View className="px-3 py-1.5 rounded-full" style={{ backgroundColor: `${getConfidenceColor(forecast.confidence)}20` }}>
-                    <Text className="text-xs font-bold" style={{ color: getConfidenceColor(forecast.confidence) }}>
+                  <View className="app-pill" style={{ backgroundColor: `${getConfidenceColor(forecast.confidence)}20` }}>
+                    <Text className="text-[9px] font-semibold" style={{ color: getConfidenceColor(forecast.confidence) }}>
                       {forecast.confidence} confidence
                     </Text>
                   </View>
@@ -480,7 +480,7 @@ export default function AnalyticsScreen() {
 
               {/* Days until exhaustion */}
               {forecast.daysUntilExhaustion !== null && (
-                <View className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-[12px] border border-amber-200 dark:border-amber-800/50">
+                <View className="p-5 rounded-[12px] bg-amber-50 dark:bg-amber-900/20">
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 items-center justify-center">
                       <FontAwesome name="clock-o" size={18} color="#f59e0b" />
@@ -502,7 +502,7 @@ export default function AnalyticsScreen() {
       )}
 
       {/* Header */}
-      <View className="m-4 px-4 py-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-gray-200 dark:border-slate-800">
+      <View className="app-card-muted m-4 px-4 py-4">
         <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Total Expense • {formatMonth(selectedDate)}</Text>
         <Text className="text-slate-900 dark:text-white text-xl font-bold mb-6">
           {formatCurrency(stats.expense)}
@@ -549,7 +549,7 @@ export default function AnalyticsScreen() {
         <View className="flex-row gap-3 mb-4">
           {/*income card*/}
           <TouchableOpacity onPress={() => router.push('/(tabs)/income')}>
-            <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-[12px] border border-gray-200 dark:border-slate-800">
+            <View className="app-card flex-1 p-4">
               <View className="flex-row items-center mb-2">
                 <Image
                   source={require('../../assets/svg/income.svg')}
@@ -562,7 +562,7 @@ export default function AnalyticsScreen() {
               <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">KES {thisMonthTotal.toLocaleString()}</Text>
             </View>
           </TouchableOpacity>
-          <View className="flex-1 bg-white dark:bg-[#1e293b] p-4 rounded-[12px] border border-gray-200 dark:border-slate-800">
+          <View className="app-card flex-1 p-4">
             <View className="flex-row items-center mb-2">
               <Image
                 source={require('../../assets/svg/expense.svg')}
@@ -576,7 +576,7 @@ export default function AnalyticsScreen() {
           </View>
         </View>
 
-        <View className="bg-white dark:bg-[#1e293b] p-4 rounded-[10px] border border-gray-200 dark:border-slate-800">
+        <View className="app-card p-4 rounded-[12px]">
           <View className="flex-row items-center justify-between">
             <Text className="text-slate-600 dark:text-slate-400 text-sm">Net Balance</Text>
             <Text className={`text-2xl font-bold ${stats.net >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -592,7 +592,7 @@ export default function AnalyticsScreen() {
       <View className="px-6 mt-8">
         <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Spending by Category</Text>
         {stats.categories.length > 0 ? (
-          <View className="bg-white dark:bg-[#1e293b] p-4 rounded-[12px] border border-gray-200 dark:border-slate-800">
+          <View className="app-card p-4">
             {stats.categories.slice(0, 8).map((cat, index) => (
               <View key={index} className="mb-4">
                 <View className="flex-row items-center justify-between mb-2">
@@ -616,7 +616,7 @@ export default function AnalyticsScreen() {
             ))}
           </View>
         ) : (
-          <View className="bg-white dark:bg-[#1e293b] p-8 rounded-[12px] border border-gray-200 dark:border-slate-800 items-center">
+          <View className="app-card p-8 items-center">
             <FontAwesome name="pie-chart" size={48} color="#94a3b8" />
             <Text className="text-slate-500 dark:text-slate-400 mt-4">No expense data for this period</Text>
           </View>
@@ -658,7 +658,7 @@ export default function AnalyticsScreen() {
         <View className="flex-row gap-4">
 
           {/* Income Card */}
-          <View className="flex-1 bg-white dark:bg-[#0f172a] rounded-[12px] p-5 border border-slate-200 dark:border-slate-800">
+          <View className="app-card-muted flex-1 p-5">
 
             <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
               Yearly Income
@@ -704,7 +704,7 @@ export default function AnalyticsScreen() {
           </View>
 
           {/* Expense Card */}
-          <View className="flex-1 bg-white dark:bg-[#0f172a] rounded-[12px] p-5 border border-slate-200 dark:border-slate-800">
+          <View className="app-card-muted flex-1 p-5">
 
             <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
               Yearly Expenditure

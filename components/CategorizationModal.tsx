@@ -135,7 +135,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <BlurView intensity={20} className="flex-1 justify-end">
                 <View
-                    className="bg-white dark:bg-[#0f172a] rounded-t-[32px] h-[90%] border-t border-gray-200 dark:border-slate-700 shadow-2xl overflow-hidden"
+                    className="bg-white dark:bg-[#0f172a] rounded-t-[32px] h-[90%] border-t border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden"
                     style={{ paddingBottom: insets.bottom }}
                 >
                     <View className="p-6 border-b border-gray-200 dark:border-slate-800 flex-row justify-between items-center">

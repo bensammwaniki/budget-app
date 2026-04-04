@@ -178,7 +178,7 @@ export default function AddCategoryModal({ visible, onClose, onCategoryAdded, de
                             {/* Save Button */}
                             <TouchableOpacity
                                 onPress={handleAddCategory}
-                                className="bg-blue-600 p-4 rounded-2xl mb-8 shadow-lg shadow-blue-500/30"
+                                className="bg-blue-600 p-4 rounded-2xl mb-8 shadow-sm"
                             >
                                 <Text className="text-white text-center font-bold text-lg">Create Category</Text>
                             </TouchableOpacity>

@@ -114,11 +114,11 @@ const styles = StyleSheet.create({
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
-            height: -2,
+            height: -1,
         },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 10,
+        shadowOpacity: 0.05,
+        shadowRadius: 1.5,
+        elevation: 4,
     },
     tabsContainer: {
         flexDirection: 'row',

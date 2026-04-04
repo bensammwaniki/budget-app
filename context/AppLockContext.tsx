@@ -1,6 +1,4 @@
-// eslint-disable-next-line import/no-unresolved
 import * as LocalAuthentication from 'expo-local-authentication';
-// eslint-disable-next-line import/no-unresolved
 import * as SecureStore from 'expo-secure-store';
 import React, {
     createContext,
@@ -36,7 +34,10 @@ interface AppLockContextType {
 
 const AppLockContext = createContext<AppLockContextType | undefined>(undefined);
 
-const getPinKey = (uid: string) => `app_lock_pin:${uid}`;
+const getPinKey = (uid: string) => {
+    const safeUid = uid.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `app_lock_pin.${safeUid}`;
+};
 
 const resolveBiometricLabel = (types: LocalAuthentication.AuthenticationType[]): BiometricLabel => {
     if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {

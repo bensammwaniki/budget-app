@@ -196,6 +196,42 @@ export const incomeService = {
         notifyListeners('INCOME_LOGS');
     },
 
+    async unlinkTransaction(transactionId: string): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+
+        await db.withTransactionAsync(async () => {
+            const existingLog = await db.getFirstAsync<any>(
+                'SELECT id, source_id FROM income_logs WHERE transaction_id = ?',
+                [transactionId]
+            );
+
+            if (!existingLog) {
+                throw new Error('Linked income entry not found');
+            }
+
+            await db.runAsync('DELETE FROM income_logs WHERE id = ?', [existingLog.id]);
+
+            const latestRemainingLog = await db.getFirstAsync<{ received_at: string }>(
+                `SELECT received_at
+                 FROM income_logs
+                 WHERE source_id = ?
+                 ORDER BY datetime(received_at) DESC
+                 LIMIT 1`,
+                [existingLog.source_id]
+            );
+
+            await db.runAsync(
+                'UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?',
+                [latestRemainingLog?.received_at ?? null, now, existingLog.source_id]
+            );
+        });
+
+        notifyListeners('INCOME_LOGS');
+        notifyListeners('INCOME_SOURCES');
+    },
+
     async clearSourceLogs(sourceId: string): Promise<void> {
         await initDatabase();
         const db = getDb();
@@ -231,7 +267,7 @@ export const incomeService = {
 
         const patterns: DetectedIncomePattern[] = [];
 
-        for (const [name, txList] of Object.entries(grouped)) {
+        for (const [, txList] of Object.entries(grouped)) {
             // Only suggest if seen at least twice
             if (txList.length < 2) continue;
 

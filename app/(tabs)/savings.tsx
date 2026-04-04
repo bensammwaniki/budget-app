@@ -17,6 +17,7 @@ export default function SavingsScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
+    const isDark = colorScheme === 'dark';
 
     const loadGoals = async () => {
         try {
@@ -57,17 +58,18 @@ export default function SavingsScreen() {
     const renderGoal = ({ item }: { item: SavingsGoal }) => {
         const progress = Math.min((item.currentAmount / item.targetAmount) * 100, 100);
         const goalColor = item.color || '#3b82f6';
+        const clampedProgress = Math.max(0, Math.min(progress, 100));
         const ringSize = 44;
-        const strokeWidth = 3.5;
+        const strokeWidth = 2.5;
         const radius = (ringSize - strokeWidth) / 2;
         const circumference = 2 * Math.PI * radius;
-        const strokeDashoffset = circumference - (Math.max(0, Math.min(progress, 100)) / 100) * circumference;
+        const strokeDashoffset = circumference - (clampedProgress / 100) * circumference;
 
         return (
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push(`/savings/${item.id}`)}
-                className="bg-white dark:bg-[#1e293b] p-3 rounded-[12px] mb-4 mx-1 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden"
+                className="app-card p-3 mb-4 mx-1 relative overflow-hidden"
             >
                 <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: goalColor }} />
                 <View className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10" style={{ backgroundColor: goalColor }} />
@@ -80,7 +82,7 @@ export default function SavingsScreen() {
                                     cx={ringSize / 2}
                                     cy={ringSize / 2}
                                     r={radius}
-                                    stroke={colorScheme === 'dark' ? '#334155' : '#e2e8f0'}
+                                    stroke={isDark ? '#334155' : '#e2e8f0'}
                                     strokeWidth={strokeWidth}
                                     fill="none"
                                 />
@@ -107,11 +109,14 @@ export default function SavingsScreen() {
                         </View>
 
                         <View className="flex-1">
-                            <View className="flex-row items-center gap-1">
+                            <View className="flex-row items-center flex-wrap gap-1">
                                 <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-[1px]">Savings Goal</Text>
+                                <Text className="text-slate-400 text-[10px] font-medium">
+                                    Target KES {item.targetAmount.toLocaleString()}
+                                </Text>
                                 {item.status === 'COMPLETED' && (
-                                    <View className="px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30">
-                                        <Text className="text-[8px] text-green-700 dark:text-green-300 font-semibold">Done</Text>
+                                    <View className="app-pill-success">
+                                        <Text className="app-pill-success-text">Done</Text>
                                     </View>
                                 )}
                             </View>
@@ -131,33 +136,44 @@ export default function SavingsScreen() {
                         >
                             <FontAwesome name="pencil" size={12} color={goalColor} />
                         </TouchableOpacity>
-                        <Text className="font-black text-base text-slate-900 dark:text-white mt-[30px]">
-                            KES {item.currentAmount.toLocaleString()}
-                        </Text>
-                        <Text className="text-slate-400 text-[10px] text-right ">
-                            Target KES {item.targetAmount.toLocaleString()}
-                        </Text>
                     </View>
                 </View>
 
-                <View className="flex-row flex-wrap gap-1.5 mb-1 mt-[-35px]">
+                <View className="flex-row flex-wrap gap-1.5 mb-1">
                     {item.targetDate && (
-                        <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                            <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">
+                        <View className="app-pill">
+                            <Text className="app-pill-text">
                                 Goal Date {new Date(item.targetDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                             </Text>
                         </View>
                     )}
-                    <View className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-                        <Text className="text-[9px] text-slate-600 dark:text-slate-300 font-semibold">
-                            Remaining KES {Math.max(0, item.targetAmount - item.currentAmount).toLocaleString()}
+                </View>
+
+                <View className="flex-row justify-between items-end gap-3">
+                    <View className="flex-row items-center flex-wrap gap-1 ml-[5px] flex-1">
+                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            Remaining:
+                        </Text>
+                        <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                            KES {Math.max(0, item.targetAmount - item.currentAmount).toLocaleString()}
+                        </Text>
+                        <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
+                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            Progress:
+                        </Text>
+                        <Text style={{ color: goalColor }} className="text-[10px] font-semibold">
+                            {progress.toFixed(1)}%
+                        </Text>
+                    </View>
+                    <View className="items-end">
+                        <Text className="font-black text-base text-slate-900 dark:text-white">
+                            KES {item.currentAmount.toLocaleString()}
+                        </Text>
+                        <Text className="text-slate-400 text-[10px] text-right mt-0.5">
+                            Saved so far
                         </Text>
                     </View>
                 </View>
-
-                <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium ml-2">
-                    Progress: <Text style={{ color: goalColor }} className="font-bold">{progress.toFixed(1)}%</Text>
-                </Text>
             </TouchableOpacity>
         );
     };
@@ -190,35 +206,41 @@ export default function SavingsScreen() {
             </View>
 
             {/* Overall Summary Card */}
-            <View className="mx-6 mt-4 mb-6 bg-blue-600 rounded-[12px] p-6 shadow-xl shadow-blue-500/20 overflow-hidden relative">
-                <View className="absolute right-[-20] top-[-20] opacity-10">
-                    <FontAwesome name="bank" size={150} color="white" />
+            <View className="mx-6 mt-4 mb-6 bg-blue-600 rounded-[12px] p-5 overflow-hidden relative">
+                <View className="absolute right-[-18] top-[-18] opacity-10">
+                    <FontAwesome name="bank" size={132} color="white" />
                 </View>
 
-                <Text className="text-blue-100 text-sm font-medium mb-1">Total Savings</Text>
-                <Text className="text-white text-4xl font-bold mb-6">
+                <Text className="text-blue-100 text-[11px] font-bold uppercase tracking-[1px] mb-1">Savings Overview</Text>
+                <Text className="text-white text-[30px] font-black mb-4">
                     KES {totalSaved.toLocaleString()}
                 </Text>
 
-                <View className="flex-row justify-between items-center mb-2">
-                    <Text className="text-blue-100 text-xs font-medium">Overall Progress</Text>
-                    <Text className="text-white font-bold text-xs">{overallProgress.toFixed(1)}%</Text>
-                </View>
-                <View className="h-2 bg-blue-400/30 rounded-full overflow-hidden">
+                <View className="h-1.5 bg-white/20 rounded-full overflow-hidden mb-4">
                     <View
                         className="h-full bg-white rounded-full"
                         style={{ width: `${Math.min(overallProgress, 100)}%` }}
                     />
                 </View>
 
-                <View className="flex-row justify-between mt-3">
-                    <Text className="text-blue-200 text-xs">Target: KES {totalTarget.toLocaleString()}</Text>
-                    <Text className="text-blue-200 text-xs">{goals.length} active goals</Text>
+                <View className="flex-row justify-between items-end">
+                    <View>
+                        <Text className="text-blue-100 text-[10px] font-medium uppercase tracking-[1px]">Target</Text>
+                        <Text className="text-white font-bold text-sm mt-1">KES {totalTarget.toLocaleString()}</Text>
+                    </View>
+                    <View className="items-end">
+                        <Text className="text-blue-100 text-[10px] font-medium uppercase tracking-[1px]">Progress</Text>
+                        <Text className="text-white font-bold text-sm mt-1">{overallProgress.toFixed(1)}%</Text>
+                    </View>
+                    <View className="items-end">
+                        <Text className="text-blue-100 text-[10px] font-medium uppercase tracking-[1px]">Goals</Text>
+                        <Text className="text-white font-bold text-sm mt-1">{goals.length}</Text>
+                    </View>
                 </View>
             </View>
 
             {goals.length === 0 ? (
-                <View className="mx-6 mt-2 items-center justify-center py-8 px-4 bg-white dark:bg-[#0f172a] rounded-[12px] border border-slate-200 dark:border-slate-800">
+                <View className="app-card-muted mx-6 mt-2 items-center justify-center py-8 px-4">
                     <Image
                         source={require('../../assets/svg/savings.svg')}
                         style={{ width: 18, height: 18 }}

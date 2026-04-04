@@ -26,6 +26,7 @@ export default function IncomeDetailScreen() {
     const openingLinkModalRef = useRef(false);
     const [linkableTx, setLinkableTx] = useState<Transaction[]>([]);
     const [linking, setLinking] = useState<string | null>(null);
+    const [unlinking, setUnlinking] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     const filteredLinkableTx = useMemo(() => {
@@ -131,6 +132,26 @@ export default function IncomeDetailScreen() {
         }
     };
 
+    const handleUnlink = (transactionId: string) => {
+        Alert.alert('Unlink transaction', 'Remove this linked transaction from the income history?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Unlink',
+                onPress: async () => {
+                    setUnlinking(transactionId);
+                    try {
+                        await incomeService.unlinkTransaction(transactionId);
+                        await loadData();
+                    } catch (e: any) {
+                        Alert.alert('Error', e.message || 'Failed to unlink transaction.');
+                    } finally {
+                        setUnlinking(null);
+                    }
+                },
+            },
+        ]);
+    };
+
     const handleDelete = () => {
         Alert.alert('Delete Source', 'Are you sure? All income logs for this source will also be deleted.', [
             { text: 'Cancel', style: 'cancel' },
@@ -199,7 +220,8 @@ export default function IncomeDetailScreen() {
                         try {
                             const currentTotal = logs.reduce((sum, l) => sum + l.amount, 0);
                             const expectedTotal = parseAmountValue(source.expectedAmount);
-                            const remainingToFull = Number((expectedTotal - currentTotal).toFixed(2));
+                            const finalExpectedTotal = Number(Math.max(expectedTotal, currentTotal).toFixed(2));
+                            const remainingToFull = Number((finalExpectedTotal - currentTotal).toFixed(2));
 
                             if (remainingToFull > 0) {
                                 await incomeService.logIncome(
@@ -211,7 +233,10 @@ export default function IncomeDetailScreen() {
                                 );
                             }
 
-                            await incomeService.updateSource(source.id, { status: 'INACTIVE' });
+                            await incomeService.updateSource(source.id, {
+                                status: 'INACTIVE',
+                                expectedAmount: finalExpectedTotal,
+                            });
                             setShowManualModal(false);
                             setManualAmount('');
                             setManualChannel(null);
@@ -372,21 +397,46 @@ export default function IncomeDetailScreen() {
                 ) : (
                     <View className="space-y-3">
                         {logs.map(log => (
-                            <View key={log.id} className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex-row justify-between items-center mb-2">
-                                <View className="flex-row items-center flex-1">
-                                    <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${themeColor}20` }}>
-                                        <FontAwesome name={log.transactionId ? 'mobile-phone' : 'money'} size={14} color={themeColor} />
+                            <View key={log.id} className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800 mb-2">
+                                <View className="flex-row justify-between items-start">
+                                    <View className="flex-row items-center flex-1">
+                                        <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${themeColor}18` }}>
+                                            <FontAwesome name={log.transactionId ? 'mobile-phone' : 'money'} size={13} color={themeColor} />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className="font-bold text-slate-900 dark:text-white" numberOfLines={1}>
+                                                {log.notes || 'Income Received'}
+                                            </Text>
+                                            <View className="flex-row items-center flex-wrap gap-1 mt-1">
+                                                <Text className="text-slate-400 text-xs">
+                                                    {new Date(log.receivedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </Text>
+                                                <Text className="text-slate-300 dark:text-slate-600 text-xs">•</Text>
+                                                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium">
+                                                    {log.transactionId ? 'Linked SMS' : 'Manual entry'}
+                                                </Text>
+                                            </View>
+                                        </View>
                                     </View>
-                                    <View className="flex-1">
-                                        <Text className="font-bold text-slate-900 dark:text-white" numberOfLines={1}>
-                                            {log.notes || 'Income Received'}
-                                        </Text>
-                                        <Text className="text-slate-400 text-xs mt-0.5">
-                                            {new Date(log.receivedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    <View className="items-end mt-[-5px]">
+                                        {log.transactionId && (
+                                            <TouchableOpacity
+                                                onPress={() => handleUnlink(log.transactionId!)}
+                                                disabled={unlinking === log.transactionId}
+                                                className="py-1"
+                                            >
+                                                {unlinking === log.transactionId ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Text className="text-red-600 dark:text-red-400 font-semibold text-xs">Unlink</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+                                        <Text className="font-bold text-lg" style={{ color: themeColor }}>
+                                            KES {log.amount.toLocaleString()}
                                         </Text>
                                     </View>
                                 </View>
-                                <Text className="text-slate-900 dark:text-white font-bold text-lg">KES {log.amount.toLocaleString()}</Text>
                             </View>
                         ))}
                     </View>
