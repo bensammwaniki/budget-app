@@ -32,6 +32,7 @@ export default function BudgetScreen() {
     // New Allocation Form State
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [currentBudgetAmount, setCurrentBudgetAmount] = useState('');
+    const [isInputFocused, setIsInputFocused] = useState(false);
 
     const formatWithCommas = (value: string) => {
         const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
@@ -170,34 +171,43 @@ export default function BudgetScreen() {
 
             <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
                 {activeCat && (
-                    <View className="mx-4 mt-2 mb-6 pt-6 pb-8 px-6 items-center">
-                        <View className="w-full mb-6">
-                            <Picker
-                                selectedValue={activeCat.id}
-                                onValueChange={(itemValue) => {
-                                    const cat = categories.find(c => c.id === itemValue);
-                                    if (cat) setSelectedCategory(cat);
-                                }}
-                                style={{ width: '100%', color: isDark ? '#fff' : '#0f172a' }}
-                                itemStyle={{ color: isDark ? '#fff' : '#0f172a', fontWeight: 'bold' }}
-                                dropdownIconColor="#3b82f6"
-                            >
-                                {categories.map(cat => (
-                                    <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
-                                ))}
-                            </Picker>
+                    <View className="mx-4 mt-2 mb-4 pt-4 pb-4 px-4 items-center bg-white dark:bg-[#1e293b] rounded-[16px] border border-slate-100 dark:border-slate-700 shadow-sm">
+                        <View className="w-full flex-row items-center gap-3 mb-6">
+                            <View className="flex-1 bg-slate-50 dark:bg-[#0f172a] rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden h-[54px] justify-center">
+                                <Picker
+                                    selectedValue={activeCat.id}
+                                    onValueChange={(itemValue) => {
+                                        const cat = categories.find(c => c.id === itemValue);
+                                        if (cat) setSelectedCategory(cat);
+                                    }}
+                                    style={{ width: '100%', color: isDark ? '#fff' : '#1e293b' }}
+                                    itemStyle={{ color: isDark ? '#fff' : '#1e293b', fontWeight: 'bold', fontSize: 14 }}
+                                    dropdownIconColor="#3b82f6"
+                                >
+                                    {categories.map(cat => (
+                                        <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
+                                    ))}
+                                </Picker>
+                            </View>
+
+                            <View className="bg-slate-50 dark:bg-[#0f172a] px-4 h-[54px] rounded-xl border border-slate-100 dark:border-slate-800 justify-center">
+                                <Text className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Total Budget</Text>
+                                <Text className="text-sm font-black text-blue-600 dark:text-blue-400">KES {totalAllocated.toLocaleString()}</Text>
+                            </View>
                         </View>
 
                         <Text className="text-slate-400 text-[10px] uppercase font-black tracking-widest mb-1">Budget Target</Text>
-                        <View className="flex-row items-center justify-center mt-2">
+                        <View className="flex-row items-center justify-center mt-1">
                             <Text className="text-3xl text-slate-300 dark:text-slate-600 font-bold mr-2">KES</Text>
                             <TextInput
                                 className="text-5xl font-black text-slate-900 dark:text-white min-w-[100px] text-center p-0"
-                                placeholder="0"
+                                placeholder={isInputFocused ? '' : '0'}
                                 placeholderTextColor="#cbd5e1"
                                 keyboardType="numeric"
                                 value={activeAmount}
                                 onChangeText={handleActiveAmountChange}
+                                onFocus={() => setIsInputFocused(true)}
+                                onBlur={() => setIsInputFocused(false)}
                             />
                         </View>
                     </View>

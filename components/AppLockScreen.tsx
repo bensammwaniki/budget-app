@@ -269,14 +269,14 @@ export default function AppLockScreen() {
                         </View>
                     </View>
 
-                    <View className="pb-3">
+                    <View className="pb-10 mb-4">
                         {KEYPAD_ROWS.map(row => (
                             <View key={row.join('-')} className="flex-row justify-between mb-4">
                                 {row.map(key => (
                                     <Pressable
                                         key={key}
                                         onPress={() => handleDigitPress(key)}
-                                        className="w-[30.5%] h-20 rounded-[24px] bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 items-center justify-center"
+                                        className="w-[30.5%] h-20 rounded-[16px] bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 items-center justify-center"
                                     >
                                         <Text className="text-[30px] font-light text-slate-900 dark:text-white">
                                             {key}
@@ -290,7 +290,7 @@ export default function AppLockScreen() {
                             <TouchableOpacity
                                 onPress={handleDelete}
                                 disabled={isSubmitting || pinInput.length === 0}
-                                className={`w-[30.5%] h-20 rounded-[24px] border items-center justify-center ${pinInput.length === 0
+                                className={`w-[30.5%] h-20 rounded-[16px] border items-center justify-center ${pinInput.length === 0
                                     ? 'border-transparent bg-transparent opacity-50'
                                     : 'bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800'
                                     }`}
@@ -308,7 +308,7 @@ export default function AppLockScreen() {
 
                             <Pressable
                                 onPress={() => handleDigitPress('0')}
-                                className="w-[30.5%] h-20 rounded-[24px] bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 items-center justify-center"
+                                className="w-[30.5%] h-20 rounded-[16px] bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 items-center justify-center"
                             >
                                 <Text className="text-[30px] font-light text-slate-900 dark:text-white">
                                     0
@@ -318,7 +318,7 @@ export default function AppLockScreen() {
                             <TouchableOpacity
                                 onPress={() => void handleBiometricUnlock()}
                                 disabled={!biometricsAvailable || isSubmitting}
-                                className={`w-[30.5%] h-20 rounded-[24px] border items-center justify-center ${biometricsAvailable
+                                className={`w-[30.5%] h-20 rounded-[16px] border items-center justify-center ${biometricsAvailable
                                     ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20'
                                     : 'bg-white/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-50'
                                     }`}
