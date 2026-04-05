@@ -817,7 +817,7 @@ export default function HomeScreen() {
               placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              className="flex-1 h-full text-[9px] text-slate-900 dark:text-white"
+              className="flex-1 h-full text-sm text-slate-900 dark:text-white"
               autoCapitalize="none"
             />
             {searchQuery.length > 0 && (
