@@ -123,14 +123,14 @@ export default function AutomationListScreen() {
 
     if (loading) {
         return (
-            <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
+            <View className="flex-1 app-screen items-center justify-center">
                 <ActivityIndicator size="large" color="#3b82f6" />
             </View>
         );
     }
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <View className="flex-1 app-screen">
             {/* Header */}
             <View
                 className="px-6 pb-4 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800 shadow-sm z-10 flex-row justify-between items-center"

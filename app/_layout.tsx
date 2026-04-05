@@ -41,6 +41,7 @@ function RootLayoutContent() {
       <ScrollProvider>
         <View
           style={{ flex: 1 }}
+          className="app-screen"
           onTouchStart={recordActivity}
           pointerEvents={user && !inAuthGroup && !isSecurityReady ? "none" : "auto"}
         >

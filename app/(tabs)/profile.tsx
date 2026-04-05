@@ -258,7 +258,7 @@ export default function ProfileScreen() {
 
     return (
         <Animated.ScrollView
-            className="flex-1 bg-gray-50 dark:bg-[#020617]"
+            className="flex-1 app-screen"
             contentContainerStyle={{ paddingBottom: 120 }}
             onScroll={handleScroll}
             scrollEventThrottle={16}
@@ -266,8 +266,8 @@ export default function ProfileScreen() {
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
-            <View className="px-6 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[12px] border-b border-gray-200 dark:border-slate-800">
-                <View className="w-24 h-24 bg-gray-100 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <View className="px-4 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[16px] border-b border-gray-200 dark:border-slate-800">
+                <View className="w-24 h-24 bg-gray-50 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
                     {user?.photoURL ? (
                         <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     ) : (
@@ -280,8 +280,8 @@ export default function ProfileScreen() {
             </View>
 
             {/* Profile Options List */}
-            <View className="px-6 mt-8">
-                <View className="bg-white dark:bg-[#1e293b] rounded-[12px] border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <View className="mx-4 mt-8">
+                <View className="app-card overflow-hidden">
                     {/* Dark Mode Toggle */}
                     <View className="flex-row items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
                         <TouchableOpacity
@@ -365,13 +365,13 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View className="bg-white dark:bg-[#1e293b] rounded-[12px] border border-gray-200 dark:border-slate-700 overflow-hidden p-4">
+                    <View className="app-card p-4">
                         {categories.filter(c => !!c.isCustom).length === 0 ? (
                             <Text className="text-slate-500 dark:text-slate-400 text-center py-4">No custom categories yet</Text>
                         ) : (
                             <View className="gap-3">
                                 {categories.filter(c => !!c.isCustom).map((cat) => (
-                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-[12px] border border-gray-100 dark:border-slate-800">
+                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-[14px] border border-gray-100 dark:border-slate-800">
                                         <View className="flex-row items-center flex-1">
                                             <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
                                                 <FontAwesome name={cat.icon as any} size={16} color={cat.color} />
@@ -414,7 +414,7 @@ export default function ProfileScreen() {
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
                     >
                         <View className="flex-1 justify-end bg-black/50">
-                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[12px] p-6 h-[85%]">
+                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[16px] p-6 h-[85%]">
                                 <View className="flex-row justify-between items-center mb-6">
                                     <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
                                     <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
@@ -506,7 +506,7 @@ export default function ProfileScreen() {
                 {/* Sign Out Button */}
                 <TouchableOpacity
                     onPress={handleSignOut}
-                    className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 rounded-[12px] p-4 mt-8 mb-8 flex-row items-center justify-center"
+                    className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 rounded-[16px] p-4 mt-8 mb-8 flex-row items-center justify-center"
                 >
                     <FontAwesome name="sign-out" size={20} color="#ef4444" />
                     <Text className="text-red-500 font-bold text-base ml-2">Sign Out</Text>
@@ -518,7 +518,7 @@ export default function ProfileScreen() {
             {/* Financial Month Day Picker Modal */}
             <Modal visible={dayPickerVisible} transparent animationType="fade">
                 <View className="flex-1 justify-center items-center bg-black/60 px-6">
-                    <View className="bg-white dark:bg-slate-900 w-full rounded-[12px] overflow-hidden">
+                    <View className="bg-white dark:bg-slate-900 w-full rounded-[16px] overflow-hidden">
                         <View className="p-6 border-b border-gray-100 dark:border-slate-800">
                             <Text className="text-xl font-bold text-slate-900 dark:text-white">Month Start Day</Text>
                             <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">Select the day your financial month begins.</Text>
@@ -557,7 +557,7 @@ export default function ProfileScreen() {
                 onRequestClose={() => setExportPeriodModalVisible(false)}
             >
                 <View className="flex-1 justify-end bg-black/50 p-6">
-                    <View className="bg-white dark:bg-slate-900 rounded-[12px] border border-gray-200 dark:border-slate-700 p-5">
+                    <View className="bg-white dark:bg-slate-900 rounded-[16px] border border-gray-200 dark:border-slate-700 p-5">
                         <View className="flex-row items-center justify-between mb-4">
                             <Text className="text-slate-900 dark:text-white text-lg font-bold">Export Excel (.xlsx)</Text>
                             <TouchableOpacity onPress={() => setExportPeriodModalVisible(false)} className="p-1">

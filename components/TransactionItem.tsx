@@ -41,7 +41,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
 
     return (
         <TouchableOpacity
-            className="app-card flex-row items-center mx-4 p-3 mb-3 active:opacity-70"
+            className="flex-row items-center mx-4 p-3 bg-white dark:bg-[#1e293b] border-x border-b border-slate-100 dark:border-slate-700 active:opacity-70"
             onPress={() => onPress(tx)}
         >
             <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 border ${isBankTransaction
@@ -55,25 +55,25 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
                 />
             </View>
             <View className="flex-1">
-                <Text className="text-slate-900 dark:text-white font-semibold text-[15px]" numberOfLines={1}>
-                    {tx.recipientName}
+                <Text className="text-slate-900 dark:text-white font-semibold text-[13px]" numberOfLines={1}>
+                    {(tx.recipientName || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
                     {tx.categoryName && (
-                        <Text className="text-[10px] font-medium mr-2" style={{ color: tx.categoryColor }}>
+                        <Text className="text-[9px] font-medium mr-2" style={{ color: tx.categoryColor }}>
                             {tx.categoryName}
                         </Text>
                     )}
-                    <Text className="text-slate-400 text-[10px]">
+                    <Text className="text-slate-400 text-[9px]">
                         {tx.date.toLocaleDateString()}
                     </Text>
                 </View>
             </View>
             <View className="items-end ml-2">
-                <Text className={`font-bold text-[14px] ${tx.type === 'RECEIVED' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
+                <Text className={`font-bold text-[12px] ${tx.type === 'RECEIVED' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
                     {tx.type === 'RECEIVED' ? '+' : '-'} KES {tx.amount.toLocaleString()}
                 </Text>
-                <Text className={`text-[10px] font-semibold mt-1 ${sourceTextClass}`}>
+                <Text className={`text-[9px] font-semibold mt-1 ${sourceTextClass}`}>
                     {sourceLabel}
                 </Text>
             </View>

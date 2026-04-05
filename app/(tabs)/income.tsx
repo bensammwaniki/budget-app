@@ -127,7 +127,7 @@ export default function IncomeScreen() {
             <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => router.push(`/income/${item.id}`)}
-                className="app-card p-3 mb-4 overflow-hidden relative"
+                className="app-card p-3 mb-4 mx-4 overflow-hidden relative"
             >
                 <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: themeColor }} />
                 <View className="absolute top-0 right-0 w-28 h-28 rounded-bl-full opacity-10" style={{ backgroundColor: themeColor }} />
@@ -269,11 +269,11 @@ export default function IncomeScreen() {
     }
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]" style={{ paddingTop: insets.top }}>
+        <View className="flex-1 app-screen" style={{ paddingTop: insets.top }}>
             <StatusBar style={isDark ? 'light' : 'dark'} />
 
             {/* Header */}
-            <View className="px-6 pt-6 pb-2 flex-row justify-between items-center">
+            <View className="px-4 pt-6 pb-2 flex-row justify-between items-center">
                 <Text className="text-3xl font-bold text-slate-900 dark:text-white">Income</Text>
                 <View className="flex-row gap-3">
                     <TouchableOpacity
@@ -297,7 +297,7 @@ export default function IncomeScreen() {
             </View>
 
             {/* Summary Card */}
-            <View className="mx-6 mt-4 mb-6 bg-emerald-600 rounded-[12px] p-5 overflow-hidden relative">
+            <View className="mx-4 mt-4 mb-6 bg-emerald-600 rounded-[16px] p-5 overflow-hidden relative">
                 <View className="absolute right-[-18] top-[-18] opacity-10">
                     <FontAwesome name="line-chart" size={132} color="white" />
                 </View>
@@ -338,7 +338,7 @@ export default function IncomeScreen() {
                         />
                     }
                 >
-                    <View className="app-card-muted mx-6 mt-2 items-center justify-center py-8 px-4">
+                    <View className="app-card-muted mx-4 mt-2 items-center justify-center py-8 px-4">
                         <Image
                             source={require('../../assets/svg/income.svg')}
                             style={{ width: 24, height: 24 }}
@@ -370,7 +370,7 @@ export default function IncomeScreen() {
                     data={sources}
                     keyExtractor={item => item.id}
                     renderItem={renderSource}
-                    contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
@@ -380,7 +380,7 @@ export default function IncomeScreen() {
                         />
                     }
                     ListHeaderComponent={
-                        <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-4">
+                        <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-4 px-4">
                             {sources.length} Active Source{sources.length !== 1 ? 's' : ''}
                         </Text>
                     }

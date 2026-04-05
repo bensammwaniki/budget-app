@@ -740,26 +740,13 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-
       </View>
 
       {/* Debt Summary Widget */}
       {debtSummary && debtSummary.activeDebts > 0 && (
-        <View className="px-6 mt-8 mb-2">
-          <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-slate-900 dark:text-white text-lg font-bold">Debts</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/debts')}
-              className="flex-row items-center gap-1"
-            >
-              <Text className="text-blue-600 dark:text-blue-400 text-sm font-medium">View All</Text>
-              <FontAwesome name="chevron-right" size={12} color="#3b82f6" />
-            </TouchableOpacity>
-          </View>
-
-          <View className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 p-5 rounded-[12px] border border-purple-200 dark:border-purple-800">
-            <View className="flex-row justify-between items-start mb-1">
+        <View className="mt-8 mb-2 mx-4">
+          <View className="bg-white dark:bg-[#1e293b] pt-5 rounded-[16px] border border-slate-100 dark:border-purple-800 overflow-hidden">
+            <View className="flex-row justify-between items-start mb-1 px-6">
               <View className="flex-1">
                 <Text className="text-purple-800 dark:text-purple-200 font-bold text-base mb-1">Total Debt</Text>
                 <Text className="text-slate-900 dark:text-white text-3xl font-bold">
@@ -769,15 +756,22 @@ export default function HomeScreen() {
                   {debtSummary.activeDebts} active {debtSummary.activeDebts === 1 ? 'debt' : 'debts'}
                 </Text>
               </View>
-              <View className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/40 items-center justify-center">
-                <FontAwesome name="exchange" size={20} color="#9333ea" />
+              <View className="items-end gap-y-2">
+                <View className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/40 items-center justify-center">
+                  <FontAwesome name="exchange" size={20} color="#9333ea" />
+                </View>
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/debts')}
+                  className="flex-row items-center gap-1"
+                >
+                  <Text className="text-blue-600 dark:text-blue-400 text-xs font-medium">View All</Text>
+                  <FontAwesome name="chevron-right" size={10} color="#3b82f6" />
+                </TouchableOpacity>
               </View>
             </View>
 
-
-
             {debtSummary.activeDebts > 0 && (
-              <View className="flex-row justify-between items-center mb-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[12px]">
+              <View className="flex-row justify-between items-center mt-4 px-6 py-4 bg-slate-50 dark:bg-slate-800/50">
                 <View>
                   <Text className="text-slate-500 text-xs font-bold uppercase mb-1">Debt Summary</Text>
                   <View className="flex-row items-center gap-4">
@@ -805,71 +799,73 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* search bar */}
-      <View className="mx-6 mt-6">
-        <View className="app-card-muted h-12 px-3 rounded-[10px] flex-row items-center">
-          <View className="w-6 h-6 items-center justify-center mr-2">
-            <Image
-              source={require('../../assets/svg/search.svg')}
-              style={{ width: 30, height: 30 }}
-              tintColor={colorScheme === 'dark' ? '#93c5fd' : '#2563eb'}
-              contentFit="contain"
-            />
-          </View>
-          <TextInput
-            placeholder="Search for amount, category, or recipient..."
-            placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            className="flex-1 h-full text-[10PX] text-slate-900 dark:text-white"
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center ml-2"
-            >
+      {/* Grouped Transaction List Card Start */}
+      <View className="mx-4 mt-6 bg-white dark:bg-[#1e293b] rounded-t-[16px] border-t border-x border-slate-100 dark:border-slate-700 overflow-hidden">
+        {/* Search bar */}
+        <View className="px-4 pt-4 pb-2">
+          <View className="bg-slate-50 dark:bg-[#0f172a] h-12 px-3 rounded-[10px] flex-row items-center border border-slate-100 dark:border-slate-800">
+            <View className="w-6 h-6 items-center justify-center mr-2">
               <Image
-                source={require('../../assets/svg/close.svg')}
-                style={{ width: 8, height: 8 }}
-                tintColor={colorScheme === 'dark' ? '#cbd5e1' : '#475569'}
+                source={require('../../assets/svg/search.svg')}
+                style={{ width: 30, height: 30 }}
+                tintColor={colorScheme === 'dark' ? '#93c5fd' : '#2563eb'}
                 contentFit="contain"
               />
-            </TouchableOpacity>
-          )}
+            </View>
+            <TextInput
+              placeholder="Search for amount, category, or recipient..."
+              placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              className="flex-1 h-full text-[9px] text-slate-900 dark:text-white"
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center ml-2"
+              >
+                <Image
+                  source={require('../../assets/svg/close.svg')}
+                  style={{ width: 8, height: 8 }}
+                  tintColor={colorScheme === 'dark' ? '#cbd5e1' : '#475569'}
+                  contentFit="contain"
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-      {/* end search bar */}
 
-      <View className="px-6 mt-6 mb-4 flex-row justify-between items-center">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold">Recent Transactions</Text>
-        <Text className="text-slate-500 text-xs">
-          {filteredTransactions.length} items
-        </Text>
-      </View>
-      {periodLoading && (
-        <View className="px-6 pb-4">
-          <ActivityIndicator size="small" color="#3b82f6" />
+        <View className="px-4 py-3 flex-row justify-between items-center">
+          <Text className="text-slate-900 dark:text-white text-sm font-bold">Recent Transactions</Text>
+          <Text className="text-slate-500 text-xs">
+            {filteredTransactions.length} items
+          </Text>
         </View>
-      )}
+        {periodLoading && (
+          <View className="px-4 pb-3">
+            <ActivityIndicator size="small" color="#3b82f6" />
+          </View>
+        )}
+      </View>
     </View>
   );
 
   const renderFooter = () => {
     if (loadingMore) {
       return (
-        <View className="px-6 pb-8">
+        <View className="mx-4 bg-white dark:bg-[#1e293b] border-x border-b border-slate-100 dark:border-slate-700 rounded-b-[16px] px-4 pb-4 overflow-hidden">
           <TransactionSkeleton />
           <TransactionSkeleton />
           <TransactionSkeleton />
         </View>
       );
     }
-    return <View className="h-24" />;
+    return <View className="mx-4 h-6 bg-white dark:bg-[#1e293b] rounded-b-[16px] border-b border-x border-slate-100 dark:border-slate-700" />;
   };
 
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+    <View className="flex-1 app-screen">
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       <CategorizationModal
@@ -996,6 +992,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Animated.FlatList
+        className="app-screen"
         data={filteredTransactions
           .filter(t => !t.id.startsWith('FULIZA-FEES-'))
           .slice(0, searchQuery ? filteredTransactions.length : displayLimit)}
@@ -1009,7 +1006,7 @@ export default function HomeScreen() {
         ListHeaderComponent={renderHeader()}
         ListFooterComponent={renderFooter()}
         onEndReached={handleEndReached}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={1}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         onScroll={handleScroll}

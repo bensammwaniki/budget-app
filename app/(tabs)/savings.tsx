@@ -69,7 +69,7 @@ export default function SavingsScreen() {
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push(`/savings/${item.id}`)}
-                className="app-card p-3 mb-4 mx-1 relative overflow-hidden"
+                className="app-card p-3 mb-4 mx-4 relative overflow-hidden"
             >
                 <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: goalColor }} />
                 <View className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10" style={{ backgroundColor: goalColor }} />
@@ -187,10 +187,10 @@ export default function SavingsScreen() {
     }
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]" style={{ paddingTop: insets.top }}>
+        <View className="flex-1 app-screen" style={{ paddingTop: insets.top }}>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
-            <View className="px-6 pt-6 pb-2 flex-row justify-between items-center">
+            <View className="px-4 pt-6 pb-2 flex-row justify-between items-center">
                 <Text className="text-3xl font-bold text-slate-900 dark:text-white">Savings</Text>
                 <TouchableOpacity
                     onPress={() => router.push('/savings/add')}
@@ -206,7 +206,7 @@ export default function SavingsScreen() {
             </View>
 
             {/* Overall Summary Card */}
-            <View className="mx-6 mt-4 mb-6 bg-blue-600 rounded-[12px] p-5 overflow-hidden relative">
+            <View className="mx-4 mt-4 mb-6 bg-blue-600 rounded-[16px] p-5 overflow-hidden relative">
                 <View className="absolute right-[-18] top-[-18] opacity-10">
                     <FontAwesome name="bank" size={132} color="white" />
                 </View>
@@ -240,7 +240,7 @@ export default function SavingsScreen() {
             </View>
 
             {goals.length === 0 ? (
-                <View className="app-card-muted mx-6 mt-2 items-center justify-center py-8 px-4">
+                <View className="app-card-muted mx-4 mt-2 items-center justify-center py-8 px-4">
                     <Image
                         source={require('../../assets/svg/savings.svg')}
                         style={{ width: 18, height: 18 }}
@@ -271,7 +271,7 @@ export default function SavingsScreen() {
                     data={goals}
                     keyExtractor={item => item.id}
                     renderItem={renderGoal}
-                    contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colorScheme === 'dark' ? '#fff' : '#000'} />

@@ -75,7 +75,7 @@ export default function LoginScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-gray-50 dark:bg-[#020617]"
+            className="flex-1 app-screen"
         >
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <ScrollView

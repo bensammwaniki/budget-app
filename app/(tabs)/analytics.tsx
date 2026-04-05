@@ -31,6 +31,9 @@ export default function AnalyticsScreen() {
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [insightsTab, setInsightsTab] = useState<'overview' | 'trends' | 'forecast'>('overview');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedYearlyIncome, setSelectedYearlyIncome] = useState<{ value: number; text: string } | null>(null);
+  const [selectedYearlyExpense, setSelectedYearlyExpense] = useState<{ value: number; text: string } | null>(null);
+
 
   const loadData = useCallback(async () => {
     try {
@@ -197,18 +200,7 @@ export default function AnalyticsScreen() {
 
 
 
-  const renderLegend = (data: any[]) => {
-    return (
-      <View className="flex-row flex-wrap gap-2 mt-4 justify-left">
-        {data.slice(0, 5).map((item, index) => (
-          <View key={index} className="flex-row items-center mr-2">
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color, marginRight: 6 }} />
-            <Text className="text-slate-600 dark:text-slate-400 text-xs">{item.text}</Text>
-          </View>
-        ))}
-      </View>
-    );
-  };
+
 
   const formatCurrency = (amount: number) => {
     return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -248,7 +240,7 @@ export default function AnalyticsScreen() {
 
   return (
     <Animated.ScrollView
-      className="flex-1 bg-gray-50 dark:bg-[#020617]"
+      className="flex-1 app-screen"
       contentContainerStyle={{ paddingBottom: 120 }}
       // onScroll={handleScroll}
       scrollEventThrottle={16}
@@ -258,7 +250,7 @@ export default function AnalyticsScreen() {
 
       {/* ── INTELLIGENCE INSIGHTS SECTION ── */}
       {metrics && (
-        <View className="mx-4 mt-16 mb-6">
+        <View className="mx-4 mt-12 mb-4">
           {/* Section header */}
           <View className="flex-row justify-between items-center mb-4">
             <View>
@@ -295,47 +287,50 @@ export default function AnalyticsScreen() {
           {/* ── OVERVIEW TAB ── */}
           {insightsTab === 'overview' && (
             <View>
-              {/* Key metric cards */}
-              <View className="flex-row gap-3 mb-3">
+              {/* Unified Metrics Card */}
+              <View className="app-card mb-4 flex-row py-4 px-2">
                 {/* Savings Rate */}
-                <View className="app-card-muted flex-1 p-4">
-                  <View className="flex-row justify-between items-start mb-2">
-                    <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getSavingsRateColor(metrics.savingsRate)}20` }}>
-                      <FontAwesome name="leaf" size={12} color={getSavingsRateColor(metrics.savingsRate)} />
-                    </View>
-                    <FontAwesome name={metrics.savingsRate >= 15 ? 'arrow-up' : 'arrow-down'} size={10} color={getSavingsRateColor(metrics.savingsRate)} />
+                <View className="flex-1 items-center border-r border-slate-50 dark:border-slate-800/50">
+                  <Text className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">Savings Rate</Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-sm font-bold text-slate-900 dark:text-white">{metrics.savingsRate.toFixed(1)}%</Text>
+                    <FontAwesome 
+                      name={metrics.savingsRate >= 15 ? 'arrow-up' : 'arrow-down'} 
+                      size={8} 
+                      color={getSavingsRateColor(metrics.savingsRate)} 
+                    />
                   </View>
-                  <Text className="text-2xl font-bold text-slate-900 dark:text-white">{metrics.savingsRate.toFixed(1)}%</Text>
-                  <Text className="text-slate-400 text-xs mt-0.5">Savings Rate</Text>
                 </View>
 
                 {/* Debt-to-Income */}
-                <View className="app-card-muted flex-1 p-4">
-                  <View className="flex-row justify-between items-start mb-2">
-                    <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: `${getDTIColor(metrics.debtToIncomeRatio)}20` }}>
-                      <FontAwesome name="balance-scale" size={12} color={getDTIColor(metrics.debtToIncomeRatio)} />
-                    </View>
-                    <FontAwesome name={metrics.debtToIncomeRatio <= 30 ? 'arrow-down' : 'arrow-up'} size={10} color={getDTIColor(metrics.debtToIncomeRatio)} />
+                <View className="flex-1 items-center border-r border-slate-50 dark:border-slate-800/50">
+                  <Text className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">DTI Ratio</Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-sm font-bold text-slate-900 dark:text-white">{metrics.debtToIncomeRatio.toFixed(0)}%</Text>
+                    <FontAwesome 
+                      name={metrics.debtToIncomeRatio <= 30 ? 'arrow-down' : 'arrow-up'} 
+                      size={8} 
+                      color={getDTIColor(metrics.debtToIncomeRatio)} 
+                    />
                   </View>
-                  <Text className="text-2xl font-bold text-slate-900 dark:text-white">{metrics.debtToIncomeRatio.toFixed(0)}%</Text>
-                  <Text className="text-slate-400 text-xs mt-0.5">Debt-to-Income</Text>
                 </View>
 
                 {/* Spending Velocity */}
-                <View className="app-card-muted flex-1 p-4">
-                  <View className="flex-row justify-between items-start mb-2">
-                    <View className="w-8 h-8 rounded-xl items-center justify-center bg-orange-50 dark:bg-orange-900/20">
-                      <FontAwesome name="bolt" size={12} color="#f97316" />
-                    </View>
-                    <FontAwesome name={metrics.spendingVelocity <= metrics.lastMonthVelocity ? 'arrow-down' : 'arrow-up'} size={10} color={metrics.spendingVelocity <= metrics.lastMonthVelocity ? '#10b981' : '#ef4444'} />
+                <View className="flex-1 items-center">
+                  <Text className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">KES/Day</Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-sm font-bold text-slate-900 dark:text-white">{Math.round(metrics.spendingVelocity / 1000).toFixed(0)}K</Text>
+                    <FontAwesome 
+                      name={metrics.spendingVelocity <= metrics.lastMonthVelocity ? 'arrow-down' : 'arrow-up'} 
+                      size={8} 
+                      color={metrics.spendingVelocity <= metrics.lastMonthVelocity ? '#10b981' : '#ef4444'} 
+                    />
                   </View>
-                  <Text className="text-xl font-bold text-slate-900 dark:text-white">{Math.round(metrics.spendingVelocity / 1000).toFixed(0)}K</Text>
-                  <Text className="text-slate-400 text-xs mt-0.5">KES/day</Text>
                 </View>
               </View>
 
               {/* Net Worth Card */}
-              <View className={`p-5 rounded-[12px] mb-3 overflow-hidden relative ${metrics.netWorth >= 0
+              <View className={`p-5 rounded-[16px] mb-4 overflow-hidden relative ${metrics.netWorth >= 0
                 ? 'bg-emerald-600'
                 : 'bg-red-600'
                 }`}>
@@ -357,32 +352,12 @@ export default function AnalyticsScreen() {
                   </View>
                 </View>
               </View>
-
-              {/* Savings Progress */}
-              {metrics.totalSavingsTarget > 0 && (
-                <View className="app-card-muted p-5">
-                  <View className="flex-row justify-between items-center mb-3">
-                    <Text className="font-bold text-slate-900 dark:text-white">Savings Goals</Text>
-                    <Text className="text-slate-400 text-xs">{metrics.savingsProgress.toFixed(0)}% achieved</Text>
-                  </View>
-                  <View className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <View
-                      className="h-full rounded-full"
-                      style={{ width: `${Math.min(100, metrics.savingsProgress)}%`, backgroundColor: '#10b981' }}
-                    />
-                  </View>
-                  <View className="flex-row justify-between mt-2">
-                    <Text className="text-slate-400 text-xs">KES {metrics.totalSaved.toLocaleString()} saved</Text>
-                    <Text className="text-slate-400 text-xs">of KES {metrics.totalSavingsTarget.toLocaleString()}</Text>
-                  </View>
-                </View>
-              )}
             </View>
           )}
 
           {/* ── TRENDS TAB ── */}
           {insightsTab === 'trends' && (
-            <View className="app-card-muted p-5">
+            <View className="app-card p-5">
               <Text className="text-slate-900 dark:text-white font-bold mb-1">Spending by Category</Text>
               <Text className="text-slate-400 text-xs mb-5">This month vs last month</Text>
 
@@ -443,9 +418,9 @@ export default function AnalyticsScreen() {
 
           {/* ── FORECAST TAB ── */}
           {insightsTab === 'forecast' && forecast && (
-            <View className="gap-3">
+            <View className="gap-4">
               {/* Main forecast card */}
-              <View className="app-card-muted p-5">
+              <View className="app-card p-5">
                 <View className="flex-row justify-between items-start mb-4">
                   <View>
                     <Text className="text-slate-400 text-xs">Projected Next Month</Text>
@@ -460,18 +435,18 @@ export default function AnalyticsScreen() {
                   </View>
                 </View>
 
-                <View className="bg-slate-50 dark:bg-slate-800/50 rounded-[12px] p-4 gap-3">
+                <View className="bg-slate-50 dark:bg-[#0f172a] rounded-[16px] p-4 gap-3">
                   <View className="flex-row justify-between">
                     <Text className="text-slate-500 text-xs">Projected Income</Text>
                     <Text className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">KES {forecast.projectedIncome.toLocaleString()}</Text>
                   </View>
-                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-700 pt-2">
+                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
                     <Text className="text-slate-500 text-xs">Projected Savings</Text>
                     <Text className={`font-bold text-xs ${forecast.projectedSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                       {forecast.projectedSavings >= 0 ? '+' : ''}KES {forecast.projectedSavings.toLocaleString()}
                     </Text>
                   </View>
-                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-700 pt-2">
+                  <View className="flex-row justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
                     <Text className="text-slate-500 text-xs">Based on</Text>
                     <Text className="text-slate-700 dark:text-slate-300 font-bold text-xs">{forecast.monthlyDataPoints} months of data</Text>
                   </View>
@@ -480,7 +455,7 @@ export default function AnalyticsScreen() {
 
               {/* Days until exhaustion */}
               {forecast.daysUntilExhaustion !== null && (
-                <View className="p-5 rounded-[12px] bg-amber-50 dark:bg-amber-900/20">
+                <View className="p-5 rounded-[16px] bg-amber-50 dark:bg-amber-900/20">
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 items-center justify-center">
                       <FontAwesome name="clock-o" size={18} color="#f59e0b" />
@@ -502,253 +477,212 @@ export default function AnalyticsScreen() {
       )}
 
       {/* Header */}
-      <View className="app-card-muted m-4 px-4 py-4">
+      <View className="app-card m-4 px-4 py-4 mb-4">
         <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Total Expense • {formatMonth(selectedDate)}</Text>
         <Text className="text-slate-900 dark:text-white text-xl font-bold mb-6">
           {formatCurrency(stats.expense)}
         </Text>
 
-        {/* New Month Selector */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="flex-row"
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {months.map((date, index) => {
-            const isSelected = isSameMonth(date, selectedDate);
-            return (
-              <TouchableOpacity
-                key={index}
-                onPress={() => setSelectedDate(date)}
-                className={`px-3 py-1 rounded-[8px] border ${isSelected
-                  ? 'bg-blue-600 border-blue-600'
-                  : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
-                  }`}
-              >
-                <Text className={`font-semibold text-xs ${isSelected
-                  ? 'text-white'
-                  : 'text-slate-600 dark:text-slate-400'
-                  }`}>
-                  {index === 0 ? 'This Month' : formatMonthShort(date)}
-                </Text>
-                <Text className={`text-[10px] text-center ${isSelected
-                  ? 'text-blue-200'
-                  : 'text-slate-400 dark:text-slate-500'
-                  }`}>
-                  {date.getFullYear()}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
 
-      {/* Summary Cards */}
-      <View className="px-6 mt-6">
-        <View className="flex-row gap-3 mb-4">
-          {/*income card*/}
-          <TouchableOpacity onPress={() => router.push('/(tabs)/income')}>
-            <View className="app-card flex-1 p-4">
-              <View className="flex-row items-center mb-2">
-                <Image
-                  source={require('../../assets/svg/income.svg')}
-                  style={{ width: 20, height: 20 }}
-                  tintColor={"#10b981"}
-                  contentFit="contain"
-                />
-                <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Income</Text>
-              </View>
-              <Text className="text-green-600 dark:text-green-400 text-2xl font-bold">KES {thisMonthTotal.toLocaleString()}</Text>
-            </View>
-          </TouchableOpacity>
-          <View className="app-card flex-1 p-4">
-            <View className="flex-row items-center mb-2">
-              <Image
-                source={require('../../assets/svg/expense.svg')}
-                style={{ width: 22, height: 22 }}
-                tintColor={"#ef4444"}
-                contentFit="contain"
-              />
-              <Text className="text-slate-600 dark:text-slate-400 text-xs ml-4">Expense</Text>
-            </View>
-            <Text className="text-red-600 dark:text-red-400 text-2xl font-bold">{formatCurrency(stats.expense)}</Text>
+
+        {/* Summary Metrics Row */}
+        <View className="flex-row items-center border-t border-slate-50 dark:border-slate-800/50 -mx-4 pt-4 px-4 pb-4">
+          <View className="flex-1 items-center border-r border-slate-100 dark:border-slate-800/50">
+            <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1 text-center">Income</Text>
+            <Text className="text-green-600 dark:text-green-500 font-bold text-sm">KES {thisMonthTotal.toLocaleString()}</Text>
           </View>
-        </View>
-
-        <View className="app-card p-4 rounded-[12px]">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-slate-600 dark:text-slate-400 text-sm">Net Balance</Text>
-            <Text className={`text-2xl font-bold ${stats.net >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {formatCurrency(thisMonthTotal - stats.expense)}
+          <View className="flex-1 items-center border-r border-slate-100 dark:border-slate-800/50">
+            <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1 text-center">Net Balance</Text>
+            <Text className={`font-bold text-sm ${(thisMonthTotal - stats.expense) >= 0 ? 'text-blue-600 dark:text-blue-500' : 'text-red-500'}`}>
+              KES {Math.abs(thisMonthTotal - stats.expense).toLocaleString()}
             </Text>
           </View>
+          <View className="flex-1 items-center">
+            <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1 text-center">Expense</Text>
+            <Text className="text-red-600 dark:text-red-500 font-bold text-sm">KES {stats.expense.toLocaleString()}</Text>
+          </View>
         </View>
-      </View>
 
+        {/* Date Selector / Navigation */}
+        <View className="flex-row items-center justify-between border-t border-slate-50 dark:border-slate-800/50 pt-4 mb-4 mx-0">
+          <TouchableOpacity
+            onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1))}
+            className="w-10 h-10 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-800/50"
+          >
+            <FontAwesome name="chevron-left" size={12} color={isDark ? '#94a3b8' : '#64748b'} />
+          </TouchableOpacity>
 
+          <Text className="text-slate-900 dark:text-white font-bold">{formatMonth(selectedDate)}</Text>
 
-      {/* Spending by Category */}
-      <View className="px-6 mt-8">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Spending by Category</Text>
-        {stats.categories.length > 0 ? (
-          <View className="app-card p-4">
-            {stats.categories.slice(0, 8).map((cat, index) => (
-              <View key={index} className="mb-4">
-                <View className="flex-row items-center justify-between mb-2">
-                  <View className="flex-row items-center flex-1">
-                    <View className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: cat.color }} />
-                    <Text className="text-slate-900 dark:text-slate-300 text-sm font-medium flex-1">{cat.name}</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs mr-4">{cat.percentage.toFixed(1)}% of total</Text>
-                    <Text className="text-slate-600 dark:text-slate-400 text-xs">{cat.count} txns</Text>
+          <TouchableOpacity
+            onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1))}
+            className="w-10 h-10 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-800/50"
+          >
+            <FontAwesome name="chevron-right" size={12} color={isDark ? '#94a3b8' : '#64748b'} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Spending by Category - Merged into card */}
+        <View className="border-t border-slate-50 dark:border-slate-800/50 -mx-4">
+          <View className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+            <Text className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest">Spending by Category</Text>
+          </View>
+          {stats.categories.length === 0 ? (
+            <View className="p-8 items-center justify-center">
+              <Text className="text-slate-400 text-sm">No transaction data for this period</Text>
+            </View>
+          ) : (
+            <>
+              {stats.categories.map((cat, index) => (
+                <View
+                  key={cat.name}
+                  className={`flex-row items-center p-3 ${index !== stats.categories.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : ''
+                    }`}
+                >
+                  <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
+                    <FontAwesome name={cat.name.includes('Rent') ? 'home' : 'tag'} size={16} color={cat.color} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-900 dark:text-white font-semibold mb-1 text-[13px]">{cat.name}</Text>
+                    <View className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <View
+                        className="h-full rounded-full"
+                        style={{
+                          backgroundColor: cat.color,
+                          width: `${(cat.amount / stats.expense) * 100}%`
+                        }}
+                      />
+                    </View>
+                  </View>
+                  <View className="items-end ml-4">
+                    <Text className="text-slate-900 dark:text-white font-bold mb-1 text-[13px]">{formatCurrency(cat.amount)}</Text>
+                    <Text className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">
+                      {((cat.amount / stats.expense) * 100).toFixed(0)}%
+                    </Text>
                   </View>
                 </View>
-                <View className="flex-row items-center">
-                  <View className="flex-1 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden mr-3">
-                    <View
-                      className="h-full rounded-full"
-                      style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
-                    />
-                  </View>
-                  <Text className="text-slate-900 dark:text-white font-bold w-24 text-right">{formatCurrency(cat.amount)}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View className="app-card p-8 items-center">
-            <FontAwesome name="pie-chart" size={48} color="#94a3b8" />
-            <Text className="text-slate-500 dark:text-slate-400 mt-4">No expense data for this period</Text>
-          </View>
-        )}
+              ))}
+            </>
+          )}
+        </View>
       </View>
 
       {/* Monthly Fuliza Fees - Only displayed if there are fees */}
       {filteredTransactions.some(t => t.id.startsWith('FULIZA-FEES-')) && (
-        <View className="px-6 mt-8 mb-2">
-          <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">Monthly Fuliza Fees</Text>
-          <View className="gap-4">
-            {filteredTransactions
-              .filter(t => t.id.startsWith('FULIZA-FEES-'))
-              .map((tx) => (
-                <View
-                  key={tx.id}
-                  className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-[12px] border border-orange-100 dark:border-orange-800/50"
-                >
-                  <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
-                    <FontAwesome name="warning" size={20} color="#f97316" />
+        <View className="px-4 mt-8 mb-4">
+          <View className="app-card p-5">
+            <Text className="text-slate-900 dark:text-white text-base font-bold mb-4">Monthly Fuliza Fees</Text>
+            <View className="gap-4">
+              {filteredTransactions
+                .filter(t => t.id.startsWith('FULIZA-FEES-'))
+                .map((tx) => (
+                  <View
+                    key={tx.id}
+                    className="flex-row items-center bg-orange-50 dark:bg-orange-900/20 p-4 rounded-[16px] border border-orange-100 dark:border-orange-800/50"
+                  >
+                    <View className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/40 items-center justify-center mr-4 border border-orange-200 dark:border-orange-800">
+                      <FontAwesome name="warning" size={20} color="#f97316" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
+                      <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
+                    </View>
+                    <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
+                      - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-slate-900 dark:text-white font-bold text-base">{tx.recipientName}</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{tx.date.toLocaleDateString()}</Text>
-                  </View>
-                  <Text className="text-orange-600 dark:text-orange-400 font-bold text-base">
-                    - KES {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-              ))}
+                ))}
+            </View>
           </View>
         </View>
       )}
 
-      {/* Year-to-Date Stats */}
-      <View className="px-6 mt-8 mb-8">
-        <Text className="text-slate-900 dark:text-white text-lg font-bold mb-4">{currentYear} Summary</Text>
-
-        <View className="flex-row gap-4">
-
-          {/* Income Card */}
-          <View className="app-card-muted flex-1 p-5">
-
-            <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
-              Yearly Income
-            </Text>
-
-            {yearlyStats.income.length > 0 ? (
-              <>
-                <View className="items-center justify-center mb-4">
-                  <PieChart
-                    data={yearlyStats.income}
-                    donut
-                    radius={65}
-                    innerRadius={45}
-                    focusOnPress
-                    animationDuration={600}
-                    strokeWidth={3}
-                    strokeColor={isDark ? "#0f172a" : "#ffffff"}
-                    innerCircleColor={innerCircleColor}
-                    centerLabelComponent={() => (
-                      <View className="items-center">
-                        <Text className="text-[12px] font-bold text-slate-900 dark:text-white">
-                          {formatCurrency(yearlyStats.totalIncome)}
-                        </Text>
-                        <Text className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                          Total
-                        </Text>
-                      </View>
-                    )}
-                  />
+      {/* Yearly Overview Card - Combined */}
+      <View className="px-4 mt-8 mb-8">
+        <View className="app-card p-5">
+          <Text className="text-slate-900 dark:text-white text-base font-bold mb-6">{currentYear} Overview</Text>
+          <View className="flex-row">
+            {/* Yearly Income Section */}
+            <View className="flex-1 items-center">
+              <Text className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-6 text-center">
+                Income Log
+              </Text>
+              {yearlyStats.income.length > 0 ? (
+                <PieChart
+                  data={yearlyStats.income}
+                  donut
+                  radius={80}
+                  innerRadius={40}
+                  onPress={(item: any) => setSelectedYearlyIncome(item)}
+                  animationDuration={600}
+                  strokeWidth={2}
+                  strokeColor={isDark ? "#0f172a" : "#ffffff"}
+                  innerCircleColor={innerCircleColor}
+                  centerLabelComponent={() => (
+                    <View className="items-center px-1">
+                      <Text className="text-[11px] font-bold text-slate-900 dark:text-white text-center" numberOfLines={1}>
+                        {selectedYearlyIncome ? formatCurrency(selectedYearlyIncome.value) : formatCurrency(yearlyStats.totalIncome)}
+                      </Text>
+                      <Text className="text-[8px] uppercase tracking-tighter text-slate-500 dark:text-slate-400 text-center" numberOfLines={1}>
+                        {selectedYearlyIncome ? selectedYearlyIncome.text : 'Total'}
+                      </Text>
+                    </View>
+                  )}
+                />
+              ) : (
+                <View className="py-6 items-center">
+                  <Text className="text-slate-400 text-[10px]">No income data</Text>
                 </View>
+              )}
+            </View>
 
-                <View className="mt-2 align-left">
-                  {renderLegend(yearlyStats.income)}
+            {/* Vertical Divider */}
+            <View className="w-[1px] bg-slate-50 dark:bg-slate-800/50 mx-2" />
+
+            {/* Yearly Expense Section */}
+            <View className="flex-1 items-center">
+              <Text className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-6 text-center">
+                Expenditure
+              </Text>
+              {yearlyStats.expense.length > 0 ? (
+                <PieChart
+                  data={yearlyStats.expense}
+                  donut
+                  radius={80}
+                  innerRadius={40}
+                  onPress={(item: any) => setSelectedYearlyExpense(item)}
+                  animationDuration={600}
+                  strokeWidth={1}
+                  strokeColor={isDark ? "#0f172a" : "#ffffff"}
+                  innerCircleColor={innerCircleColor}
+                  centerLabelComponent={() => (
+                    <View className="items-center px-1">
+                      <Text className="text-[11px] font-bold text-slate-900 dark:text-white text-center" numberOfLines={1}>
+                        {selectedYearlyExpense ? formatCurrency(selectedYearlyExpense.value) : formatCurrency(yearlyStats.totalExpense)}
+                      </Text>
+                      <Text className="text-[8px] uppercase tracking-tighter text-slate-500 dark:text-slate-400 text-center" numberOfLines={1}>
+                        {selectedYearlyExpense ? selectedYearlyExpense.text : 'Total'}
+                      </Text>
+                    </View>
+                  )}
+                />
+              ) : (
+                <View className="py-6 items-center">
+                  <Text className="text-slate-400 text-[10px]">No expense data</Text>
                 </View>
-              </>
-            ) : (
-              <View className="py-10 items-center">
-                <Text className="text-slate-400 dark:text-slate-500 text-sm">
-                  No income data for {currentYear}
-                </Text>
-              </View>
-            )}
+              )}
+            </View>
           </View>
 
-          {/* Expense Card */}
-          <View className="app-card-muted flex-1 p-5">
-
-            <Text className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-3 text-center">
-              Yearly Expenditure
-            </Text>
-
-            {yearlyStats.expense.length > 0 ? (
-              <>
-                <View className="items-center justify-center mb-4">
-                  <PieChart
-                    data={yearlyStats.expense}
-                    donut
-                    radius={65}
-                    innerRadius={45}
-                    focusOnPress
-                    animationDuration={600}
-                    strokeWidth={3}
-                    strokeColor={isDark ? "#0f172a" : "#ffffff"}
-                    innerCircleColor={innerCircleColor}
-                    centerLabelComponent={() => (
-                      <View className="items-center">
-                        <Text className="text-lg font-bold text-slate-900 dark:text-white">
-                          {formatCurrency(yearlyStats.totalExpense)}
-                        </Text>
-                        <Text className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                          Total
-                        </Text>
-                      </View>
-                    )}
-                  />
-                </View>
-
-                <View className="text-left">
-                  {renderLegend(yearlyStats.expense)}
-                </View>
-              </>
-            ) : (
-              <View className="py-10 items-center">
-                <Text className="text-slate-400 dark:text-slate-500 text-sm">
-                  No expense data for {currentYear}
-                </Text>
-              </View>
-            )}
-          </View>
-
+          <TouchableOpacity 
+            onPress={() => {
+              setSelectedYearlyIncome(null);
+              setSelectedYearlyExpense(null);
+            }}
+            className="mt-6 py-2 items-center border-t border-slate-50 dark:border-slate-800/50"
+          >
+            <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Tap chart to inspect • Reset View</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Animated.ScrollView>

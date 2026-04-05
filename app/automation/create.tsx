@@ -127,7 +127,7 @@ export default function CreateAutomationRuleScreen() {
 
     if (loading) {
         return (
-            <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
+            <View className="flex-1 app-screen items-center justify-center">
                 <ActivityIndicator size="large" color="#3b82f6" />
             </View>
         );
@@ -136,7 +136,7 @@ export default function CreateAutomationRuleScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-gray-50 dark:bg-[#020617]"
+            className="flex-1 app-screen"
         >
             {/* Header */}
             <View

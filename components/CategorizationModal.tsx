@@ -141,7 +141,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                     <View className="p-6 border-b border-gray-200 dark:border-slate-800 flex-row justify-between items-center">
                         <View className="flex-1 pr-4">
                             <Text className="text-slate-500 color-[#1e293b] dark:text-slate-300 font-bold text-[14px] mt-3 text-center">
-                                {transaction.recipientName} • KES {transaction.amount.toLocaleString()}
+                                {(transaction.recipientName || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • KES {transaction.amount.toLocaleString()}
                             </Text>
                         </View>
                         <TouchableOpacity onPress={onClose} className="p-2 -mr-2 mt-[-10px] bg-gray-100 dark:bg-slate-800 rounded-full">

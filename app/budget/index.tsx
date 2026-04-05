@@ -122,7 +122,7 @@ export default function BudgetScreen() {
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-gray-50 dark:bg-[#020617]" edges={['top']}>
+        <SafeAreaView className="flex-1 app-screen" edges={['top']}>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             <KeyboardAvoidingView

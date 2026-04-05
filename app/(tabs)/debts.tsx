@@ -161,7 +161,7 @@ export default function DebtsScreen() {
 
     return (
       <TouchableOpacity
-        className="app-card p-3 mb-4 mx-5 overflow-hidden"
+        className="app-card p-3 mb-4 mx-4 overflow-hidden"
         onPress={() => handleDebtPress(item.id)}
       >
         <View
@@ -227,7 +227,7 @@ export default function DebtsScreen() {
                 ) : null}
               </View>
               <Text className="text-slate-900 dark:text-white font-black text-[15px] mt-0.5" numberOfLines={1}>
-                {item.name}
+                {(item.name || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
               </Text>
             </View>
           </View>
@@ -290,10 +290,10 @@ export default function DebtsScreen() {
 
   return (
     <View
-      className="flex-1 bg-gray-50 dark:bg-[#020617]"
+      className="flex-1 app-screen"
       style={{ paddingTop: insets.top }}
     >
-      <View className="px-6 py-4 flex-row justify-between items-center bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800">
+      <View className="px-4 py-4 flex-row justify-between items-center bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800">
         <Text className="text-l font-bold text-slate-900 dark:text-white">
           {typeFilter === 'LIABILITY' ? 'My Debts' : 'All my Loans and Receivables'}
         </Text>
@@ -320,16 +320,16 @@ export default function DebtsScreen() {
         }
         contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
-          <View className="px-6 mt-4 ">
+          <View className="px-4 mt-4 ">
             {/* Main Tabs (Active vs Paid) */}
-            <View style={{ flexDirection: 'row', backgroundColor: '#e6edf3', padding: 2, borderRadius: 50, marginBottom: 16 }}>
+            <View className="flex-row bg-slate-200 dark:bg-slate-800 p-0.5 rounded-full mb-4">
               {(['ACTIVE', 'PAID'] as const).map((f) => (
                 <TouchableOpacity
                   key={f}
-                  style={{ flex: 1, paddingVertical: 6, borderRadius: 50, backgroundColor: statusFilter === f ? '#ffffff' : 'transparent', alignItems: 'center' }}
+                  className={`flex-1 py-1.5 rounded-full items-center ${statusFilter === f ? 'bg-white dark:bg-slate-700 shadow-sm' : 'bg-transparent'}`}
                   onPress={() => setStatusFilter(f)}
                 >
-                  <Text style={{ textAlign: 'center', fontWeight: '700', color: statusFilter === f ? '#0f172a' : '#94a3b8' }}>
+                  <Text className={`text-center font-bold ${statusFilter === f ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
                     {f === 'ACTIVE' ? 'Active' : 'History'}
                   </Text>
                 </TouchableOpacity>
@@ -342,7 +342,7 @@ export default function DebtsScreen() {
                   {liabilityCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('LIABILITY')}
-                      className={`flex-1 rounded-[12px] p-4 overflow-hidden relative ${typeFilter === 'LIABILITY'
+                      className={`flex-1 rounded-[16px] p-4 overflow-hidden relative ${typeFilter === 'LIABILITY'
                         ? 'bg-red-500'
                         : 'bg-white dark:bg-[#0f172a]'
                         }`}
@@ -365,7 +365,7 @@ export default function DebtsScreen() {
                   {receivableCount > 0 && (
                     <TouchableOpacity
                       onPress={() => setTypeFilter('RECEIVABLE')}
-                      className={`flex-1 rounded-[12px] p-4 overflow-hidden relative ${typeFilter === 'RECEIVABLE'
+                      className={`flex-1 rounded-[16px] p-4 overflow-hidden relative ${typeFilter === 'RECEIVABLE'
                         ? 'bg-green-500'
                         : 'bg-white dark:bg-[#0f172a]'
                         }`}

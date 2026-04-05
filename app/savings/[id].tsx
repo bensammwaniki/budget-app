@@ -186,7 +186,7 @@ export default function GoalDetailScreen() {
     const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <View className="flex-1 app-screen">
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             {/* Header */}
@@ -343,7 +343,7 @@ export default function GoalDetailScreen() {
                 presentationStyle="pageSheet"
                 onRequestClose={() => setShowLinkModal(false)}
             >
-                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6 mt-8">
+                <View className="flex-1 app-screen pt-6 mt-8">
                     <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
                         <TouchableOpacity onPress={() => setShowLinkModal(false)} className="p-2 -mr-2">

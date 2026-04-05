@@ -12,7 +12,7 @@ export default function PrivacyPolicyScreen() {
     const { colorScheme } = useColorScheme();
 
     return (
-        <SafeAreaView className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <SafeAreaView className="flex-1 app-screen">
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             {/* Header */}

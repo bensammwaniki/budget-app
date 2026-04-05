@@ -4,11 +4,11 @@
 
 @layer components {
   .app-card {
-    @apply bg-white dark:bg-[#1e293b] rounded-[12px];
+    @apply bg-white dark:bg-[#1e293b] rounded-[16px] border border-slate-100 dark:border-slate-700 overflow-hidden;
   }
 
   .app-card-muted {
-    @apply bg-white dark:bg-[#0f172a] rounded-[12px];
+    @apply bg-slate-50 dark:bg-[#0f172a] rounded-[16px] border border-slate-100 dark:border-slate-800 overflow-hidden;
   }
 
   .app-pill {
@@ -41,5 +41,9 @@
 
   .app-pill-accent-text {
     @apply text-[9px] font-semibold text-blue-700 dark:text-blue-300;
+  }
+
+  .app-screen {
+    @apply bg-slate-50 dark:bg-[#020617];
   }
 }

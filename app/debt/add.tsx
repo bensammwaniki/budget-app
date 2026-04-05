@@ -296,14 +296,14 @@ function AddDebtScreen() {
 
   if (loadingDebt) {
     return (
-      <View className="flex-1 bg-gray-50 dark:bg-[#020617] items-center justify-center">
+      <View className="flex-1 app-screen items-center justify-center">
         <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+    <View className="flex-1 app-screen">
       {/* Header */}
       <Animated.View
         style={[

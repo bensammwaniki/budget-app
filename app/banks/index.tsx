@@ -1,8 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useAlert } from '../../context/AlertContext';
 import { clearProcessedSms, getUserSettings, saveUserSettings } from '../../services/database';
 import { syncMessages } from '../../services/smsService';
@@ -109,8 +110,8 @@ export default function MyBanksScreen() {
     };
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
-            <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+        <View className="flex-1 app-screen">
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             {/* Header */}
             <View className="px-6 pt-16 pb-6 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800">

@@ -119,7 +119,7 @@ export default function DebtDetailScreen() {
 
         Alert.alert(
             "Clear Debt",
-            `Are you sure you want to mark "${debt.name}" as fully paid? This is usually for payments made in cash.`,
+            `Are you sure you want to mark "${(debt.name || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}" as fully paid? This is usually for payments made in cash.`,
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -211,7 +211,7 @@ export default function DebtDetailScreen() {
     const progress = Math.max(0, Math.min(((originalAmount - balanceWithFees) / originalAmount) * 100, 100));
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <View className="flex-1 app-screen">
             {/* Header */}
             <Animated.View
                 style={[
@@ -228,7 +228,7 @@ export default function DebtDetailScreen() {
                             contentFit="contain"
                         />
                     </TouchableOpacity>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white">{debt.name}</Text>
+                    <Text className="text-xl font-bold text-slate-900 dark:text-white">{(debt.name || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</Text>
                     <TouchableOpacity onPress={handleDeleteDebt} className="p-2 -mr-2">
                         <FontAwesome name="trash-o" size={22} color="#ef4444" />
                     </TouchableOpacity>
@@ -393,7 +393,7 @@ export default function DebtDetailScreen() {
 
             {/* Link Transaction Modal */}
             <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-4 mt-6">
+                <View className="flex-1 app-screen pt-4 mt-6">
                     <View className="px-6 py-4 flex-row items-center justify-between border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
                         <TouchableOpacity onPress={() => setModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 p-3 rounded-full">

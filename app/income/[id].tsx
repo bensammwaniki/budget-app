@@ -295,7 +295,7 @@ export default function IncomeDetailScreen() {
     };
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]">
+        <View className="flex-1 app-screen">
             <StatusBar style={isDark ? 'light' : 'dark'} />
 
             {/* Scroll-reactive header */}
@@ -445,7 +445,7 @@ export default function IncomeDetailScreen() {
 
             {/* Link Transaction Modal */}
             <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
-                <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6">
+                <View className="flex-1 app-screen pt-6">
                     <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
                         <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Income Transaction</Text>
                         <TouchableOpacity onPress={() => setShowModal(false)} className="p-2 -mr-2">
@@ -516,7 +516,7 @@ export default function IncomeDetailScreen() {
             {/* Manual Income Recording Modal */}
             <Modal visible={showManualModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManualModal(false)}>
                 <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                    <View className="flex-1 bg-gray-50 dark:bg-[#020617] pt-6 mt-6">
+                    <View className="flex-1 app-screen pt-6 mt-6">
                         <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
                             <Text className="text-xl font-bold text-slate-900 dark:text-white">Record Income</Text>
                             <TouchableOpacity onPress={() => setShowManualModal(false)} className="p-2 -mr-2">

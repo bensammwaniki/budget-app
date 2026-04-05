@@ -59,7 +59,7 @@ export default function DetectIncomeScreen() {
     };
 
     return (
-        <View className="flex-1 bg-gray-50 dark:bg-[#020617]" style={{ paddingTop: insets.top }}>
+        <View className="flex-1 app-screen" style={{ paddingTop: insets.top }}>
             <StatusBar style={isDark ? 'light' : 'dark'} />
 
             <View className="px-6 py-4 flex-row items-center border-b border-gray-200 dark:border-slate-800">
