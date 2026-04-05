@@ -119,13 +119,13 @@ export default function AnalyticsScreen() {
     const expense = filteredTransactions.filter(t => t.type === 'SENT').reduce((sum, t) => sum + t.amount, 0);
 
     // Category breakdown
-    const categoryMap: Record<string, { amount: number; color: string; count: number }> = {};
+    const categoryMap: Record<string, { amount: number; color: string; count: number; icon: string }> = {};
     filteredTransactions
       .filter(t => t.type === 'SENT')
       .forEach(t => {
         const cat = t.categoryName || 'Uncategorized';
         if (!categoryMap[cat]) {
-          categoryMap[cat] = { amount: 0, color: t.categoryColor || '#64748b', count: 0 };
+          categoryMap[cat] = { amount: 0, color: t.categoryColor || '#64748b', count: 0, icon: t.categoryIcon || 'tag' };
         }
         categoryMap[cat].amount += t.amount;
         categoryMap[cat].count += 1;
@@ -137,6 +137,7 @@ export default function AnalyticsScreen() {
         amount: data.amount,
         color: data.color,
         count: data.count,
+        icon: data.icon,
         percentage: expense > 0 ? (data.amount / expense) * 100 : 0
       }))
       .sort((a, b) => b.amount - a.amount);
@@ -539,8 +540,8 @@ export default function AnalyticsScreen() {
                   className={`flex-row items-center p-3 ${index !== stats.categories.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : ''
                     }`}
                 >
-                  <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
-                    <FontAwesome name={cat.name.includes('Rent') ? 'home' : 'tag'} size={16} color={cat.color} />
+                  <View className="w-8 h-8 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
+                    <FontAwesome name={cat.icon as any} size={12} color={cat.color} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-slate-900 dark:text-white font-semibold mb-1 text-[13px]">{cat.name}</Text>
