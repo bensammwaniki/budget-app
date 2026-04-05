@@ -611,7 +611,7 @@ export default function AnalyticsScreen() {
                 <PieChart
                   data={yearlyStats.income}
                   donut
-                  radius={80}
+                  radius={70}
                   innerRadius={40}
                   onPress={(item: any) => setSelectedYearlyIncome(item)}
                   animationDuration={600}
@@ -648,7 +648,7 @@ export default function AnalyticsScreen() {
                 <PieChart
                   data={yearlyStats.expense}
                   donut
-                  radius={80}
+                  radius={70}
                   innerRadius={40}
                   onPress={(item: any) => setSelectedYearlyExpense(item)}
                   animationDuration={600}

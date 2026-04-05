@@ -21,6 +21,7 @@ import { Debt } from '../../types/debt';
 
 export default function DebtsScreen() {
   const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
   const { showTabBar } = useScrollVisibility();
 
@@ -326,10 +327,21 @@ export default function DebtsScreen() {
               {(['ACTIVE', 'PAID'] as const).map((f) => (
                 <TouchableOpacity
                   key={f}
-                  className={`flex-1 py-1.5 rounded-full items-center ${statusFilter === f ? 'bg-white dark:bg-slate-700 shadow-sm' : 'bg-transparent'}`}
+                  className="flex-1 py-1.5 rounded-full items-center"
+                  style={{
+                    backgroundColor: statusFilter === f ? (isDark ? '#334155' : '#ffffff') : 'transparent',
+                    shadowColor: statusFilter === f ? "#000" : "transparent",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: statusFilter === f ? 0.05 : 0,
+                    shadowRadius: 1,
+                    elevation: statusFilter === f ? 2 : 0,
+                  }}
                   onPress={() => setStatusFilter(f)}
                 >
-                  <Text className={`text-center font-bold ${statusFilter === f ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+                  <Text 
+                    className="text-center font-bold"
+                    style={{ color: statusFilter === f ? (isDark ? '#ffffff' : '#0f172a') : '#94a3b8' }}
+                  >
                     {f === 'ACTIVE' ? 'Active' : 'History'}
                   </Text>
                 </TouchableOpacity>
@@ -338,52 +350,46 @@ export default function DebtsScreen() {
 
             {statusFilter === 'ACTIVE' && (
               <>
-                <View className="flex-row gap-3 mb-4">
-                  {liabilityCount > 0 && (
-                    <TouchableOpacity
-                      onPress={() => setTypeFilter('LIABILITY')}
-                      className={`flex-1 rounded-[16px] p-4 overflow-hidden relative ${typeFilter === 'LIABILITY'
-                        ? 'bg-red-500'
-                        : 'bg-white dark:bg-[#0f172a]'
-                        }`}
-                    >
-                      <View className="absolute right-[-10] top-[-10] opacity-10">
-                        <FontAwesome name="warning" size={72} color={typeFilter === 'LIABILITY' ? '#fff' : '#ef4444'} />
-                      </View>
-                      <Text className={`text-[10px] font-bold uppercase tracking-[1px] ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                        Debt Overview
-                      </Text>
-                      <Text style={{ fontSize: 20, fontWeight: '900', marginTop: 8, color: typeFilter === 'LIABILITY' ? '#fff' : '#0f172a' }}>
-                        {formatCurrency(liabilityTotal)}
-                      </Text>
-                      <Text className={`mt-3 text-[11px] ${typeFilter === 'LIABILITY' ? 'text-red-100' : 'text-slate-400'}`}>
-                        {liabilityCount} {liabilityCount === 1 ? 'debt' : 'debts'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                {/* Simplified Unified Debt Summary Card */}
+                <View className="app-card mb-4 p-5">
+                  <Text className="text-slate-900 dark:text-white text-base font-bold mb-5">Summary Dashboard</Text>
+                  <View className="flex-row">
+                    {/* Liability Column */}
+                    {liabilityCount > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setTypeFilter('LIABILITY')}
+                        activeOpacity={0.7}
+                        className={`flex-1 p-4 rounded-2xl border ${typeFilter === 'LIABILITY' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800' : 'bg-transparent border-transparent'}`}
+                      >
+                        <Text className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Liabilities</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: isDark ? '#fff' : '#0f172a' }}>{formatCurrency(liabilityTotal)}</Text>
+                        <View className="flex-row items-center gap-1 mt-3">
+                          <FontAwesome name="warning" size={10} color="#ef4444" />
+                          <Text className="text-[10px] text-slate-400 font-medium">{liabilityCount} active debts</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
 
-                  {receivableCount > 0 && (
-                    <TouchableOpacity
-                      onPress={() => setTypeFilter('RECEIVABLE')}
-                      className={`flex-1 rounded-[16px] p-4 overflow-hidden relative ${typeFilter === 'RECEIVABLE'
-                        ? 'bg-green-500'
-                        : 'bg-white dark:bg-[#0f172a]'
-                        }`}
-                    >
-                      <View className="absolute right-[-10] top-[-10] opacity-10">
-                        <FontAwesome name="arrow-circle-down" size={72} color={typeFilter === 'RECEIVABLE' ? '#fff' : '#22c55e'} />
-                      </View>
-                      <Text className={`text-[10px] font-bold uppercase tracking-[1px] ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                        Receivables Overview
-                      </Text>
-                      <Text style={{ fontSize: 20, fontWeight: '900', marginTop: 8, color: typeFilter === 'RECEIVABLE' ? '#fff' : '#0f172a' }}>
-                        {formatCurrency(receivableTotal)}
-                      </Text>
-                      <Text className={`mt-3 text-[11px] ${typeFilter === 'RECEIVABLE' ? 'text-green-100' : 'text-slate-400'}`}>
-                        {receivableCount} {receivableCount === 1 ? 'person owes' : 'people owe'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                    {liabilityCount > 0 && receivableCount > 0 && (
+                      <View className="w-4" />
+                    )}
+
+                    {/* Receivable Column */}
+                    {receivableCount > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setTypeFilter('RECEIVABLE')}
+                        activeOpacity={0.7}
+                        className={`flex-1 p-4 rounded-2xl border ${typeFilter === 'RECEIVABLE' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-transparent border-transparent'}`}
+                      >
+                        <Text className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Receivables</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: isDark ? '#fff' : '#0f172a' }}>{formatCurrency(receivableTotal)}</Text>
+                        <View className="flex-row items-center gap-1 mt-3">
+                          <FontAwesome name="arrow-circle-down" size={10} color="#22c55e" />
+                          <Text className="text-[10px] text-slate-400 font-medium">{receivableCount} active loans</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {liabilityCount === 0 && receivableCount === 0 && (

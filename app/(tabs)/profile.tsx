@@ -304,39 +304,39 @@ export default function ProfileScreen() {
                         />
                     </View>
 
-                    <View className="p-3 flex-row flex-wrap justify-between">
-                        {[
-                            { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/(tabs)/income') },
-                            { icon: require('../../assets/svg/budget.svg'), label: 'Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
-                            { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
-                            { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
-                            {
-                                icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
-                                value: `Day ${financialMonthStart}`
-                            },
-                            {
-                                icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
-                                value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
-                            },
-                            {
-                                icon: require('../../assets/svg/graph.svg'),
-                                label: 'Export Excel',
-                                color: '#0ea5e9',
-                                action: handleOpenExportModal,
-                                value: isExportingExcel ? 'Generating export...' : `Period: ${periodLabel(selectedExportPeriod)}`,
-                                disabled: isExportingExcel,
-                            },
-                            { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
-                            { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
-                        ].map((item, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                onPress={item.action ? item.action : undefined}
-                                disabled={!!item.disabled}
-                                className={`w-[48.5%] mb-3 p-4 rounded-[10px] border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-[#0f172a] ${item.disabled ? 'opacity-60' : ''}`}
-                            >
-                                <View className="flex-row justify-between items-start mb-3">
-                                    <View className="w-10 h-10 rounded-full items-center justify-center bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-slate-700">
+                    <View className="p-3">
+                        <View className="flex-row flex-wrap justify-between">
+                            {[
+                                { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/(tabs)/income') },
+                                { icon: require('../../assets/svg/budget.svg'), label: 'Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
+                                { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
+                                { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
+                                {
+                                    icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
+                                    value: `Day ${financialMonthStart}`
+                                },
+                                {
+                                    icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
+                                    value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
+                                },
+                                {
+                                    icon: require('../../assets/svg/graph.svg'),
+                                    label: 'Export Excel',
+                                    color: '#0ea5e9',
+                                    action: handleOpenExportModal,
+                                    value: isExportingExcel ? 'Generating export...' : `Period: ${periodLabel(selectedExportPeriod)}`,
+                                    disabled: isExportingExcel,
+                                },
+                                { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
+                                { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
+                            ].map((item, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    onPress={item.action ? item.action : undefined}
+                                    disabled={!!item.disabled}
+                                    className="w-full flex-row items-center p-3 mb-2 rounded-[12px] bg-gray-50 dark:bg-[#0f172a] border border-gray-100/50 dark:border-slate-800/50"
+                                >
+                                    <View className="w-10 h-10 rounded-full items-center justify-center mr-4 bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-slate-800">
                                         <Image
                                             source={item.icon as any}
                                             style={{ width: 18, height: 18 }}
@@ -344,34 +344,35 @@ export default function ProfileScreen() {
                                             contentFit="contain"
                                         />
                                     </View>
-                                    <FontAwesome name="angle-right" size={16} color="#94a3b8" />
-                                </View>
-                                <Text className="text-slate-800 dark:text-white font-semibold text-[13px] leading-4">{item.label}</Text>
-                                {item.value && <Text className="text-slate-500 dark:text-slate-400 text-[11px] mt-1">{item.value}</Text>}
-                            </TouchableOpacity>
-                        ))}
+                                    <View className="flex-1">
+                                        <Text className="text-slate-800 dark:text-white font-bold text-sm leading-4">{item.label}</Text>
+                                        {item.value && <Text className="text-slate-500 dark:text-slate-400 text-[10px] mt-1">{item.value}</Text>}
+                                    </View>
+                                    <FontAwesome name="angle-right" size={14} color="#94a3b8" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
                 </View>
 
                 {/* Manage Categories Section */}
                 <View className="mt-8">
-                    <View className="flex-row justify-between items-center mb-4">
-                        <Text className="text-slate-900 dark:text-white text-lg font-bold">Custom Categories</Text>
-                        <TouchableOpacity
-                            onPress={() => setModalVisible(true)}
-                            className="bg-blue-500 px-3 py-1.5 rounded-full"
-                        >
-                            <Text className="text-white text-xs font-bold">+ Add New</Text>
-                        </TouchableOpacity>
-                    </View>
-
                     <View className="app-card p-4">
+                        <View className="flex-row justify-between items-center mb-6">
+                            <Text className="text-slate-900 dark:text-white text-base font-bold">Custom Categories</Text>
+                            <TouchableOpacity
+                                onPress={() => setModalVisible(true)}
+                                className="bg-blue-500 px-3 py-1.5 rounded-full"
+                            >
+                                <Text className="text-white text-xs font-bold">+ Add New</Text>
+                            </TouchableOpacity>
+                        </View>
                         {categories.filter(c => !!c.isCustom).length === 0 ? (
                             <Text className="text-slate-500 dark:text-slate-400 text-center py-4">No custom categories yet</Text>
                         ) : (
                             <View className="gap-3">
                                 {categories.filter(c => !!c.isCustom).map((cat) => (
-                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-[14px] border border-gray-100 dark:border-slate-800">
+                                    <View key={cat.id} className="flex-row items-center justify-between bg-gray-50 dark:bg-[#0f172a] p-3 rounded-[12px] border border-gray-100/50 dark:border-slate-800/50">
                                         <View className="flex-row items-center flex-1">
                                             <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
                                                 <FontAwesome name={cat.icon as any} size={16} color={cat.color} />

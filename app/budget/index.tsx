@@ -3,15 +3,19 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCategories, getCategorySpending, getMonthlyBudget, saveMonthlyBudget } from '../../services/database';
 import { Category } from '../../types/transaction';
+import { Picker } from '@react-native-picker/picker';
 
 export default function BudgetScreen() {
     const { colorScheme } = useColorScheme();
+    const isDark = colorScheme === 'dark';
     const router = useRouter();
+    
+    // UI State
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -21,8 +25,13 @@ export default function BudgetScreen() {
     // Data State
     const [categories, setCategories] = useState<Category[]>([]);
     const [income, setIncome] = useState('');
+    const [savingsTarget, setSavingsTarget] = useState('');
     const [allocations, setAllocations] = useState<Record<number, string>>({});
     const [spending, setSpending] = useState<Record<number, number>>({});
+
+    // New Allocation Form State
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+    const [currentBudgetAmount, setCurrentBudgetAmount] = useState('');
 
     const formatWithCommas = (value: string) => {
         const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
@@ -30,12 +39,11 @@ export default function BudgetScreen() {
         return parseInt(numeric, 10).toLocaleString();
     };
 
-    const handleIncomeChange = (text: string) => {
-        setIncome(formatWithCommas(text));
-    };
+    const handleIncomeChange = (text: string) => setIncome(formatWithCommas(text));
+    const handleSavingsChange = (text: string) => setSavingsTarget(formatWithCommas(text));
 
     const monthKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`;
-    const monthName = selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const monthName = selectedDate.toLocaleString('default', { month: 'long' });
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -46,10 +54,15 @@ export default function BudgetScreen() {
                 getCategorySpending(monthKey)
             ]);
 
-            // Filter out Income categories from allocation list
             setCategories(cats.filter(c => c.type === 'EXPENSE'));
-
             setIncome(budget.totalIncome > 0 ? budget.totalIncome.toLocaleString() : '');
+
+            // For now, if budget exists, we can infer savingsTarget if we had a way to store it.
+            // But since it's a new flow, we might start fresh or calculate from totalIncome - allocations.
+            const budgetAllocated = budget.allocations.reduce((sum, a) => sum + a.budgetAmount, 0);
+            if (budget.totalIncome > 0) {
+              setSavingsTarget((budget.totalIncome - budgetAllocated).toLocaleString());
+            }
 
             const allocs: Record<number, string> = {};
             budget.allocations.forEach(a => {
@@ -60,58 +73,64 @@ export default function BudgetScreen() {
 
         } catch (error) {
             console.error('Error loading budget data:', error);
-            Alert.alert('Error', 'Failed to load budget data');
         } finally {
             setLoading(false);
         }
     }, [monthKey]);
 
-    useFocusEffect(
-        useCallback(() => {
-            const task = InteractionManager.runAfterInteractions(() => {
-                loadData();
-            });
-            return () => task.cancel();
-        }, [loadData])
-    );
+    useFocusEffect(useCallback(() => {
+        const task = InteractionManager.runAfterInteractions(() => { loadData(); });
+        return () => task.cancel();
+    }, [loadData]));
 
-    const handleSave = async () => {
+    const numIncome = parseFloat(income.replace(/,/g, '')) || 0;
+    const numSavings = parseFloat(savingsTarget.replace(/,/g, '')) || 0;
+    const monthlySpendingBudget = Math.max(0, numIncome - numSavings);
+    const totalAllocated = Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val.replace(/,/g, '')) || 0), 0);
+    const remainingToAllocate = monthlySpendingBudget - totalAllocated;
+
+    const handleSaveAndClose = async () => {
         setSaving(true);
         try {
-            const numericIncome = parseFloat(income.replace(/,/g, '')) || 0;
             const allocationList = Object.entries(allocations).map(([catId, amount]) => ({
                 categoryId: parseInt(catId),
                 budgetAmount: parseFloat(amount.replace(/,/g, '')) || 0
             }));
-
-            await saveMonthlyBudget(monthKey, numericIncome, allocationList);
-            Alert.alert('Success', 'Budget saved successfully!');
+            await saveMonthlyBudget(monthKey, numIncome, allocationList);
+            router.back();
         } catch (error) {
             console.error('Error saving budget:', error);
             Alert.alert('Error', 'Failed to save budget');
-        } finally {
-            setSaving(false);
+            router.back();
         }
     };
 
     const handleAllocationChange = (categoryId: number, value: string) => {
-        const formatted = formatWithCommas(value);
-        setAllocations(prev => ({
-            ...prev,
-            [categoryId]: formatted
-        }));
+        setAllocations(prev => ({ ...prev, [categoryId]: formatWithCommas(value) }));
     };
 
-    const changeMonth = (direction: -1 | 1) => {
-        const newDate = new Date(selectedDate);
-        newDate.setMonth(newDate.getMonth() + direction);
-        setSelectedDate(newDate);
+    const handleEditAllocation = (catId: number) => {
+        const cat = categories.find(c => c.id === catId);
+        if (cat) {
+            setSelectedCategory(cat);
+            setCurrentBudgetAmount(allocations[catId] || '');
+        }
     };
 
-    // Calculations
-    const totalAllocated = Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val.replace(/,/g, '')) || 0), 0);
-    const totalIncome = parseFloat(income.replace(/,/g, '')) || 0;
-    const remainingIncome = totalIncome - totalAllocated;
+    const handleAddUpdateAllocation = () => {
+        if (!selectedCategory) return;
+        handleAllocationChange(selectedCategory.id, currentBudgetAmount);
+        setSelectedCategory(null);
+        setCurrentBudgetAmount('');
+    };
+
+    const handleRemoveAllocation = (catId: number) => {
+        setAllocations(prev => {
+            const next = { ...prev };
+            delete next[catId];
+            return next;
+        });
+    };
 
     if (loading) {
         return (
@@ -121,129 +140,106 @@ export default function BudgetScreen() {
         );
     }
 
-    return (
-        <SafeAreaView className="flex-1 app-screen" edges={['top']}>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    const renderHeader = () => (
+        <View className="px-6 py-4 flex-row items-center justify-between bg-white dark:bg-[#0f172a] rounded-b-[16px] mb-2 shadow-sm border border-slate-50 dark:border-slate-800/50">
+            <TouchableOpacity onPress={handleSaveAndClose} className="p-2 -ml-2 flex-row items-center" disabled={saving}>
+                {saving ? (
+                    <ActivityIndicator size="small" color="#3b82f6" style={{ marginRight: 8 }} />
+                ) : (
+                    <Image source={require('../../assets/svg/back.svg')} style={{ width: 20, height: 20, marginRight: 4 }} tintColor={isDark ? '#fff' : '#1e293b'} contentFit="contain" />
+                )}
+                <Text className="text-slate-900 dark:text-white font-bold ml-1">Back</Text>
+            </TouchableOpacity>
+            <Text className="text-lg font-bold text-slate-900 dark:text-white">
+                Set Budgets
+            </Text>
+            <View className="w-16" />
+        </View>
+    );
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ flex: 1 }}
-            >
-                <View className="px-6 py-4 flex-row items-center justify-between bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800">
-                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-                        <Image
-                            source={require('../../assets/svg/back.svg')}
-                            style={{ width: 24, height: 24 }}
-                            tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                            contentFit="contain"
-                        />
-                    </TouchableOpacity>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white">Monthly Budget</Text>
-                    <TouchableOpacity onPress={handleSave} disabled={saving} className="bg-blue-600 px-4 py-2 rounded-full">
-                        {saving ? <ActivityIndicator color="white" size="small" /> : <Text className="text-white font-bold">Save</Text>}
-                    </TouchableOpacity>
-                </View>
+    const activeCat = selectedCategory || (categories.length > 0 ? categories[0] : null);
+    const activeAmount = activeCat ? (allocations[activeCat.id] || '') : '';
 
-                <ScrollView className="flex-1 p-6">
+    const handleActiveAmountChange = (text: string) => {
+        if (!activeCat) return;
+        handleAllocationChange(activeCat.id, text);
+    };
 
-                    {/* Month Selector */}
-                    <View className="flex-row items-center justify-between mb-8 bg-white dark:bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
-                        <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-                            <FontAwesome name="chevron-left" size={16} color="#64748b" />
-                        </TouchableOpacity>
-                        <Text className="text-lg font-bold text-slate-800 dark:text-white">{monthName}</Text>
-                        <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-                            <FontAwesome name="chevron-right" size={16} color="#64748b" />
-                        </TouchableOpacity>
-                    </View>
+    const renderAllocation = () => (
+        <View className="flex-1">
 
-                    {/* Income Input */}
-                    <View className="mb-8">
-                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Total Expected Income</Text>
-                        <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 border border-slate-200 dark:border-slate-700">
-                            <Text className="text-slate-400 font-bold mr-2">KES</Text>
+            <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+                {activeCat && (
+                    <View className="mx-4 mt-2 mb-6 pt-6 pb-8 px-6 items-center">
+                        <View className="w-full mb-6">
+                            <Picker
+                                selectedValue={activeCat.id}
+                                onValueChange={(itemValue) => {
+                                    const cat = categories.find(c => c.id === itemValue);
+                                    if (cat) setSelectedCategory(cat);
+                                }}
+                                style={{ width: '100%', color: isDark ? '#fff' : '#0f172a' }}
+                                itemStyle={{ color: isDark ? '#fff' : '#0f172a', fontWeight: 'bold' }}
+                                dropdownIconColor="#3b82f6"
+                            >
+                                {categories.map(cat => (
+                                    <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
+                                ))}
+                            </Picker>
+                        </View>
+
+                        <Text className="text-slate-400 text-[10px] uppercase font-black tracking-widest mb-1">Budget Target</Text>
+                        <View className="flex-row items-center justify-center mt-2">
+                            <Text className="text-3xl text-slate-300 dark:text-slate-600 font-bold mr-2">KES</Text>
                             <TextInput
-                                className="flex-1 text-xl font-bold text-slate-900 dark:text-white"
+                                className="text-5xl font-black text-slate-900 dark:text-white min-w-[100px] text-center p-0"
                                 placeholder="0"
-                                placeholderTextColor="#94a3b8"
+                                placeholderTextColor="#cbd5e1"
                                 keyboardType="numeric"
-                                value={income}
-                                onChangeText={handleIncomeChange}
+                                value={activeAmount}
+                                onChangeText={handleActiveAmountChange}
                             />
                         </View>
                     </View>
+                )}
 
-                    {/* Summary Cards */}
-                    <View className="flex-row gap-4 mb-8">
-                        <View className="flex-1 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800">
-                            <Text className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase mb-1">Allocated</Text>
-                            <Text className="text-blue-900 dark:text-blue-100 text-lg font-bold">
-                                {totalAllocated.toLocaleString()}
-                            </Text>
-                        </View>
-                        <View className={`flex-1 p-4 rounded-2xl border ${remainingIncome < 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800' : 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800'}`}>
-                            <Text className={`${remainingIncome < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'} text-xs font-bold uppercase mb-1`}>Remaining</Text>
-                            <Text className={`${remainingIncome < 0 ? 'text-red-900 dark:text-red-100' : 'text-green-900 dark:text-green-100'} text-lg font-bold`}>
-                                {remainingIncome.toLocaleString()}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Allocations & Progress */}
-                    <Text className="text-slate-500 dark:text-slate-400 font-bold mb-4 uppercase text-xs tracking-wider">Category Limits & Progress</Text>
-
-                    <View className="gap-4 mb-20">
-                        {categories.map((cat) => {
-                            const allocated = parseFloat(allocations[cat.id] || '0');
-                            const spent = spending[cat.id] || 0;
-                            const progress = allocated > 0 ? (spent / allocated) * 100 : 0;
-
-                            let progressColor = 'bg-green-500';
-                            if (progress > 100) progressColor = 'bg-red-500';
-                            else if (progress > 80) progressColor = 'bg-yellow-500';
-
-                            return (
-                                <View key={cat.id} className="bg-white dark:bg-[#1e293b] p-3 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
-                                    <View className="flex-row items-center mb-2">
-                                        <View className="w-8 h-8 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${cat.color}20` }}>
-                                            <FontAwesome name={cat.icon as any} size={14} color={cat.color} />
-                                        </View>
-                                        <Text className="flex-1 font-bold text-slate-700 dark:text-slate-200 text-sm">{cat.name}</Text>
-                                        <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-2 py-1 border border-slate-200 dark:border-slate-700 w-28">
-                                            <Text className="text-xs text-slate-400 mr-1">KES</Text>
-                                            <TextInput
-                                                className="flex-1 text-right font-semibold text-slate-900 dark:text-white text-sm"
-                                                placeholder="0"
-                                                placeholderTextColor="#94a3b8"
-                                                keyboardType="numeric"
-                                                value={allocations[cat.id] || ''}
-                                                onChangeText={(text) => handleAllocationChange(cat.id, text)}
-                                            />
-                                        </View>
-                                    </View>
-
-                                    {/* Progress Bar */}
-                                    <View>
-                                        <View className="flex-row justify-between mb-1">
-                                            <Text className="text-[10px] text-slate-400 font-medium">
-                                                Spent: {spent.toLocaleString()}
-                                            </Text>
-                                            <Text className="text-[10px] text-slate-400 font-medium">
-                                                {progress.toFixed(0)}%
-                                            </Text>
-                                        </View>
-                                        <View className="h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                            <View
-                                                className={`h-full rounded-full ${progressColor}`}
-                                                style={{ width: `${Math.min(progress, 100)}%` }}
-                                            />
-                                        </View>
-                                    </View>
+                <View className="mx-4 bg-white dark:bg-[#1e293b] rounded-[16px] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm">
+                    {categories.filter(cat => {
+                        const amount = parseFloat((allocations[cat.id] || '0').replace(/,/g, ''));
+                        return amount > 0 || activeCat?.id === cat.id;
+                    }).map((cat, index, arr) => {
+                        const amount = allocations[cat.id] || '0';
+                        const isActive = activeCat?.id === cat.id;
+                        return (
+                            <TouchableOpacity 
+                                key={cat.id} 
+                                onPress={() => setSelectedCategory(cat)}
+                                className={`flex-row items-center p-4 ${index < arr.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/80' : ''} ${isActive ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                            >
+                                <View className="w-10 h-10 rounded-full items-center justify-center mr-4" style={{ backgroundColor: `${cat.color}20` }}>
+                                    <FontAwesome name={cat.icon as any} size={16} color={cat.color} />
                                 </View>
-                            );
-                        })}
-                    </View>
-                </ScrollView>
+                                <View className="flex-1">
+                                    <Text className="font-bold text-slate-900 dark:text-white">{cat.name}</Text>
+                                    {isActive && <Text className="text-[10px] text-blue-500 font-bold uppercase mt-0.5" tracking-widest>Currently Editing</Text>}
+                                </View>
+                                <Text className={`font-bold ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'} mr-3`}>KES {amount}</Text>
+                                <FontAwesome name="pencil" size={14} color={isActive ? '#3b82f6' : '#94a3b8'} />
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+        </View>
+    );
+
+    return (
+        <SafeAreaView className="flex-1 app-screen" edges={['top']}>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            {renderHeader()}
+            
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                {renderAllocation()}
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
