@@ -15,8 +15,9 @@ import AppLockScreen from '../components/AppLockScreen';
 import { getUserSettings, saveUserSettings } from '../services/database';
 import { useAuth } from '../services/AuthContext';
 
-const LOCK_TIMEOUT_MS = 3 * 60 * 1000;
+const DEFAULT_LOCK_TIMEOUT_MS = 3 * 60 * 1000;
 const BIOMETRICS_ENABLED_KEY = 'app_lock_biometrics_enabled';
+const LOCK_TIMEOUT_KEY = 'app_lock_timeout_ms';
 
 type BiometricLabel = 'Face ID' | 'Fingerprint' | 'Biometrics';
 
@@ -25,10 +26,16 @@ interface AppLockContextType {
     isLocked: boolean;
     requiresPinSetup: boolean;
     biometricsAvailable: boolean;
+    biometricsEnabled: boolean;
+    biometricsSupported: boolean;
     biometricLabel: BiometricLabel;
+    lockTimeoutMs: number;
     recordActivity: () => void;
     unlockWithPin: (pin: string) => Promise<boolean>;
     savePin: (pin: string) => Promise<void>;
+    changePin: (currentPin: string, nextPin: string) => Promise<boolean>;
+    setBiometricsEnabled: (enabled: boolean) => Promise<void>;
+    setLockTimeout: (timeoutMs: number) => Promise<void>;
     unlockWithBiometrics: () => Promise<boolean>;
 }
 
@@ -74,7 +81,10 @@ export function AppLockProvider({
     const [isLocked, setIsLocked] = useState(false);
     const [requiresPinSetup, setRequiresPinSetup] = useState(false);
     const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+    const [biometricsEnabled, setBiometricsEnabledState] = useState(true);
+    const [biometricsSupported, setBiometricsSupported] = useState(false);
     const [biometricLabel, setBiometricLabel] = useState<BiometricLabel>('Biometrics');
+    const [lockTimeoutMs, setLockTimeoutMs] = useState(DEFAULT_LOCK_TIMEOUT_MS);
     const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const backgroundedAtRef = useRef<number | null>(null);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -95,8 +105,8 @@ export function AppLockProvider({
 
         lockTimerRef.current = setTimeout(() => {
             setIsLocked(true);
-        }, LOCK_TIMEOUT_MS);
-    }, [authLoading, clearLockTimer, isAuthRoute, isLocked, isSecurityReady, requiresPinSetup, user]);
+        }, lockTimeoutMs);
+    }, [authLoading, clearLockTimer, isAuthRoute, isLocked, isSecurityReady, lockTimeoutMs, requiresPinSetup, user]);
 
     const recordActivity = useCallback(() => {
         if (!user || isAuthRoute || authLoading || isLocked || requiresPinSetup || !isSecurityReady) {
@@ -132,6 +142,35 @@ export function AppLockProvider({
         scheduleLock();
     }, [scheduleLock, user]);
 
+    const changePin = useCallback(async (currentPin: string, nextPin: string) => {
+        if (!user) return false;
+
+        const existingPin = await SecureStore.getItemAsync(getPinKey(user.uid));
+        if (existingPin && existingPin !== currentPin) {
+            return false;
+        }
+
+        await SecureStore.setItemAsync(getPinKey(user.uid), nextPin, {
+            keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        });
+
+        setRequiresPinSetup(false);
+        scheduleLock();
+        return true;
+    }, [scheduleLock, user]);
+
+    const setBiometricsEnabled = useCallback(async (enabled: boolean) => {
+        await saveUserSettings(BIOMETRICS_ENABLED_KEY, enabled ? '1' : '0');
+        setBiometricsEnabledState(enabled);
+        setBiometricsAvailable(biometricsSupported && enabled);
+    }, [biometricsSupported]);
+
+    const setLockTimeout = useCallback(async (timeoutMs: number) => {
+        await saveUserSettings(LOCK_TIMEOUT_KEY, String(timeoutMs));
+        setLockTimeoutMs(timeoutMs);
+        clearLockTimer();
+    }, [clearLockTimer]);
+
     const unlockWithBiometrics = useCallback(async () => {
         if (!biometricsAvailable || !user) return false;
 
@@ -164,7 +203,10 @@ export function AppLockProvider({
                     setIsLocked(false);
                     setRequiresPinSetup(false);
                     setBiometricsAvailable(false);
+                    setBiometricsEnabledState(true);
+                    setBiometricsSupported(false);
                     setBiometricLabel('Biometrics');
+                    setLockTimeoutMs(DEFAULT_LOCK_TIMEOUT_MS);
                 }
                 return;
             }
@@ -174,9 +216,10 @@ export function AppLockProvider({
             }
 
             try {
-                const [storedPin, biometricsFlag, hasHardware, isEnrolled, supportedTypes] = await Promise.all([
+                const [storedPin, biometricsFlag, storedTimeout, hasHardware, isEnrolled, supportedTypes] = await Promise.all([
                     SecureStore.getItemAsync(getPinKey(user.uid)),
                     getUserSettings(BIOMETRICS_ENABLED_KEY),
+                    getUserSettings(LOCK_TIMEOUT_KEY),
                     LocalAuthentication.hasHardwareAsync(),
                     LocalAuthentication.isEnrolledAsync(),
                     LocalAuthentication.supportedAuthenticationTypesAsync(),
@@ -184,10 +227,19 @@ export function AppLockProvider({
 
                 if (cancelled) return;
 
-                const canUseBiometrics = hasHardware && isEnrolled && biometricsFlag !== '0';
+                const biometricSupport = hasHardware && isEnrolled;
+                const biometricsPreferenceEnabled = biometricsFlag !== '0';
+                const parsedTimeout = Number.parseInt(storedTimeout || '', 10);
+                const resolvedTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0
+                    ? parsedTimeout
+                    : DEFAULT_LOCK_TIMEOUT_MS;
+                const canUseBiometrics = biometricSupport && biometricsPreferenceEnabled;
 
                 setBiometricsAvailable(canUseBiometrics);
+                setBiometricsEnabledState(biometricsPreferenceEnabled);
+                setBiometricsSupported(biometricSupport);
                 setBiometricLabel(resolveBiometricLabel(supportedTypes));
+                setLockTimeoutMs(resolvedTimeout);
                 setRequiresPinSetup(!storedPin);
                 setIsLocked(true);
                 setIsSecurityReady(true);
@@ -197,7 +249,10 @@ export function AppLockProvider({
                 if (cancelled) return;
 
                 setBiometricsAvailable(false);
+                setBiometricsEnabledState(false);
+                setBiometricsSupported(false);
                 setBiometricLabel('Biometrics');
+                setLockTimeoutMs(DEFAULT_LOCK_TIMEOUT_MS);
                 setRequiresPinSetup(false);
                 setIsLocked(true);
                 setIsSecurityReady(true);
@@ -254,10 +309,10 @@ export function AppLockProvider({
                 !authLoading &&
                 isSecurityReady
             ) {
-                const elapsed = backgroundedAtRef.current ? Date.now() - backgroundedAtRef.current : LOCK_TIMEOUT_MS;
+                const elapsed = backgroundedAtRef.current ? Date.now() - backgroundedAtRef.current : lockTimeoutMs;
                 backgroundedAtRef.current = null;
 
-                if (elapsed >= LOCK_TIMEOUT_MS) {
+                if (elapsed >= lockTimeoutMs) {
                     setIsLocked(true);
                     return;
                 }
@@ -271,26 +326,38 @@ export function AppLockProvider({
         return () => {
             subscription.remove();
         };
-    }, [authLoading, clearLockTimer, isAuthRoute, isLocked, isSecurityReady, requiresPinSetup, scheduleLock, user]);
+    }, [authLoading, clearLockTimer, isAuthRoute, isLocked, isSecurityReady, lockTimeoutMs, requiresPinSetup, scheduleLock, user]);
 
     const contextValue = useMemo(() => ({
         isSecurityReady,
         isLocked,
         requiresPinSetup,
         biometricsAvailable,
+        biometricsEnabled,
+        biometricsSupported,
         biometricLabel,
+        lockTimeoutMs,
         recordActivity,
         unlockWithPin,
         savePin,
+        changePin,
+        setBiometricsEnabled,
+        setLockTimeout,
         unlockWithBiometrics,
     }), [
         biometricLabel,
         biometricsAvailable,
+        biometricsEnabled,
+        biometricsSupported,
+        changePin,
         isLocked,
         isSecurityReady,
+        lockTimeoutMs,
         recordActivity,
         requiresPinSetup,
         savePin,
+        setBiometricsEnabled,
+        setLockTimeout,
         unlockWithBiometrics,
         unlockWithPin,
     ]);

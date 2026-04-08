@@ -3,9 +3,10 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PageSheetSearchModal from '../../components/modals/PageSheetSearchModal';
 import { debtService } from '../../services/debtService';
 import { Debt } from '../../types/debt';
 import { calculateFulizaDailyCharge } from '../../utils/fulizaCalculator';
@@ -343,26 +344,41 @@ export default function DebtDetailScreen() {
                         </View>
                     )}
 
-                    {/* Payment History */}
-                    <Text className="text-lg font-bold text-slate-900 dark:text-white mb-4">Payment History</Text>
+                    {/* Debt History */}
+                    <Text className="text-lg font-bold text-slate-900 dark:text-white mb-4">Debt History</Text>
                     {paymentHistory.length > 0 ? (
                         <View className="space-y-3">
                             {paymentHistory.map((payment) => (
                                 <View
-                                    key={payment.payment_id}
+                                    key={payment.payment_id || payment.transaction_id}
                                     className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800"
                                 >
+                                    {(() => {
+                                        const isPrincipalEvent = payment.transaction_kind === 'DEBT_PRINCIPAL';
+                                        const eventDate = payment.payment_date || payment.transaction_date;
+                                        const displayAmount = Number(payment.payment_amount ?? payment.transaction_amount ?? 0);
+                                        const isIncoming = payment.transaction_type === 'RECEIVED';
+                                        const amountPrefix = isIncoming ? '+' : '-';
+                                        const amountClass = isIncoming
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400';
+                                        const title = isPrincipalEvent
+                                            ? (debt.type === 'RECEIVABLE' ? 'Debt Created' : 'Loan Received')
+                                            : (debt.type === 'RECEIVABLE' ? 'Repayment Received' : 'Debt Payment');
+
+                                        return (
+                                            <>
                                     <View className="flex-row justify-between items-start ">
                                         <View className="flex-1">
                                             <Text className="font-bold text-slate-900 dark:text-white">
-                                                {payment.recipient_name || 'Payment'}
+                                                {payment.recipient_name || title}
                                             </Text>
                                             <Text className="text-slate-400 text-xs mt-1">
-                                                {new Date(payment.payment_date).toLocaleDateString()}
+                                                {title} • {new Date(eventDate).toLocaleDateString()}
                                             </Text>
                                         </View>
                                         <View className="items-end mt-[-5px]">
-                                            {payment.transaction_id && (
+                                            {payment.payment_id && payment.transaction_id && (
                                             <TouchableOpacity
                                                 onPress={() => handleUnlinkPayment(payment.transaction_id)}
                                                 disabled={unlinkingTxId === payment.transaction_id}
@@ -375,104 +391,70 @@ export default function DebtDetailScreen() {
                                                 )}
                                             </TouchableOpacity>
                                             )}
-                                            <Text className="text-green-600 dark:text-green-400 font-bold text-lg">
-                                                -KES {Number(payment.payment_amount).toLocaleString()}
+                                            <Text className={`${amountClass} font-bold text-lg`}>
+                                                {amountPrefix}KES {displayAmount.toLocaleString()}
                                             </Text>
                                         </View>
                                     </View>
+                                            </>
+                                        );
+                                    })()}
                                 </View>
                             ))}
                         </View>
                     ) : (
                         <View className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] border border-slate-100 dark:border-slate-800">
-                            <Text className="text-slate-400 text-center py-4">No payments linked yet.</Text>
+                            <Text className="text-slate-400 text-center py-4">No history linked yet.</Text>
                         </View>
                     )}
                 </View>
             </Animated.ScrollView>
 
-            {/* Link Transaction Modal */}
-            <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-                <View className="flex-1 app-screen pt-4 mt-6">
-                    <View className="px-6 py-4 flex-row items-center justify-between border-b border-gray-200 dark:border-slate-800">
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
-                        <TouchableOpacity onPress={() => setModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 p-3 rounded-full">
-                            <Image
-                                source={require('../../assets/svg/close.svg')}
-                                style={{ width: 16, height: 16 }}
-                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                                contentFit="contain"
-                            />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Search Bar */}
-                    <View className="px-4 py-2 border-b border-gray-200 dark:border-slate-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-[12px] border border-slate-200 dark:border-slate-700">
-                            <Image
-                                source={require('../../assets/svg/search.svg')}
-                                style={{ width: 26, height: 26 }}
-                                tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                                contentFit="contain"
-                            />
-                            <TextInput
-                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[14px]"
-                                placeholder="Search by name or amount..."
-                                placeholderTextColor={colorScheme === 'dark' ? '#cbd5e1' : '#94a3b8'}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                                autoCorrect={false}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
-                                    <Image
-                                        source={require('../../assets/svg/close.svg')}
-                                        style={{ width: 10, height: 10 }}
-                                        tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                                        contentFit="contain"
-                                    />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {matchesLoading ? (
-                        <ActivityIndicator size="large" className="mt-10" color="#3b82f6" />
-                    ) : (
-                        <FlatList
-                            data={filteredMatches}
-                            keyExtractor={item => item.id}
-                            contentContainerStyle={{ padding: 24 }}
-                            ListHeaderComponent={
-                                <Text className="text-slate-500 mb-2 text-[12px]">
-                                    Select a transaction to link as repayment for this debt.
-                                    Only showing {debt.type === 'LIABILITY' ? 'Sent' : 'Received'} transactions not yet linked.
-                                </Text>
-                            }
-                            ListEmptyComponent={
-                                <View className="items-center py-10">
-                                    <Text className="text-slate-400">No matching transactions found.</Text>
-                                    <Text className="text-slate-400 text-xs mt-2">Try refreshing M-PESA SMS.</Text>
+            <PageSheetSearchModal
+                visible={modalVisible}
+                title="Link Transaction"
+                colorScheme={colorScheme}
+                searchQuery={searchQuery}
+                onChangeSearch={setSearchQuery}
+                onClearSearch={() => setSearchQuery('')}
+                onClose={() => setModalVisible(false)}
+            >
+                {matchesLoading ? (
+                    <ActivityIndicator size="large" className="mt-10" color="#3b82f6" />
+                ) : (
+                    <FlatList
+                        data={filteredMatches}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={{ padding: 24 }}
+                        ListHeaderComponent={
+                            <Text className="text-slate-500 mb-2 text-[12px]">
+                                Select a transaction to link as repayment for this debt.
+                                Only showing {debt?.type === 'LIABILITY' ? 'Sent' : 'Received'} transactions not yet linked.
+                            </Text>
+                        }
+                        ListEmptyComponent={
+                            <View className="items-center py-10">
+                                <Text className="text-slate-400">No matching transactions found.</Text>
+                                <Text className="text-slate-400 text-xs mt-2">Try refreshing M-PESA SMS.</Text>
+                            </View>
+                        }
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 border border-slate-100 dark:border-slate-800"
+                                onPress={() => handleLink(item.id)}
+                            >
+                                <View className="flex-row justify-between items-center mb-1">
+                                    <Text className="font-bold text-slate-900 dark:text-white flex-1">{item.recipient_name || 'Unknown'}</Text>
+                                    <Text className={`font-bold ${item.type === 'SENT' ? 'text-red-500' : 'text-green-500'}`}>
+                                        {item.type === 'SENT' ? '-' : '+'} KES {item.amount.toLocaleString()}
+                                    </Text>
                                 </View>
-                            }
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 border border-slate-100 dark:border-slate-800"
-                                    onPress={() => handleLink(item.id)}
-                                >
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="font-bold text-slate-900 dark:text-white flex-1">{item.recipient_name || 'Unknown'}</Text>
-                                        <Text className={`font-bold ${item.type === 'SENT' ? 'text-red-500' : 'text-green-500'}`}>
-                                            {item.type === 'SENT' ? '-' : '+'} KES {item.amount.toLocaleString()}
-                                        </Text>
-                                    </View>
-                                    <Text className="text-slate-400 text-xs">{new Date(item.date).toLocaleDateString()} • {item.rawSms?.substring(0, 40)}...</Text>
-                                </TouchableOpacity>
-                            )}
-                        />
-                    )}
-                </View>
-            </Modal>
+                                <Text className="text-slate-400 text-xs">{new Date(item.date).toLocaleDateString()} • {item.rawSms?.substring(0, 40)}...</Text>
+                            </TouchableOpacity>
+                        )}
+                    />
+                )}
+            </PageSheetSearchModal>
         </View>
     );
 }

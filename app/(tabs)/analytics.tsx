@@ -1,27 +1,32 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { PieChart } from "react-native-gifted-charts";
 import Animated from 'react-native-reanimated';
+import { useAuth } from '../../services/AuthContext';
 import { getTransactions, initDatabase, subscribeToDatabaseChanges } from '../../services/database';
+import {
+  getFinancialMonthRange,
+  getFinancialSettings,
+  isInternalTransfer,
+} from '../../services/financialSettingsService';
 import { ForecastResult, forecastService } from '../../services/forecastService';
 import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
 import { Transaction } from '../../types/transaction';
 
-
-
-import { router } from 'expo-router';
 import { useColorScheme } from "nativewind";
 
 export default function AnalyticsScreen() {
+  const { phoneNumber } = useAuth();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
   const innerCircleColor = isDark ? '#1e293b' : '#ffffff';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [financialMonthStart, setFinancialMonthStart] = useState(1);
+  const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
 
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
@@ -38,8 +43,13 @@ export default function AnalyticsScreen() {
   const loadData = useCallback(async () => {
     try {
       await initDatabase();
-      const allTransactions = await getTransactions();
+      const [allTransactions, financialSettings] = await Promise.all([
+        getTransactions(),
+        getFinancialSettings(),
+      ]);
       setTransactions(allTransactions);
+      setFinancialMonthStart(financialSettings.monthStartDay);
+      setHideInternalTransfers(financialSettings.hideInternalTransfers);
 
       // Load intelligence data in parallel
       try {
@@ -79,38 +89,31 @@ export default function AnalyticsScreen() {
     setRefreshing(false);
   }, [loadData]);
 
-  // Generate last 12 months
-  const months = useMemo(() => {
-    const result = [];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      result.push(d);
-    }
-    return result;
-  }, []);
+  const selectedMonthRange = useMemo(
+    () => getFinancialMonthRange(selectedDate, financialMonthStart),
+    [financialMonthStart, selectedDate]
+  );
 
-  const isSameMonth = (d1: Date, d2: Date) => {
-    return d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
-  };
-
-  // Filter transactions by selected month
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       if (t.isDeleted) return false;
+      if (hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber })) return false;
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       if (isNaN(txDate.getTime())) return false;
-      return isSameMonth(txDate, selectedDate);
+      return txDate >= selectedMonthRange.start && txDate <= selectedMonthRange.end;
     });
-  }, [transactions, selectedDate]);
+  }, [hideInternalTransfers, phoneNumber, selectedMonthRange.end, selectedMonthRange.start, transactions]);
 
   // Calculate statistics
   const { thisMonthTotal } = useMemo(() => {
     const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth).reduce((sum, l) => sum + l.amount, 0);
+    const thisMonthRange = getFinancialMonthRange(now, financialMonthStart);
+    const thisTotal = logs.filter(l => {
+      const receivedAt = new Date(l.receivedAt);
+      return receivedAt >= thisMonthRange.start && receivedAt <= thisMonthRange.end;
+    }).reduce((sum, l) => sum + l.amount, 0);
     return { thisMonthTotal: thisTotal };
-  }, [logs]);
+  }, [financialMonthStart, logs]);
 
   //  old method   
   const stats = useMemo(() => {
@@ -156,6 +159,7 @@ export default function AnalyticsScreen() {
   const yearlyStats = useMemo(() => {
     const yearlyTransactions = transactions.filter(t => {
       if (t.isDeleted) return false;
+      if (hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber })) return false;
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       return txDate.getFullYear() === currentYear;
     });
@@ -197,7 +201,7 @@ export default function AnalyticsScreen() {
       totalExpense: expenseData.reduce((sum, item) => sum + item.value, 0),
       totalIncome: incomeData.reduce((sum, item) => sum + item.value, 0)
     };
-  }, [transactions, currentYear]);
+  }, [currentYear, hideInternalTransfers, phoneNumber, transactions]);
 
 
 
@@ -209,10 +213,6 @@ export default function AnalyticsScreen() {
 
   const formatMonth = (date: Date) => {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
-
-  const formatMonthShort = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'short' });
   };
 
   const getSavingsRateColor = (rate: number) => {

@@ -4,9 +4,13 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
+import CashTransactionModal from '../../components/modals/CashTransactionModal';
+import RecategorizeScopeModal from '../../components/modals/RecategorizeScopeModal';
+import SelectIncomeSourceSheet from '../../components/modals/SelectIncomeSourceSheet';
+import SelectSavingsGoalSheet from '../../components/modals/SelectSavingsGoalSheet';
 import { TransactionSkeleton } from '../../components/SkeletonLoader';
 import TransactionItem from '../../components/TransactionItem';
 import { useAlert } from '../../context/AlertContext';
@@ -22,6 +26,14 @@ import {
   updateTransactionDate
 } from '../../services/database';
 import { debtService } from '../../services/debtService';
+import {
+  FreshStartConfig,
+  getFinancialMonthRange,
+  getFinancialSettings,
+  getFreshStartEffectiveDate,
+  getPreviousFinancialMonthRange,
+  isInternalTransfer,
+} from '../../services/financialSettingsService';
 import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 import { ledgerService } from '../../services/ledgerService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
@@ -32,8 +44,10 @@ import { Category, Transaction } from '../../types/transaction';
 
 type Period = 'THIS_MONTH' | 'LAST_MONTH' | 'LAST 3 MONTHS' | 'CURRENT YEAR' | 'ALL TIME';
 
+const normalizeSearchValue = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, phoneNumber } = useAuth();
   const router = useRouter();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -51,6 +65,8 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
+  const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
+  const [freshStartConfig, setFreshStartConfig] = useState<FreshStartConfig | null>(null);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [logs, setLogs] = useState<IncomeLog[]>([]);
 
@@ -99,25 +115,30 @@ export default function HomeScreen() {
   const activeTransaction = selectedTransaction;
 
 
-  // Load bank settings and subscribe to changes
+  // Load settings and subscribe to changes
   useEffect(() => {
     if (!dbReady) return;
 
-    const loadBankSettings = async () => {
+    const loadHomeSettings = async () => {
       try {
-        const enabled = await getUserSettings('bank_im_enabled');
+        const [enabled, financialSettings] = await Promise.all([
+          getUserSettings('bank_im_enabled'),
+          getFinancialSettings(),
+        ]);
         setImBankEnabled(enabled === 'true');
+        setFinancialMonthStart(financialSettings.monthStartDay);
+        setHideInternalTransfers(financialSettings.hideInternalTransfers);
+        setFreshStartConfig(financialSettings.freshStart);
       } catch (error) {
-        console.error('Error loading bank settings:', error);
+        console.error('Error loading home settings:', error);
       }
     };
 
-    loadBankSettings();
+    loadHomeSettings();
 
-    // Subscribe to settings changes so we update when user toggles banks
     const unsubscribe = subscribeToDatabaseChanges((type) => {
       if (type === 'SETTINGS') {
-        loadBankSettings();
+        loadHomeSettings();
       }
     });
 
@@ -178,9 +199,6 @@ export default function HomeScreen() {
       try {
         setIsSyncing(true);
         setDbReady(true);
-
-        const startDay = await getUserSettings('financial_month_start_day');
-        if (startDay) setFinancialMonthStart(parseInt(startDay, 10));
 
         const lastSync = await getUserSettings('last_sync_timestamp');
 
@@ -290,31 +308,36 @@ export default function HomeScreen() {
   // Calculate date boundaries once
   const dateRange = useMemo(() => {
     const now = new Date();
-    const startDay = financialMonthStart;
-
-    let startOfThisMonth: Date;
-    if (now.getDate() >= startDay) {
-      startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), startDay);
-    } else {
-      startOfThisMonth = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
-    }
-
-    const startOfLastMonth = new Date(startOfThisMonth.getFullYear(), startOfThisMonth.getMonth() - 1, startDay);
-    const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+    const thisMonthRange = getFinancialMonthRange(now, financialMonthStart);
+    const lastMonthRange = getPreviousFinancialMonthRange(now, financialMonthStart);
 
     const startOfCurrentYear = new Date(now.getFullYear(), 0, 1);
-    const startOfLast3Months = new Date(startOfThisMonth.getFullYear(), startOfThisMonth.getMonth() - 2, startDay);
+    const startOfLast3Months = new Date(thisMonthRange.start.getFullYear(), thisMonthRange.start.getMonth() - 2, thisMonthRange.start.getDate());
 
-    return { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months };
+    return {
+      startOfThisMonth: thisMonthRange.start,
+      startOfLastMonth: lastMonthRange.start,
+      endOfLastMonth: lastMonthRange.end,
+      startOfCurrentYear,
+      startOfLast3Months,
+    };
   }, [financialMonthStart]);
 
   // Calculate carried forward balance (from previous financial month)
   const carriedForwardBalance = useMemo(() => {
     const { startOfLastMonth, endOfLastMonth } = dateRange;
+    const freshStartDate = getFreshStartEffectiveDate(freshStartConfig);
+
+    if (freshStartConfig?.resetBroughtForward && freshStartDate && startOfLastMonth < freshStartDate) {
+      return 0;
+    }
 
     const lastMonthTransactions = allTransactions.filter(t => {
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
-      return txDate >= startOfLastMonth && txDate <= endOfLastMonth && !t.isDeleted;
+      return txDate >= startOfLastMonth &&
+        txDate <= endOfLastMonth &&
+        !t.isDeleted &&
+        !(hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber }));
     });
 
     const income = lastMonthTransactions
@@ -326,7 +349,7 @@ export default function HomeScreen() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     return income - expense;
-  }, [allTransactions, dateRange]);
+  }, [allTransactions, dateRange, freshStartConfig, hideInternalTransfers, phoneNumber]);
 
   const carriedForwardPeriodLabel = useMemo(() => {
     const { endOfLastMonth } = dateRange;
@@ -345,6 +368,7 @@ export default function HomeScreen() {
 
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       if (isNaN(txDate.getTime())) return false;
+      if (hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber })) return false;
 
       const { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months } = dateRange;
 
@@ -361,14 +385,14 @@ export default function HomeScreen() {
     });
 
     if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
+      const q = normalizeSearchValue(searchQuery);
       filtered = filtered.filter((t) => {
-        const recipient = (t.recipientName || '').toLowerCase();
-        const categoryName = (t.categoryName || '').toLowerCase();
+        const recipient = normalizeSearchValue(t.recipientName || '');
+        const categoryName = normalizeSearchValue(t.categoryName || '');
         const categoryType = t.type === 'SENT' ? 'expense' : 'income';
-        const kind = (t.transactionKind || '').toLowerCase().replace(/_/g, ' ');
+        const kind = normalizeSearchValue((t.transactionKind || '').replace(/_/g, ' '));
         const amount = t.amount.toString();
-        const account = `${t.accountName || ''} ${t.accountType || ''}`.toLowerCase();
+        const account = normalizeSearchValue(`${t.accountName || ''} ${t.accountType || ''}`);
         const categoryId = t.categoryId ? String(t.categoryId) : '';
 
         return (
@@ -395,7 +419,7 @@ export default function HomeScreen() {
     }
 
     return filtered;
-  }, [allTransactions, selectedPeriod, dateRange, imBankEnabled, searchQuery]);
+  }, [allTransactions, selectedPeriod, dateRange, hideInternalTransfers, imBankEnabled, phoneNumber, searchQuery]);
 
   // Calculate summary statistics for the selected period
   const periodSummary = useMemo(() => {
@@ -720,26 +744,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View className="app-card flex-row justify-between items-center p-1 rounded-[20px] mt-6 overflow-hidden">
-          {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
-            <TouchableOpacity
-              key={period}
-              className={`px-2 py-1 mr-1 text-[8px] font-medium rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
-              onPress={() => {
-                setPeriodLoading(true);
-                setDisplayLimit(20);
-                setTimeout(() => {
-                  setSelectedPeriod(period);
-                  setPeriodLoading(false);
-                }, 100);
-              }}
-            >
-              <Text className={`uppercase font-medium text-[8px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
-                {getPeriodLabel(period)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
 
       {/* Debt Summary Widget */}
@@ -801,6 +805,33 @@ export default function HomeScreen() {
 
       {/* Grouped Transaction List Card Start */}
       <View className="mx-4 mt-6 bg-white dark:bg-[#1e293b] rounded-t-[16px] border-t border-x border-slate-100 dark:border-slate-700 overflow-hidden">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 4, paddingHorizontal: 16 }}
+        >
+          <View className="app-card flex-row items-center p-1 rounded-[20px] overflow-hidden">
+            {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
+              <TouchableOpacity
+                key={period}
+                className={`px-2.5 py-1.5 mr-1 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
+                onPress={() => {
+                  setPeriodLoading(true);
+                  setDisplayLimit(20);
+                  setTimeout(() => {
+                    setSelectedPeriod(period);
+                    setPeriodLoading(false);
+                  }, 100);
+                }}
+              >
+                <Text className={`font-medium text-[10px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
+                  {getPeriodLabel(period)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
         {/* Search bar */}
         <View className="px-4 pt-4 pb-2">
           <View className="bg-slate-50 dark:bg-[#0f172a] h-12 px-3 rounded-[10px] flex-row items-center border border-slate-100 dark:border-slate-800">
@@ -836,11 +867,13 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="px-4 py-3 flex-row justify-between items-center">
-          <Text className="text-slate-900 dark:text-white text-sm font-bold">Recent Transactions</Text>
-          <Text className="text-slate-500 text-xs">
-            {filteredTransactions.length} items
-          </Text>
+        <View className="px-4 pt-3 pb-2">
+          <View className="flex-row justify-between items-center">
+            <Text className="text-slate-900 dark:text-white text-sm font-bold">Recent Transactions</Text>
+            <Text className="text-slate-500 text-xs">
+              {filteredTransactions.length} items
+            </Text>
+          </View>
         </View>
         {periodLoading && (
           <View className="px-4 pb-3">
@@ -879,117 +912,24 @@ export default function HomeScreen() {
         onClose={handleCloseModal}
       />
 
-      <Modal
-        transparent
-        animationType="fade"
+      <CashTransactionModal
         visible={cashModalVisible}
-        onRequestClose={() => !savingCashTx && setCashModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-        >
-          <TouchableOpacity
-            className="flex-1 bg-black/50 justify-center items-center p-6"
-            activeOpacity={1}
-            onPress={() => !savingCashTx && setCashModalVisible(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={() => { }}
-              className="w-full max-h-[85%] bg-white dark:bg-[#0f172a] rounded-xl p-6 border border-slate-200 dark:border-slate-800"
-            >
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <View className="flex-row justify-between items-center mb-5">
-                  <Text className="text-slate-900 dark:text-white text-xl font-black">Add Cash Transaction</Text>
-                  <TouchableOpacity onPress={() => !savingCashTx && setCashModalVisible(false)}>
-                    <Image
-                      source={require('../../assets/svg/close.svg')}
-                      style={{ width: 14, height: 14 }}
-                      tintColor={colorScheme === 'dark' ? '#fff' : '#1e293b'}
-                      contentFit="contain"
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Transaction Type</Text>
-                <View className="flex-row gap-2 mb-4">
-                  <TouchableOpacity
-                    onPress={() => setCashType('SENT')}
-                    className={`flex-1 py-3 rounded-xl items-center border ${cashType === 'SENT'
-                      ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                      }`}
-                  >
-                    <Text className={`font-bold ${cashType === 'SENT' ? 'text-red-600 dark:text-red-300' : 'text-slate-600 dark:text-slate-300'}`}>
-                      Expense
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setCashType('RECEIVED')}
-                    className={`flex-1 py-3 rounded-xl items-center border ${cashType === 'RECEIVED'
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                      }`}
-                  >
-                    <Text className={`font-bold ${cashType === 'RECEIVED' ? 'text-green-600 dark:text-green-300' : 'text-slate-600 dark:text-slate-300'}`}>
-                      Income
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Amount (KES)</Text>
-                <View className="h-12 rounded-xl px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 justify-center mb-4">
-                  <TextInput
-                    value={cashAmount}
-                    onChangeText={setCashAmount}
-                    placeholder="0"
-                    placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
-                    keyboardType="numeric"
-                    className="text-base font-semibold text-slate-900 dark:text-white"
-                  />
-                </View>
-
-                <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Note (Optional)</Text>
-                <View className="rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-5">
-                  <TextInput
-                    value={cashNote}
-                    onChangeText={setCashNote}
-                    placeholder={cashType === 'SENT' ? 'What was this expense for?' : 'Where did this cash come from?'}
-                    placeholderTextColor={isDark ? '#94a3b8' : '#64748b'}
-                    className="text-slate-900 dark:text-white"
-                  />
-                </View>
-
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    onPress={() => {
-                      setCashModalVisible(false);
-                      resetCashForm();
-                    }}
-                    disabled={savingCashTx}
-                    className="flex-1 py-3 rounded-xl items-center bg-slate-100 dark:bg-slate-800"
-                  >
-                    <Text className="font-bold text-slate-700 dark:text-slate-200">Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleSaveCashTransaction}
-                    disabled={savingCashTx}
-                    className="flex-1 py-3 rounded-xl items-center bg-blue-600"
-                  >
-                    {savingCashTx ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text className="font-bold text-white">Save</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </Modal>
+        colorScheme={colorScheme}
+        isDark={isDark}
+        saving={savingCashTx}
+        cashType={cashType}
+        cashAmount={cashAmount}
+        cashNote={cashNote}
+        onChangeType={setCashType}
+        onChangeAmount={setCashAmount}
+        onChangeNote={setCashNote}
+        onSave={handleSaveCashTransaction}
+        onClose={() => setCashModalVisible(false)}
+        onCancel={() => {
+          setCashModalVisible(false);
+          resetCashForm();
+        }}
+      />
 
       <Animated.FlatList
         className="app-screen"
@@ -1029,251 +969,79 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
       />
 
-      {/* Select Savings Goal Modal */}
-      {savingsModalVisible && (
-        <View className="absolute z-50 top-0 left-0 right-0 bottom-[100px] bg-black/40 justify-end">
-          <View className="bg-white dark:bg-[#0f172a] rounded-t-[12px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
-            <View className="flex-row justify-between flex-wrap gap-y-3 items-center mb-6">
-              <Text className="text-xl font-bold text-slate-900 dark:text-white">Select a Savings Goal</Text>
-              <TouchableOpacity onPress={() => { setSavingsModalVisible(false); setSelectedTransaction(null); }}>
-                <Image
-                  source={require('../../assets/svg/close.svg')}
-                  style={{ width: 10, height: 10 }}
-                />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-slate-500 dark:text-slate-400 mb-4">
-              Where would you like to transfer KES {activeTransaction?.amount?.toLocaleString()}?
-            </Text>
+      <SelectSavingsGoalSheet
+        visible={savingsModalVisible}
+        amount={activeTransaction?.amount}
+        goals={savingsGoals}
+        linkingGoal={linkingGoal}
+        onClose={() => { setSavingsModalVisible(false); setSelectedTransaction(null); }}
+        onSelectGoal={handleConfirmLinkToGoal}
+      />
 
-            {savingsGoals.length === 0 ? (
-              <Text className="text-center text-slate-500 mt-4 mb-8">No active goals available.</Text>
-            ) : (
-              <View className="space-y-3">
-                {savingsGoals.map(goal => (
-                  <TouchableOpacity
-                    key={goal.id}
-                    onPress={() => handleConfirmLinkToGoal(goal.id)}
-                    disabled={linkingGoal === goal.id}
-                    className="app-card p-4 flex-row justify-between items-center mb-2"
-                  >
-                    <View className="flex-row items-center">
-                      <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${goal.color || '#3b82f6'}20` }}>
-                        <FontAwesome name="flag" size={16} color={goal.color || '#3b82f6'} />
-                      </View>
-                      <View>
-                        <Text className="font-bold text-slate-900 dark:text-white">{goal.name}</Text>
-                        <Text className="text-xs text-slate-500 mt-1">
-                          KES {goal.currentAmount.toLocaleString()} / {goal.targetAmount.toLocaleString()}
-                        </Text>
-                      </View>
-                    </View>
-                    {linkingGoal === goal.id ? (
-                      <ActivityIndicator size="small" color={goal.color || '#3b82f6'} />
-                    ) : (
-                      <FontAwesome name="chevron-right" size={12} color="#94a3b8" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-      )}
+      <SelectIncomeSourceSheet
+        visible={incomeModalVisible}
+        isDark={isDark}
+        amount={activeTransaction?.amount}
+        incomeSources={incomeSources}
+        linkingIncome={linkingIncome}
+        onClose={() => { setIncomeModalVisible(false); setSelectedTransaction(null); }}
+        onSelectIncome={handleConfirmLinkToIncome}
+      />
 
-      {/* Select Income Source Modal */}
-      {incomeModalVisible && (
-        <View className="absolute z-50 top-0 left-0 right-0 bottom-0 bg-black/40 justify-end">
-          <View className="bg-white dark:bg-[#0f172a] rounded-t-[32px] p-6 pb-12 border-t border-slate-200 dark:border-slate-800">
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl font-bold text-slate-900 dark:text-white">Select Income Source</Text>
-              <TouchableOpacity onPress={() => { setIncomeModalVisible(false); setSelectedTransaction(null); }}>
-                <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-slate-500 dark:text-slate-400 mb-5">
-              Link KES {activeTransaction?.amount?.toLocaleString()} to which income source?
-            </Text>
-            <View className="space-y-3">
-              {incomeSources.map(src => (
-                <TouchableOpacity
-                  key={src.id}
-                  onPress={() => handleConfirmLinkToIncome(src.id)}
-                  disabled={linkingIncome === src.id}
-                  className="app-card p-4 flex-row justify-between items-center mb-2"
-                >
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${src.color || '#10b981'}20` }}>
-                      <FontAwesome name="arrow-down" size={16} color={src.color || '#10b981'} />
-                    </View>
-                    <View>
-                      <Text className="font-bold text-slate-900 dark:text-white">{src.name}</Text>
-                      {src.isRecurring && (
-                        <Text className="text-xs text-slate-500 mt-0.5">{src.frequency}</Text>
-                      )}
-                    </View>
-                  </View>
-                  {linkingIncome === src.id
-                    ? <ActivityIndicator size="small" color={src.color || '#10b981'} />
-                    : <FontAwesome name="chevron-right" size={12} color="#94a3b8" />
-                  }
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Scope Modal */}
-      <Modal
+      <RecategorizeScopeModal
         visible={scopeModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setScopeModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/40 justify-end mb-10">
-          <View className="bg-white dark:bg-[#0f172a] rounded-t-[16px] p-6 pb-10">
-            <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">
-              Recategorize Transactions
-            </Text>
-            <Text className="text-slate-500 dark:text-slate-400 mb-6 text-sm">
-              How should this change be applied?
-            </Text>
-
-            <View className="gap-y-3">
-              <TouchableOpacity
-                onPress={async () => {
-                  setScopeModalVisible(false);
-                  if (activeTransaction && pendingCategory) {
-                    await updateTransactionCategory(activeTransaction.id, pendingCategory.id);
-                  }
-                  setSelectedTransaction(null);
-                }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 items-center justify-center mr-3">
-                      <Image
-                          source={require('../../assets/svg/transaction.svg')}
-                          style={{ width: 16, height: 16 }}
-                          tintColor={colorScheme === 'dark' ? '#fff' : '#3b82f6'}
-                          contentFit="contain"
-                      />
-                  </View>
-                  <Text className="text-slate-900 dark:text-white font-semibold">
-                    Just this transaction
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={async () => {
-                  setScopeModalVisible(false);
-                  if (activeTransaction && pendingCategory) {
-                    await updateTransactionCategoryByScope(
-                      activeTransaction.id,
-                      activeTransaction.recipientId || null,
-                      activeTransaction.type,
-                      activeTransaction.date,
-                      pendingCategory.id,
-                      'PAST'
-                    );
-                  }
-                  setSelectedTransaction(null);
-                }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 items-center justify-center mr-3">
-                      <Image
-                          source={require('../../assets/svg/transaction.svg')}
-                          style={{ width: 16, height: 16 }}
-                          tintColor={colorScheme === 'dark' ? '#fff' : '#f59e0b'}
-                          contentFit="contain"
-                      />
-                  </View>
-                  <Text className="text-slate-900 dark:text-white font-semibold">
-                    Past similar transactions
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={async () => {
-                  setScopeModalVisible(false);
-                  if (activeTransaction && pendingCategory) {
-                    await updateTransactionCategoryByScope(
-                      activeTransaction.id,
-                      activeTransaction.recipientId || null,
-                      activeTransaction.type,
-                      activeTransaction.date,
-                      pendingCategory.id,
-                      'FUTURE'
-                    );
-                  }
-                  setSelectedTransaction(null);
-                }}
-                className="bg-slate-50 dark:bg-slate-800 p-4 rounded-[12px] flex-row justify-between items-center"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 items-center justify-center mr-3">
-                      <Image
-                          source={require('../../assets/svg/transaction.svg')}
-                          style={{ width: 16, height: 16 }}
-                          tintColor={colorScheme === 'dark' ? '#fff' : '#a855f7'}
-                          contentFit="contain"
-                      />
-                  </View>
-                  <Text className="text-slate-900 dark:text-white font-semibold">
-                    Future transactions
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={async () => {
-                  setScopeModalVisible(false);
-                  if (activeTransaction && pendingCategory) {
-                    await updateTransactionCategoryByScope(
-                      activeTransaction.id,
-                      activeTransaction.recipientId || null,
-                      activeTransaction.type,
-                      activeTransaction.date,
-                      pendingCategory.id,
-                      'ALL'
-                    );
-                  }
-                  setSelectedTransaction(null);
-                }}
-                className="bg-slate-50 dark:bg-slate-800  p-4 rounded-[12px] flex-row justify-between items-center"
-              >
-                <View className="flex-row items-center" >
-                  <View className="w-8 h-8 rounded-lg bg-green-100 dark:bg-purple-900/30 items-center justify-center mr-3">
-                      <Image
-                          source={require('../../assets/svg/transaction.svg')}
-                          style={{ width: 16, height: 16 }}
-                          tintColor={colorScheme === 'dark' ? '#fff' : '#65f755ff'}
-                          contentFit="contain"
-                      />
-                  </View>
-                  <Text className="text-slate-900 dark:text-white font-bold text-base">
-                    Apply to All Transactions
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => setScopeModalVisible(false)}
-              className="bg-red-50 dark:bg-red-900/20 p-4 mt-6 mb-6 rounded-xl items-center border border-red-100 dark:border-red-900/50 justify-center"
-            >
-              <Text className="text-red-600 dark:text-red-400 font-semibold text-[16px]">
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        colorScheme={colorScheme}
+        onClose={() => setScopeModalVisible(false)}
+        onJustThis={async () => {
+          setScopeModalVisible(false);
+          if (activeTransaction && pendingCategory) {
+            await updateTransactionCategory(activeTransaction.id, pendingCategory.id);
+          }
+          setSelectedTransaction(null);
+        }}
+        onPast={async () => {
+          setScopeModalVisible(false);
+          if (activeTransaction && pendingCategory) {
+            await updateTransactionCategoryByScope(
+              activeTransaction.id,
+              activeTransaction.recipientId || null,
+              activeTransaction.type,
+              activeTransaction.date,
+              pendingCategory.id,
+              'PAST'
+            );
+          }
+          setSelectedTransaction(null);
+        }}
+        onFuture={async () => {
+          setScopeModalVisible(false);
+          if (activeTransaction && pendingCategory) {
+            await updateTransactionCategoryByScope(
+              activeTransaction.id,
+              activeTransaction.recipientId || null,
+              activeTransaction.type,
+              activeTransaction.date,
+              pendingCategory.id,
+              'FUTURE'
+            );
+          }
+          setSelectedTransaction(null);
+        }}
+        onAll={async () => {
+          setScopeModalVisible(false);
+          if (activeTransaction && pendingCategory) {
+            await updateTransactionCategoryByScope(
+              activeTransaction.id,
+              activeTransaction.recipientId || null,
+              activeTransaction.type,
+              activeTransaction.date,
+              pendingCategory.id,
+              'ALL'
+            );
+          }
+          setSelectedTransaction(null);
+        }}
+      />
     </View>
   );
 }

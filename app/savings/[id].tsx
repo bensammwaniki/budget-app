@@ -4,9 +4,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PageSheetSearchModal from '../../components/modals/PageSheetSearchModal';
 import { getTransactions } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { Transaction } from '../../types/transaction';
@@ -336,103 +337,72 @@ export default function GoalDetailScreen() {
                 </View>
             </Animated.ScrollView>
 
-            {/* Linking Modal */}
-            <Modal
+            <PageSheetSearchModal
                 visible={showLinkModal}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowLinkModal(false)}
+                title="Link Transaction"
+                colorScheme={colorScheme}
+                searchQuery={searchQuery}
+                onChangeSearch={setSearchQuery}
+                onClearSearch={() => setSearchQuery('')}
+                onClose={() => setShowLinkModal(false)}
+                useFontAwesomeSearch
             >
-                <View className="flex-1 app-screen pt-6 mt-8">
-                    <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Transaction</Text>
-                        <TouchableOpacity onPress={() => setShowLinkModal(false)} className="p-2 -mr-2">
-                            <Image
-                                source={require(`../../assets/svg/close.svg`)}
-                                style={{ width: 20, height: 20 }}
-                                tintColor={isDark ? '#94a3b8' : themeColor}
-                                contentFit="contain"
-                            />
-                        </TouchableOpacity>
+                {filteredLinkableTransactions.length === 0 ? (
+                    <View className="flex-1 items-center justify-center p-6">
+                        <Text className="text-slate-500 dark:text-slate-400 text-center">
+                            {searchQuery ? 'No matching transactions found.' : 'No eligible transactions found. Only standard expenses can be linked to savings goals.'}
+                        </Text>
                     </View>
-
-                    {/* Search Bar */}
-                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-[12px] border border-slate-200 dark:border-slate-700">
-                            <FontAwesome name="search" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                            <TextInput
-                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
-                                placeholder="Search by name or amount..."
-                                placeholderTextColor={isDark ? '#cbd5e1' : '#94a3b8'}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                                autoCorrect={false}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
-                                    <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {filteredLinkableTransactions.length === 0 ? (
-                        <View className="flex-1 items-center justify-center p-6">
-                            <Text className="text-slate-500 dark:text-slate-400 text-center">
-                                {searchQuery ? 'No matching transactions found.' : 'No eligible transactions found. Only standard expenses can be linked to savings goals.'}
-                            </Text>
-                        </View>
-                    ) : (
-                        <FlatList
-                            data={filteredLinkableTransactions}
-                            keyExtractor={tx => tx.id}
-                            contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
-                            renderItem={({ item: tx }) => (
-                                <TouchableOpacity
-                                    onPress={() => handleLinkTransaction(tx.id)}
-                                    disabled={linking === tx.id}
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
-                                >
-                                    <View className="flex-row items-center flex-1 pr-4">
-                                        <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">
-                                            <Image
-                                                source={require(`../../assets/svg/savings.svg`)}
-                                                style={{ width: 20, height: 20 }}
-                                                tintColor={isDark ? '#94a3b8' : themeColor}
-                                                contentFit="contain"
-                                            />
-                                        </View>
-                                        <View className="flex-1">
-                                            <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>
-                                                {tx.recipientName || tx.transactionKind}
-                                            </Text>
-                                            <Text className="text-slate-500 dark:text-slate-400 text-xs">
-                                                {new Date(tx.date).toLocaleDateString()}
-                                            </Text>
-                                        </View>
+                ) : (
+                    <FlatList
+                        data={filteredLinkableTransactions}
+                        keyExtractor={tx => tx.id}
+                        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+                        renderItem={({ item: tx }) => (
+                            <TouchableOpacity
+                                onPress={() => handleLinkTransaction(tx.id)}
+                                disabled={linking === tx.id}
+                                className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
+                            >
+                                <View className="flex-row items-center flex-1 pr-4">
+                                    <View className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mr-3">
+                                        <Image
+                                            source={require(`../../assets/svg/savings.svg`)}
+                                            style={{ width: 20, height: 20 }}
+                                            tintColor={isDark ? '#94a3b8' : themeColor}
+                                            contentFit="contain"
+                                        />
                                     </View>
-
-                                    <View className="flex-row items-center">
-                                        <Text className="text-slate-900 dark:text-white font-bold mr-3">
-                                            KES {tx.amount.toLocaleString()}
+                                    <View className="flex-1">
+                                        <Text className="text-slate-900 dark:text-white font-semibold text-base" numberOfLines={1}>
+                                            {tx.recipientName || tx.transactionKind}
                                         </Text>
-                                        {linking === tx.id ? (
-                                            <ActivityIndicator size="small" color={themeColor} />
-                                        ) : (
-                                            <Image
-                                                source={require(`../../assets/svg/link-sms.svg`)}
-                                                style={{ width: 28, height: 28 }}
-                                                tintColor={themeColor}
-                                                contentFit="contain"
-                                            />
-                                        )}
+                                        <Text className="text-slate-500 dark:text-slate-400 text-xs">
+                                            {new Date(tx.date).toLocaleDateString()}
+                                        </Text>
                                     </View>
-                                </TouchableOpacity>
-                            )}
-                        />
-                    )}
-                </View>
-            </Modal>
+                                </View>
+
+                                <View className="flex-row items-center">
+                                    <Text className="text-slate-900 dark:text-white font-bold mr-3">
+                                        KES {tx.amount.toLocaleString()}
+                                    </Text>
+                                    {linking === tx.id ? (
+                                        <ActivityIndicator size="small" color={themeColor} />
+                                    ) : (
+                                        <Image
+                                            source={require(`../../assets/svg/link-sms.svg`)}
+                                            style={{ width: 28, height: 28 }}
+                                            tintColor={themeColor}
+                                            contentFit="contain"
+                                        />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                    />
+                )}
+            </PageSheetSearchModal>
         </View>
     );
 }

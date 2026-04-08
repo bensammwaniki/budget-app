@@ -1,17 +1,29 @@
 import { FontAwesome } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Image as ExpoImage, Image } from 'expo-image';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, InteractionManager, RefreshControl, Switch, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import AddCategoryModal from '../../components/AddCategoryModal';
+import ExportPeriodModal from '../../components/modals/ExportPeriodModal';
+import FinancialSettingsModal from '../../components/modals/FinancialSettingsModal';
+import ProfileEditModal from '../../components/modals/ProfileEditModal';
+import { useAppLock } from '../../context/AppLockContext';
 import { useAuth } from '../../services/AuthContext';
-import { deleteCategory, getCategories, getUserSettings, initDatabase, saveUserSettings } from '../../services/database';
+import { deleteCategory, getCategories, initDatabase } from '../../services/database';
 import { exportFinancialSpreadsheet, ExportPeriod } from '../../services/exportService';
+import {
+    buildFreshStartConfig,
+    clearFreshStartConfig,
+    FreshStartConfig,
+    getFinancialSettings,
+    saveFinancialMonthStart,
+    saveFreshStartConfig,
+    saveHideInternalTransfers,
+} from '../../services/financialSettingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { Category } from '../../types/transaction';
 
@@ -23,11 +35,36 @@ const EXPORT_PERIOD_OPTIONS: { key: ExportPeriod; label: string; description: st
     { key: 'ALL_TIME', label: 'All Time', description: 'Everything in the app' },
 ];
 
+const LOCK_TIMEOUT_OPTIONS = [
+    { value: 30 * 1000, label: '30 sec' },
+    { value: 60 * 1000, label: '1 min' },
+    { value: 3 * 60 * 1000, label: '3 min' },
+    { value: 5 * 60 * 1000, label: '5 min' },
+    { value: 10 * 60 * 1000, label: '10 min' },
+];
+
 const periodLabel = (period: ExportPeriod): string =>
     EXPORT_PERIOD_OPTIONS.find((p) => p.key === period)?.label || 'All Time';
 
+const DEFAULT_FRESH_START_OPTIONS = {
+    resetBroughtForward: false,
+    resetDebts: false,
+    resetSavings: false,
+    resetIncome: false,
+    resetBudgets: false,
+};
+
 export default function ProfileScreen() {
     const { signOut, user, phoneNumber, updateUserProfile } = useAuth();
+    const {
+        changePin,
+        biometricsEnabled,
+        biometricsSupported,
+        biometricLabel,
+        lockTimeoutMs,
+        setBiometricsEnabled,
+        setLockTimeout,
+    } = useAppLock();
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const router = useRouter();
 
@@ -57,13 +94,21 @@ export default function ProfileScreen() {
     const [editName, setEditName] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [editImage, setEditImage] = useState<string | null>(null);
+    const [currentPin, setCurrentPin] = useState('');
+    const [newPin, setNewPin] = useState('');
+    const [confirmPin, setConfirmPin] = useState('');
     const [refreshing, setRefreshing] = useState(false);
+    const [isSecurityUpdating, setIsSecurityUpdating] = useState(false);
 
     // Settings State
     const [financialMonthStart, setFinancialMonthStart] = useState(1);
-    const [smsParseStartDate, setSmsParseStartDate] = useState<Date | null>(null);
+    const [financialMonthDraft, setFinancialMonthDraft] = useState(1);
+    const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
+    const [hideInternalTransfersDraft, setHideInternalTransfersDraft] = useState(false);
+    const [freshStartConfig, setFreshStartConfig] = useState<FreshStartConfig | null>(null);
+    const [freshStartOptions, setFreshStartOptions] = useState(DEFAULT_FRESH_START_OPTIONS);
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
-    const [showSmsDatePicker, setShowSmsDatePicker] = useState(false);
+    const [isFinancialSettingsSaving, setIsFinancialSettingsSaving] = useState(false);
     const [isThemeSwitching, setIsThemeSwitching] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
     const [exportPeriodModalVisible, setExportPeriodModalVisible] = useState(false);
@@ -93,11 +138,12 @@ export default function ProfileScreen() {
     );
 
     const loadSettings = async () => {
-        const startDay = await getUserSettings('financial_month_start_day');
-        if (startDay) setFinancialMonthStart(parseInt(startDay, 10));
-
-        const smsDate = await getUserSettings('sms_parse_start_date');
-        if (smsDate) setSmsParseStartDate(new Date(smsDate));
+        const financialSettings = await getFinancialSettings();
+        setFinancialMonthStart(financialSettings.monthStartDay);
+        setFinancialMonthDraft(financialSettings.monthStartDay);
+        setHideInternalTransfers(financialSettings.hideInternalTransfers);
+        setHideInternalTransfersDraft(financialSettings.hideInternalTransfers);
+        setFreshStartConfig(financialSettings.freshStart);
     };
 
     // Initialize edit form when opening modal
@@ -106,8 +152,19 @@ export default function ProfileScreen() {
             setEditName(user?.displayName || '');
             setEditPhone(phoneNumber || '');
             setEditImage(user?.photoURL || null);
+            setCurrentPin('');
+            setNewPin('');
+            setConfirmPin('');
         }
     }, [editProfileVisible, user, phoneNumber]);
+
+    useEffect(() => {
+        if (!dayPickerVisible) return;
+
+        setFinancialMonthDraft(financialMonthStart);
+        setHideInternalTransfersDraft(hideInternalTransfers);
+        setFreshStartOptions(DEFAULT_FRESH_START_OPTIONS);
+    }, [dayPickerVisible, financialMonthStart, hideInternalTransfers]);
 
     const loadCategories = async () => {
         await initDatabase();
@@ -159,6 +216,24 @@ export default function ProfileScreen() {
             return;
         }
 
+        const wantsToUpdatePin = !!(currentPin.trim() || newPin.trim() || confirmPin.trim());
+        if (wantsToUpdatePin) {
+            if (!currentPin.trim() || !newPin.trim() || !confirmPin.trim()) {
+                Alert.alert('Missing PIN', 'Fill in your current PIN, new PIN, and confirmation.');
+                return;
+            }
+
+            if (!/^\d{4}$/.test(newPin.trim())) {
+                Alert.alert('Invalid PIN', 'Your new PIN must be exactly 4 digits.');
+                return;
+            }
+
+            if (newPin.trim() !== confirmPin.trim()) {
+                Alert.alert('PIN Mismatch', 'The new PIN and confirmation PIN do not match.');
+                return;
+            }
+        }
+
         try {
             setIsUpdating(true);
             await updateUserProfile({
@@ -166,13 +241,52 @@ export default function ProfileScreen() {
                 phoneNumber: editPhone.trim(),
                 photoURL: editImage || undefined
             });
+
+            if (wantsToUpdatePin) {
+                const success = await changePin(currentPin.trim(), newPin.trim());
+                if (!success) {
+                    Alert.alert('Incorrect PIN', 'Your current PIN is not correct.');
+                    return;
+                }
+
+                setCurrentPin('');
+                setNewPin('');
+                setConfirmPin('');
+            }
+
             setEditProfileVisible(false);
-            Alert.alert('Success', 'Profile updated successfully');
+            Alert.alert('Success', wantsToUpdatePin ? 'Profile and PIN updated successfully' : 'Profile updated successfully');
         } catch (error) {
             console.error('Error updating profile:', error);
             Alert.alert('Error', 'Failed to update profile');
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handleBiometricsToggle = async (enabled: boolean) => {
+        if (!biometricsSupported) return;
+
+        try {
+            setIsSecurityUpdating(true);
+            await setBiometricsEnabled(enabled);
+        } catch (error) {
+            console.error('Error updating biometric preference:', error);
+            Alert.alert('Error', 'Failed to update biometric preference.');
+        } finally {
+            setIsSecurityUpdating(false);
+        }
+    };
+
+    const handleSelectLockTimeout = async (timeoutMs: number) => {
+        try {
+            setIsSecurityUpdating(true);
+            await setLockTimeout(timeoutMs);
+        } catch (error) {
+            console.error('Error updating lock timeout:', error);
+            Alert.alert('Error', 'Failed to update lock timeout.');
+        } finally {
+            setIsSecurityUpdating(false);
         }
     };
 
@@ -256,6 +370,90 @@ export default function ProfileScreen() {
         await handleExportExcel();
     };
 
+    const handleCloseFinancialMonthModal = async () => {
+        try {
+            setIsFinancialSettingsSaving(true);
+            await applyFinancialSettings();
+            setDayPickerVisible(false);
+        } catch (error) {
+            console.error('Failed to save financial month settings:', error);
+            Alert.alert('Error', 'Failed to save financial month settings.');
+        } finally {
+            setIsFinancialSettingsSaving(false);
+        }
+    };
+
+    const applyFinancialSettings = async () => {
+        await Promise.all([
+            saveFinancialMonthStart(financialMonthDraft),
+            saveHideInternalTransfers(hideInternalTransfersDraft),
+        ]);
+        setFinancialMonthStart(financialMonthDraft);
+        setHideInternalTransfers(hideInternalTransfersDraft);
+    };
+
+    const handleStartFreshFromCurrentMonth = async () => {
+        const enabledResets = Object.entries(freshStartOptions).filter(([, value]) => value);
+        if (enabledResets.length === 0) {
+            try {
+                setIsFinancialSettingsSaving(true);
+                await applyFinancialSettings();
+                await clearFreshStartConfig();
+                setFreshStartConfig(null);
+                setDayPickerVisible(false);
+                Alert.alert(
+                    'Recalculated',
+                    'The app has been recalculated using your current financial month settings, with no fresh-start reset applied.'
+                );
+            } catch (error) {
+                console.error('Failed to recalculate financial month settings:', error);
+                Alert.alert('Error', 'Failed to recalculate financial month settings.');
+            } finally {
+                setIsFinancialSettingsSaving(false);
+            }
+            return;
+        }
+
+        const effectiveRange = getFinancialMonthRange(new Date(), financialMonthDraft);
+        const effectiveLabel = effectiveRange.start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        const resetLines = [
+            freshStartOptions.resetBroughtForward && '• Balance brought forward before this month becomes 0.',
+            freshStartOptions.resetDebts && '• Pre-existing debt carry state will be excluded from the new cycle.',
+            freshStartOptions.resetSavings && '• Savings progress before this month will be treated as pre-baseline.',
+            freshStartOptions.resetIncome && '• Income progress before this month will be treated as pre-baseline.',
+            freshStartOptions.resetBudgets && '• Monthly summaries and budget carry state will restart from this month.',
+            '• Raw transactions and transaction dates will stay unchanged.',
+        ].filter(Boolean).join('\n');
+
+        Alert.alert(
+            'Start Fresh From This Month',
+            `This will create a new baseline from ${effectiveLabel}.\n\n${resetLines}`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Start Fresh',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setIsFinancialSettingsSaving(true);
+                            await applyFinancialSettings();
+                            const config = buildFreshStartConfig(financialMonthDraft, freshStartOptions);
+                            await saveFreshStartConfig(config);
+                            setFreshStartConfig(config);
+                            setDayPickerVisible(false);
+                            Alert.alert('Fresh Start Applied', `A new baseline now starts from ${effectiveLabel}.`);
+                        } catch (error) {
+                            console.error('Failed to apply fresh start:', error);
+                            Alert.alert('Error', 'Failed to apply fresh-start settings.');
+                        } finally {
+                            setIsFinancialSettingsSaving(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
     return (
         <Animated.ScrollView
             className="flex-1 app-screen"
@@ -267,12 +465,20 @@ export default function ProfileScreen() {
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             {/* Header with user info */}
             <View className="px-4 pt-16 pb-12 items-center bg-white dark:bg-[#0f172a] rounded-b-[16px] border-b border-gray-200 dark:border-slate-800">
-                <View className="w-24 h-24 bg-gray-50 dark:bg-[#1e293b] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
-                    {user?.photoURL ? (
-                        <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : (
-                        <Text className="text-4xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
-                    )}
+                <View className="relative mb-4">
+                    <View className="w-24 h-24 bg-gray-50 dark:bg-[#1e293b] rounded-full items-center justify-center border border-gray-200 dark:border-slate-700 overflow-hidden">
+                        {user?.photoURL ? (
+                            <Image source={{ uri: user.photoURL }} className="w-full h-full" style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        ) : (
+                            <Text className="text-4xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
+                        )}
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => setEditProfileVisible(true)}
+                        className="absolute -right-1 -bottom-1 w-9 h-9 rounded-full items-center justify-center bg-blue-600 border-2 border-white dark:border-[#0f172a]"
+                    >
+                        <FontAwesome name="pencil" size={13} color="#ffffff" />
+                    </TouchableOpacity>
                 </View>
                 <Text className="text-slate-900 dark:text-white text-2xl font-bold mb-1">{user?.displayName || 'User'}</Text>
                 <Text className="text-slate-500 dark:text-slate-400 text-sm mb-1">{user?.email}</Text>
@@ -310,14 +516,11 @@ export default function ProfileScreen() {
                                 { icon: require('../../assets/svg/income.svg'), label: 'Manage My Income', color: '#10b981', action: () => router.push('/(tabs)/income') },
                                 { icon: require('../../assets/svg/budget.svg'), label: 'Monthly Budget', color: '#10b981', action: () => router.push('/budget') },
                                 { icon: require('../../assets/svg/bank.svg'), label: 'Manage My Banks', color: '#2563eb', action: () => router.push('/banks') },
-                                { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                                 {
-                                    icon: require('../../assets/svg/privacy.svg'), label: 'Financial Month Start', color: '#f59e0b', action: () => setDayPickerVisible(true),
-                                    value: `Day ${financialMonthStart}`
-                                },
-                                {
-                                    icon: require('../../assets/svg/privacy.svg'), label: 'SMS Parse From', color: '#ec4899', action: () => setShowSmsDatePicker(true),
-                                    value: smsParseStartDate ? smsParseStartDate.toLocaleDateString() : 'All Time'
+                                    icon: require('../../assets/svg/privacy.svg'), label: 'Financial Settings', color: '#f59e0b', action: () => setDayPickerVisible(true),
+                                    value: freshStartConfig
+                                        ? `Day ${financialMonthStart} • Fresh start active`
+                                        : `Day ${financialMonthStart}`
                                 },
                                 {
                                     icon: require('../../assets/svg/graph.svg'),
@@ -327,7 +530,7 @@ export default function ProfileScreen() {
                                     value: isExportingExcel ? 'Generating export...' : `Period: ${periodLabel(selectedExportPeriod)}`,
                                     disabled: isExportingExcel,
                                 },
-                                { icon: require('../../assets/svg/my-profile.svg'), label: 'Edit Profile', color: '#3b82f6', action: () => setEditProfileVisible(true) },
+                                { icon: require('../../assets/svg/automation.svg'), label: 'Automation Rules', color: '#8b5cf6', action: () => router.push('/automation') },
                                 { icon: require('../../assets/svg/privacy.svg'), label: 'Privacy & Security', color: '#64748b', action: () => router.push('/privacy-policy') },
                             ].map((item, index) => (
                                 <TouchableOpacity
@@ -402,107 +605,35 @@ export default function ProfileScreen() {
                     onCategoryAdded={handleCategoryAdded}
                 />
 
-                {/* Edit Profile Modal */}
-                <Modal
+                <ProfileEditModal
                     visible={editProfileVisible}
-                    animationType="slide"
-                    transparent={true}
-                    onRequestClose={() => setEditProfileVisible(false)}
-                >
-                    <KeyboardAvoidingView
-                        style={{ flex: 1 }}
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-                    >
-                        <View className="flex-1 justify-end bg-black/50">
-                            <View className="bg-white dark:bg-[#1e293b] rounded-t-[16px] p-6 h-[85%]">
-                                <View className="flex-row justify-between items-center mb-6">
-                                    <Text className="text-slate-900 dark:text-white text-xl font-bold">Edit Profile</Text>
-                                    <TouchableOpacity onPress={() => setEditProfileVisible(false)} className="p-2 -mr-2">
-                                        <ExpoImage
-                                            source={require('../../assets/svg/close.svg')}
-                                            style={{ width: 20, height: 20 }}
-                                            contentFit="contain"
-                                            tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <ScrollView
-                                    className="flex-1"
-                                    showsVerticalScrollIndicator={false}
-                                    keyboardShouldPersistTaps="handled"
-                                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                                >
-                                    {/* Profile Image */}
-                                    <View className="items-center mb-8">
-                                        <View className="w-32 h-32 bg-gray-100 dark:bg-[#0f172a] rounded-full items-center justify-center mb-4 border border-gray-200 dark:border-slate-700 overflow-hidden">
-                                            {editImage ? (
-                                                <Image source={{ uri: editImage }} className="w-full h-full" style={{ width: '100%', height: '100%' }} />
-                                            ) : (
-                                                <Text className="text-5xl text-slate-800 dark:text-white font-bold">{user?.displayName?.charAt(0) || '👤'}</Text>
-                                            )}
-                                        </View>
-                                        <View className="flex-row gap-4">
-                                            <TouchableOpacity
-                                                onPress={handleTakePhoto}
-                                                className="bg-blue-500 px-4 py-2 rounded-full flex-row items-center"
-                                            >
-                                                <FontAwesome name="camera" size={14} color="white" />
-                                                <Text className="text-white font-bold ml-2">Camera</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                onPress={handlePickImage}
-                                                className="bg-purple-500 px-4 py-2 rounded-full flex-row items-center"
-                                            >
-                                                <FontAwesome name="image" size={14} color="white" />
-                                                <Text className="text-white font-bold ml-2">Gallery</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-
-                                    {/* Name Input */}
-                                    <View className="mb-6">
-                                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Full Name</Text>
-                                        <TextInput
-                                            value={editName}
-                                            onChangeText={setEditName}
-                                            placeholder="Enter your name"
-                                            placeholderTextColor="#94a3b8"
-                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-[12px] text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
-                                        />
-                                    </View>
-
-                                    {/* Phone Input */}
-                                    <View className="mb-6">
-                                        <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">Phone Number</Text>
-                                        <TextInput
-                                            value={editPhone}
-                                            onChangeText={setEditPhone}
-                                            placeholder="e.g., +254 712 345 678"
-                                            placeholderTextColor="#94a3b8"
-                                            keyboardType="phone-pad"
-                                            className="bg-gray-50 dark:bg-slate-800 p-4 rounded-[12px] text-slate-900 dark:text-white border border-gray-200 dark:border-slate-700"
-                                        />
-                                    </View>
-
-                                    {/* Save Button */}
-                                    <TouchableOpacity
-                                        onPress={handleUpdateProfile}
-                                        disabled={isUpdating}
-                                        className={`bg-blue-600 p-4 rounded-[12px] mb-8 ${isUpdating ? 'opacity-50' : ''}`}
-                                    >
-                                        {isUpdating ? (
-                                            <ActivityIndicator color="white" />
-                                        ) : (
-                                            <Text className="text-white text-center font-bold text-lg">Save Changes</Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </ScrollView>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </Modal>
+                    colorScheme={colorScheme}
+                    editImage={editImage}
+                    displayName={user?.displayName}
+                    editName={editName}
+                    onChangeName={setEditName}
+                    editPhone={editPhone}
+                    onChangePhone={setEditPhone}
+                    currentPin={currentPin}
+                    onChangeCurrentPin={setCurrentPin}
+                    newPin={newPin}
+                    onChangeNewPin={setNewPin}
+                    confirmPin={confirmPin}
+                    onChangeConfirmPin={setConfirmPin}
+                    biometricLabel={biometricLabel}
+                    biometricsSupported={biometricsSupported}
+                    biometricsEnabled={biometricsEnabled}
+                    onToggleBiometrics={handleBiometricsToggle}
+                    isSecurityUpdating={isSecurityUpdating}
+                    lockTimeoutMs={lockTimeoutMs}
+                    lockTimeoutOptions={LOCK_TIMEOUT_OPTIONS}
+                    onSelectLockTimeout={handleSelectLockTimeout}
+                    isUpdating={isUpdating}
+                    onSave={handleUpdateProfile}
+                    onClose={() => setEditProfileVisible(false)}
+                    onTakePhoto={handleTakePhoto}
+                    onPickImage={handlePickImage}
+                />
 
                 {/* Sign Out Button */}
                 <TouchableOpacity
@@ -516,122 +647,33 @@ export default function ProfileScreen() {
                 <Text className="text-center text-slate-400 dark:text-slate-600 text-xs mb-8">Version 1.0.0</Text>
             </View>
 
-            {/* Financial Month Day Picker Modal */}
-            <Modal visible={dayPickerVisible} transparent animationType="fade">
-                <View className="flex-1 justify-center items-center bg-black/60 px-6">
-                    <View className="bg-white dark:bg-slate-900 w-full rounded-[16px] overflow-hidden">
-                        <View className="p-6 border-b border-gray-100 dark:border-slate-800">
-                            <Text className="text-xl font-bold text-slate-900 dark:text-white">Month Start Day</Text>
-                            <Text className="text-slate-500 dark:text-slate-400 text-sm mt-1">Select the day your financial month begins.</Text>
-                        </View>
-                        <View className="flex-row flex-wrap p-4 justify-between">
-                            {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
-                                <TouchableOpacity
-                                    key={day}
-                                    onPress={async () => {
-                                        setFinancialMonthStart(day);
-                                        await saveUserSettings('financial_month_start_day', day.toString());
-                                        setDayPickerVisible(false);
-                                    }}
-                                    className={`w-[22%] mb-3 aspect-square items-center justify-center rounded-[12px] border ${financialMonthStart === day ? 'bg-blue-500 border-blue-500' : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700'
-                                        }`}
-                                >
-                                    <Text className={`font-bold ${financialMonthStart === day ? 'text-white' : 'text-slate-800 dark:text-white'}`}>{day}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                        <TouchableOpacity
-                            onPress={() => setDayPickerVisible(false)}
-                            className="bg-gray-100 dark:bg-slate-800 p-4 items-center"
-                        >
-                            <Text className="text-slate-600 dark:text-slate-300 font-bold">Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+            <FinancialSettingsModal
+                visible={dayPickerVisible}
+                colorScheme={colorScheme}
+                financialMonthDraft={financialMonthDraft}
+                onSelectDay={setFinancialMonthDraft}
+                hideInternalTransfersDraft={hideInternalTransfersDraft}
+                onToggleHideInternalTransfers={setHideInternalTransfersDraft}
+                freshStartOptions={freshStartOptions}
+                onToggleFreshStartOption={(key, value) => setFreshStartOptions((current) => ({ ...current, [key]: value }))}
+                freshStartConfig={freshStartConfig}
+                isSaving={isFinancialSettingsSaving}
+                primaryLabel={Object.values(freshStartOptions).some(Boolean) ? 'Start Fresh From This Month' : 'Recalculate'}
+                onPrimaryAction={handleStartFreshFromCurrentMonth}
+                onClose={handleCloseFinancialMonthModal}
+            />
 
-            {/* Excel Export Period Picker */}
-            <Modal
+            <ExportPeriodModal
                 visible={exportPeriodModalVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setExportPeriodModalVisible(false)}
-            >
-                <View className="flex-1 justify-end bg-black/50 p-6">
-                    <View className="bg-white dark:bg-slate-900 rounded-[16px] border border-gray-200 dark:border-slate-700 p-5">
-                        <View className="flex-row items-center justify-between mb-4">
-                            <Text className="text-slate-900 dark:text-white text-lg font-bold">Export Excel (.xlsx)</Text>
-                            <TouchableOpacity onPress={() => setExportPeriodModalVisible(false)} className="p-1">
-                                <ExpoImage
-                                    source={require('../../assets/svg/close.svg')}
-                                    style={{ width: 14, height: 14 }}
-                                    contentFit="contain"
-                                    tintColor={colorScheme === 'dark' ? '#fff' : '#64748b'}
-                                />
-                            </TouchableOpacity>
-                        </View>
+                colorScheme={colorScheme}
+                options={EXPORT_PERIOD_OPTIONS}
+                selectedPeriod={selectedExportPeriod}
+                isExporting={isExportingExcel}
+                onSelectPeriod={setSelectedExportPeriod}
+                onClose={() => setExportPeriodModalVisible(false)}
+                onConfirm={handleConfirmExport}
+            />
 
-                        <Text className="text-slate-500 dark:text-slate-400 text-xs mb-3">
-                            Choose a period. Export creates one Excel workbook with multiple sheets.
-                        </Text>
-
-                        <View className="gap-2 mb-5">
-                            {EXPORT_PERIOD_OPTIONS.map((option) => {
-                                const selected = option.key === selectedExportPeriod;
-                                return (
-                                    <TouchableOpacity
-                                        key={option.key}
-                                        onPress={() => setSelectedExportPeriod(option.key)}
-                                        className={`p-3 rounded-[12px] border ${selected
-                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                                            : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
-                                            }`}
-                                    >
-                                        <Text className={`font-semibold ${selected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-white'}`}>
-                                            {option.label}
-                                        </Text>
-                                        <Text className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{option.description}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-
-                        <View className="flex-row gap-3">
-                            <TouchableOpacity
-                                onPress={() => setExportPeriodModalVisible(false)}
-                                className="flex-1 py-3 rounded-[12px] bg-gray-100 dark:bg-slate-800 items-center"
-                            >
-                                <Text className="text-slate-700 dark:text-slate-200 font-semibold">Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleConfirmExport}
-                                disabled={isExportingExcel}
-                                className={`flex-1 py-3 rounded-[12px] items-center ${isExportingExcel ? 'bg-blue-400' : 'bg-blue-600'}`}
-                            >
-                                <Text className="text-white font-semibold">Export</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* SMS Parse Date Picker */}
-            {showSmsDatePicker && (
-                <DateTimePicker
-                    value={smsParseStartDate || new Date()}
-                    mode="date"
-                    display="default"
-                    maximumDate={new Date()}
-                    onChange={async (event, selectedDate) => {
-                        setShowSmsDatePicker(false);
-                        if (selectedDate) {
-                            setSmsParseStartDate(selectedDate);
-                            await saveUserSettings('sms_parse_start_date', selectedDate.toISOString());
-                            Alert.alert('Settings Saved', 'Sync will now start from the selected date.');
-                        }
-                    }}
-                />
-            )}
         </Animated.ScrollView>
     );
 }

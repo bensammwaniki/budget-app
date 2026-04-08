@@ -421,18 +421,22 @@ export const debtService = {
         const db = getDb();
         return await db.getAllAsync(`
             SELECT 
-                dp.id as payment_id,
-                dp.amount as payment_amount,
-                dp.date as payment_date,
-                dp.created_at,
                 t.id as transaction_id,
                 t.recipient_name,
                 t.raw_sms,
-                t.type as transaction_type
-            FROM debt_payments dp
-            INNER JOIN transactions t ON dp.transaction_id = t.id
-            WHERE dp.debt_id = ?
-            ORDER BY dp.date DESC
+                t.type as transaction_type,
+                t.transaction_kind,
+                t.amount as transaction_amount,
+                t.date as transaction_date,
+                t.created_at,
+                dp.id as payment_id,
+                dp.amount as payment_amount,
+                dp.date as payment_date
+            FROM transactions t
+            LEFT JOIN debt_payments dp ON dp.transaction_id = t.id
+            WHERE t.linked_debt_id = ?
+              AND t.is_deleted = 0
+            ORDER BY t.date DESC, t.created_at DESC
         `, [debtId]);
     },
 

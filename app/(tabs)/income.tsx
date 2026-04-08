@@ -8,11 +8,19 @@ import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, Touchabl
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initDatabase } from '../../services/database';
+import {
+    getFinancialMonthRange,
+    getFinancialSettings,
+    getPreviousFinancialMonthRange,
+    getFreshStartEffectiveDate,
+} from '../../services/financialSettingsService';
 import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 
 export default function IncomeScreen() {
     const [sources, setSources] = useState<IncomeSource[]>([]);
     const [logs, setLogs] = useState<IncomeLog[]>([]);
+    const [financialMonthStart, setFinancialMonthStart] = useState(1);
+    const [freshStartIncomeDate, setFreshStartIncomeDate] = useState<Date | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const router = useRouter();
@@ -23,12 +31,19 @@ export default function IncomeScreen() {
     const loadData = async () => {
         try {
             await initDatabase();
-            const [fetchedSources, fetchedLogs] = await Promise.all([
+            const [fetchedSources, fetchedLogs, financialSettings] = await Promise.all([
                 incomeService.getSources(),
                 incomeService.getLogs(),
+                getFinancialSettings(),
             ]);
             setSources(fetchedSources);
             setLogs(fetchedLogs);
+            setFinancialMonthStart(financialSettings.monthStartDay);
+            setFreshStartIncomeDate(
+                financialSettings.freshStart?.resetIncome
+                    ? getFreshStartEffectiveDate(financialSettings.freshStart)
+                    : null
+            );
         } catch (e) {
             console.error('Failed to load income data:', e);
         } finally {
@@ -44,16 +59,21 @@ export default function IncomeScreen() {
         setRefreshing(false);
     };
 
-    const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const thisMonthRange = useMemo(() => getFinancialMonthRange(new Date(), financialMonthStart), [financialMonthStart]);
+    const lastMonthRange = useMemo(() => getPreviousFinancialMonthRange(new Date(), financialMonthStart), [financialMonthStart]);
+    const effectiveLogs = useMemo(() => {
+        if (!freshStartIncomeDate) return logs;
+        return logs.filter(log => new Date(log.receivedAt) >= freshStartIncomeDate);
+    }, [freshStartIncomeDate, logs]);
 
-    const thisMonthTotal = logs.filter(l => new Date(l.receivedAt) >= startOfThisMonth)
+    const thisMonthTotal = effectiveLogs.filter(l => {
+        const receivedAt = new Date(l.receivedAt);
+        return receivedAt >= thisMonthRange.start && receivedAt <= thisMonthRange.end;
+    })
         .reduce((sum, l) => sum + l.amount, 0);
-    const lastMonthTotal = logs.filter(l => {
+    const lastMonthTotal = effectiveLogs.filter(l => {
         const d = new Date(l.receivedAt);
-        return d >= startOfLastMonth && d <= endOfLastMonth;
+        return d >= lastMonthRange.start && d <= lastMonthRange.end;
     }).reduce((sum, l) => sum + l.amount, 0);
 
     const trend = lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : 0;
@@ -75,7 +95,7 @@ export default function IncomeScreen() {
     const sourceSummaries = useMemo(() => {
         const grouped = new Map<string, { totalReceived: number; entryCount: number; lastReceivedAt: string | null }>();
 
-        for (const log of logs) {
+        for (const log of effectiveLogs) {
             const current = grouped.get(log.sourceId);
             const receivedAtTime = new Date(log.receivedAt).getTime();
 
@@ -97,7 +117,7 @@ export default function IncomeScreen() {
         }
 
         return grouped;
-    }, [logs]);
+    }, [effectiveLogs]);
 
     const renderSource = ({ item }: { item: IncomeSource }) => {
         const summary = sourceSummaries.get(item.id);

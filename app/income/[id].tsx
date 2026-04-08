@@ -4,9 +4,11 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PageSheetModal from '../../components/modals/PageSheetModal';
+import PageSheetSearchModal from '../../components/modals/PageSheetSearchModal';
 import { getTransactions } from '../../services/database';
 import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 import { Transaction } from '../../types/transaction';
@@ -443,93 +445,64 @@ export default function IncomeDetailScreen() {
                 )}
             </Animated.ScrollView>
 
-            {/* Link Transaction Modal */}
-            <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
-                <View className="flex-1 app-screen pt-6">
-                    <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Link Income Transaction</Text>
-                        <TouchableOpacity onPress={() => setShowModal(false)} className="p-2 -mr-2">
-                            <FontAwesome name="times" size={20} color={isDark ? '#94a3b8' : '#64748b'} />
-                        </TouchableOpacity>
+            <PageSheetSearchModal
+                visible={showModal}
+                title="Link Income Transaction"
+                colorScheme={colorScheme}
+                searchQuery={searchQuery}
+                onChangeSearch={setSearchQuery}
+                onClearSearch={() => setSearchQuery('')}
+                onClose={() => setShowModal(false)}
+                useFontAwesomeSearch
+                closeIconType="fontawesome"
+            >
+                {filteredLinkableTx.length === 0 ? (
+                    <View className="flex-1 items-center justify-center p-6">
+                        <Text className="text-slate-500 dark:text-slate-400 text-center">
+                            {searchQuery ? 'No matching transactions found.' : 'No unlinked income transactions found.'}
+                        </Text>
                     </View>
-
-                    {/* Search Bar */}
-                    <View className="px-6 py-4 border-b border-gray-200 dark:border-slate-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <FontAwesome name="search" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                            <TextInput
-                                className="flex-1 ml-3 text-slate-900 dark:text-white text-[16px]"
-                                placeholder="Search by name or amount..."
-                                placeholderTextColor={isDark ? '#cbd5e1' : '#94a3b8'}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                                autoCorrect={false}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
-                                    <FontAwesome name="times-circle" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {filteredLinkableTx.length === 0 ? (
-                        <View className="flex-1 items-center justify-center p-6">
-                            <Text className="text-slate-500 dark:text-slate-400 text-center">
-                                {searchQuery ? 'No matching transactions found.' : 'No unlinked income transactions found.'}
-                            </Text>
-                        </View>
-                    ) : (
-                        <FlatList
-                            data={filteredLinkableTx}
-                            keyExtractor={t => t.id}
-                            contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
-                            renderItem={({ item: tx }) => (
-                                <TouchableOpacity
-                                    onPress={() => handleLink(tx.id)}
-                                    disabled={linking === tx.id}
-                                    className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
-                                >
-                                    <View className="flex-row items-center flex-1 pr-4">
-                                        <View className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 items-center justify-center mr-3">
-                                            <FontAwesome name="arrow-down" size={12} color="#10b981" />
-                                        </View>
-                                        <View className="flex-1">
-                                            <Text className="text-slate-900 dark:text-white font-semibold" numberOfLines={1}>{tx.recipientName || 'Received'}</Text>
-                                            <Text className="text-slate-400 text-xs">{new Date(tx.date).toLocaleDateString()}</Text>
-                                        </View>
+                ) : (
+                    <FlatList
+                        data={filteredLinkableTx}
+                        keyExtractor={t => t.id}
+                        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+                        renderItem={({ item: tx }) => (
+                            <TouchableOpacity
+                                onPress={() => handleLink(tx.id)}
+                                disabled={linking === tx.id}
+                                className="bg-white dark:bg-[#0f172a] p-4 rounded-2xl mb-3 flex-row justify-between items-center border border-slate-100 dark:border-slate-800"
+                            >
+                                <View className="flex-row items-center flex-1 pr-4">
+                                    <View className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 items-center justify-center mr-3">
+                                        <FontAwesome name="arrow-down" size={12} color="#10b981" />
                                     </View>
-                                    <View className="flex-row items-center gap-3">
-                                        <Text className="text-emerald-600 dark:text-emerald-400 font-bold">KES {tx.amount.toLocaleString()}</Text>
-                                        {linking === tx.id
-                                            ? <ActivityIndicator size="small" color={themeColor} />
-                                            : <FontAwesome name="link" size={14} color={themeColor} />
-                                        }
+                                    <View className="flex-1">
+                                        <Text className="text-slate-900 dark:text-white font-semibold" numberOfLines={1}>{tx.recipientName || 'Received'}</Text>
+                                        <Text className="text-slate-400 text-xs">{new Date(tx.date).toLocaleDateString()}</Text>
                                     </View>
-                                </TouchableOpacity>
-                            )}
-                        />
-                    )}
-                </View>
-            </Modal>
-
-            {/* Manual Income Recording Modal */}
-            <Modal visible={showManualModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManualModal(false)}>
-                <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                    <View className="flex-1 app-screen pt-6 mt-6">
-                        <View className="px-6 pb-4 flex-row justify-between items-center border-b border-gray-200 dark:border-slate-800">
-                            <Text className="text-xl font-bold text-slate-900 dark:text-white">Record Income</Text>
-                            <TouchableOpacity onPress={() => setShowManualModal(false)} className="p-2 -mr-2">
-                                <Image
-                                    source={require(`../../assets/svg/close.svg`)}
-                                    style={{ width: 18, height: 18 }}
-                                    tintColor={isDark ? '#94a3b8' : '#64748b'}
-                                    contentFit="contain"
-                                />
+                                </View>
+                                <View className="flex-row items-center gap-3">
+                                    <Text className="text-emerald-600 dark:text-emerald-400 font-bold">KES {tx.amount.toLocaleString()}</Text>
+                                    {linking === tx.id
+                                        ? <ActivityIndicator size="small" color={themeColor} />
+                                        : <FontAwesome name="link" size={14} color={themeColor} />
+                                    }
+                                </View>
                             </TouchableOpacity>
-                        </View>
+                        )}
+                    />
+                )}
+            </PageSheetSearchModal>
 
-                        <ScrollView className="flex-1 p-6" keyboardShouldPersistTaps="handled">
+            <PageSheetModal
+                visible={showManualModal}
+                title="Record Income"
+                colorScheme={colorScheme}
+                onClose={() => setShowManualModal(false)}
+                keyboardAvoiding
+            >
+                <ScrollView className="flex-1 p-6" keyboardShouldPersistTaps="handled">
                             {/* Amount */}
                             <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">Amount (KES)</Text>
                             <View className="flex-row items-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-1 mb-6 border border-slate-200 dark:border-slate-700">
@@ -631,10 +604,8 @@ export default function IncomeDetailScreen() {
                                     </>
                                 }
                             </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
+                </ScrollView>
+            </PageSheetModal>
         </View>
     );
 }

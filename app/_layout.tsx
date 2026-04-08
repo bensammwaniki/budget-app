@@ -34,8 +34,24 @@ function RootLayoutContent() {
     recordActivity();
   }, [recordActivity, segments]);
 
-  // ⚠️ Always render Stack.
-  // Do NOT block navigation tree.
+  const shouldBlockAppTree =
+    authLoading || (user && !inAuthGroup && !isSecurityReady);
+
+  if (shouldBlockAppTree) {
+    return (
+      <PermissionGuard>
+        <ScrollProvider>
+          <View
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            className="app-screen"
+          >
+            <ActivityIndicator size="large" color="#2563eb" />
+          </View>
+        </ScrollProvider>
+      </PermissionGuard>
+    );
+  }
+
   return (
     <PermissionGuard>
       <ScrollProvider>
@@ -43,7 +59,6 @@ function RootLayoutContent() {
           style={{ flex: 1 }}
           className="app-screen"
           onTouchStart={recordActivity}
-          pointerEvents={user && !inAuthGroup && !isSecurityReady ? "none" : "auto"}
         >
           <Stack screenOptions={{ headerShown: false }} />
         </View>

@@ -8,6 +8,16 @@ interface TransactionItemProps {
     onPress: (tx: Transaction) => void;
 }
 
+const formatRecipientName = (value: string) =>
+    value
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .filter(Boolean)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
 const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPress }) => {
     // Detect if this is a bank transaction
     const isBankTransaction = tx.id.startsWith('IM_') ||
@@ -56,7 +66,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction: tx, onPr
             </View>
             <View className="flex-1">
                 <Text className="text-slate-900 dark:text-white font-semibold text-[13px]" numberOfLines={1}>
-                    {(tx.recipientName || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    {formatRecipientName(tx.recipientName || '')}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
                     {tx.categoryName && (
