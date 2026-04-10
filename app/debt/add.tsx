@@ -170,7 +170,7 @@ function AddDebtScreen() {
     };
   });
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
+  const onDateChange = (_event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === "ios");
     if (selectedDate) {
       setStartDate(selectedDate);

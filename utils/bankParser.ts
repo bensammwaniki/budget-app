@@ -28,8 +28,6 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const phoneNumber = match[2];
         const recipientName = match[3].trim();
         const bankRef = match[4]; // Bank Ref
-        const mpesaRef = match[5]; // M-PESA Ref - useful for deduplication
-
         const txId = `IM_TRANSFER_${bankRef}`;
         return {
             id: txId, // Standardize ID with IM_ prefix
@@ -64,8 +62,6 @@ const parseImBankSms = (smsText: string): Transaction | null => {
         const amount = parseFloat(match[1].replace(/,/g, ''));
         const senderName = match[2].trim();
         const bankRef = match[3];
-        const mpesaRef = match[4];
-
         const txId = `IM_TRANSFER_${bankRef}`;
         return {
             id: txId, // SAME ID as the transfer message

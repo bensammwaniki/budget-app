@@ -342,7 +342,7 @@ export const readAllSMS = async (days: number = 30): Promise<SMSMessage[]> => {
                         console.error('❌ Batch fetch failed:', fail);
                         resolve([]);
                     },
-                    (count: number, smsList: string) => {
+                    (_count: number, smsList: string) => {
                         try {
                             resolve(JSON.parse(smsList));
                         } catch (e) {

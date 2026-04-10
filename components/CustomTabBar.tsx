@@ -37,7 +37,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                         // Tabs accessed via other navigation (e.g. Profile) should not appear here
                         const HIDDEN_TABS = ['income'];
                         return !HIDDEN_TABS.includes(route.name);
-                    }).map((route, index) => {
+                    }).map((route) => {
                         const { options } = descriptors[route.key];
                         const routeIndex = state.routes.findIndex(r => r.key === route.key);
                         const isFocused = state.index === routeIndex;

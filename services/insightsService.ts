@@ -58,8 +58,6 @@ export const insightsService = {
 
         const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastMonthStr = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
-
         const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const startOfLastMonth = lastMonthDate.toISOString();
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();

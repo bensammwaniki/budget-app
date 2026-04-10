@@ -137,7 +137,7 @@ export default function AddIncomeSourceScreen() {
                             value={incomeDate}
                             mode="date"
                             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                            onChange={(event, selectedDate) => {
+                            onChange={(_event, selectedDate) => {
                                 setShowDatePicker(Platform.OS === 'ios');
                                 if (selectedDate) {
                                     setIncomeDate(selectedDate);

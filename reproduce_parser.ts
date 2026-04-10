@@ -103,34 +103,10 @@ const parseFulizaLoan = (smsText: string): any | null => {
 };
 
 const loanSms = `TL5FV06V3A Confirmed. Fuliza M-Pesa amount is Ksh 100.00. Access Fee charged Ksh 1.00. Total Fuliza M-Pesa outstanding amount is Ksh173.45 due on 03/01/26. To check daily charges, Dial *234*0#OK Select Query Charges`;
-const loanSms2 = `TL4FV05XMV Confirmed. Fuliza M-Pesa amount is Ksh 71.73. Access Fee charged Ksh 0.72. Total Fuliza M-Pesa outstanding amount is Ksh72.45 due on 03/01/26. To check daily charges, Dial *234*0#OK Select Query Charges`;
-
 console.log("\nParsing Loan 1:");
 console.log(JSON.stringify(parseFulizaLoan(loanSms), null, 2));
-
-
-const parseMpesaSms = (smsText: string): any | null => {
-    // Basic regex for Money Sent
-    // "TKIFVAJ7HG Confirmed. Ksh100.00 sent to OROKISE SACCO..."
-    const sentPattern = /([A-Z0-9]+)\s+Confirmed\.\s+Ksh([\d,]+\.\d{2})\s+sent to\s+(.+?)\s+(?:for account (.+?)\s+)?on\s+(\d{1,2}\/\d{1,2}\/\d{2})\s+at\s+(\d{1,2}:\d{2}\s?[AP]M)/;
-
-    // Basic regex for Money Received
-    // "TKIFVAJ7HG Confirmed. You have received Ksh100.00 from..."
-    const receivedPattern = /([A-Z0-9]+)\s+Confirmed\.\s+You have received\s+Ksh([\d,]+\.\d{2})\s+from\s+(.+?)\s+on\s+(\d{1,2}\/\d{1,2}\/\d{2})\s+at\s+(\d{1,2}:\d{2}\s?[AP]M)/;
-
-    // Basic regex for Payment (Pay Bill / Buy Goods)
-    // "TKIFVAJ7HG Confirmed. Ksh100.00 paid to..."
-    const paidPattern = /([A-Z0-9]+)\s+Confirmed\.\s+Ksh([\d,]+\.\d{2})\s+paid to\s+(.+?)\.\s+on\s+(\d{1,2}\/\d{1,2}\/\d{2})\s+at\s+(\d{1,2}:\d{2}\s?[AP]M)/;
-
-    if (smsText.match(sentPattern)) return { type: 'SENT' };
-    if (smsText.match(receivedPattern)) return { type: 'RECEIVED' };
-    if (smsText.match(paidPattern)) return { type: 'SENT' };
-
-    return null;
-};
 
 const skipped1 = `TL5FV06P6N Confirmed. Fuliza M-Pesa amount is Ksh 70.00. Access Fee charged Ksh 0.70. Total Fuliza M-Pesa outstanding amount is Ksh244.15 due on 03/01/26. To check daily charges, Dial *234*0#OK Select Query Charges`;
 
 console.log("\nParsing Skipped 1:");
 console.log(JSON.stringify(parseFulizaLoan(skipped1), null, 2));
-

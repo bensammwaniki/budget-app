@@ -115,7 +115,7 @@ export default function AddGoalScreen() {
         }
     };
 
-    const handleDateChange = (event: any, selected: Date | undefined) => {
+    const handleDateChange = (_event: any, selected: Date | undefined) => {
         setShowDatePicker(false);
         if (selected) {
             setTargetDate(selected);

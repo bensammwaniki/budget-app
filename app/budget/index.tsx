@@ -1,14 +1,14 @@
 import { FontAwesome } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getCategories, getCategorySpending, getMonthlyBudget, saveMonthlyBudget } from '../../services/database';
+import { getCategories, getMonthlyBudget, saveMonthlyBudget } from '../../services/database';
 import { Category } from '../../types/transaction';
-import { Picker } from '@react-native-picker/picker';
 
 export default function BudgetScreen() {
     const { colorScheme } = useColorScheme();
@@ -20,18 +20,13 @@ export default function BudgetScreen() {
     const [saving, setSaving] = useState(false);
 
     // Date State
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate] = useState(new Date());
 
     // Data State
     const [categories, setCategories] = useState<Category[]>([]);
     const [income, setIncome] = useState('');
-    const [savingsTarget, setSavingsTarget] = useState('');
     const [allocations, setAllocations] = useState<Record<number, string>>({});
-    const [spending, setSpending] = useState<Record<number, number>>({});
-
-    // New Allocation Form State
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-    const [currentBudgetAmount, setCurrentBudgetAmount] = useState('');
     const [isInputFocused, setIsInputFocused] = useState(false);
 
     const formatWithCommas = (value: string) => {
@@ -40,37 +35,24 @@ export default function BudgetScreen() {
         return parseInt(numeric, 10).toLocaleString();
     };
 
-    const handleIncomeChange = (text: string) => setIncome(formatWithCommas(text));
-    const handleSavingsChange = (text: string) => setSavingsTarget(formatWithCommas(text));
-
     const monthKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`;
-    const monthName = selectedDate.toLocaleString('default', { month: 'long' });
 
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [cats, budget, spent] = await Promise.all([
+            const [cats, budget] = await Promise.all([
                 getCategories(),
                 getMonthlyBudget(monthKey),
-                getCategorySpending(monthKey)
             ]);
 
             setCategories(cats.filter(c => c.type === 'EXPENSE'));
             setIncome(budget.totalIncome > 0 ? budget.totalIncome.toLocaleString() : '');
-
-            // For now, if budget exists, we can infer savingsTarget if we had a way to store it.
-            // But since it's a new flow, we might start fresh or calculate from totalIncome - allocations.
-            const budgetAllocated = budget.allocations.reduce((sum, a) => sum + a.budgetAmount, 0);
-            if (budget.totalIncome > 0) {
-              setSavingsTarget((budget.totalIncome - budgetAllocated).toLocaleString());
-            }
 
             const allocs: Record<number, string> = {};
             budget.allocations.forEach(a => {
                 allocs[a.categoryId] = a.budgetAmount > 0 ? a.budgetAmount.toLocaleString() : '';
             });
             setAllocations(allocs);
-            setSpending(spent);
 
         } catch (error) {
             console.error('Error loading budget data:', error);
@@ -85,10 +67,7 @@ export default function BudgetScreen() {
     }, [loadData]));
 
     const numIncome = parseFloat(income.replace(/,/g, '')) || 0;
-    const numSavings = parseFloat(savingsTarget.replace(/,/g, '')) || 0;
-    const monthlySpendingBudget = Math.max(0, numIncome - numSavings);
     const totalAllocated = Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val.replace(/,/g, '')) || 0), 0);
-    const remainingToAllocate = monthlySpendingBudget - totalAllocated;
 
     const handleSaveAndClose = async () => {
         setSaving(true);
@@ -108,29 +87,6 @@ export default function BudgetScreen() {
 
     const handleAllocationChange = (categoryId: number, value: string) => {
         setAllocations(prev => ({ ...prev, [categoryId]: formatWithCommas(value) }));
-    };
-
-    const handleEditAllocation = (catId: number) => {
-        const cat = categories.find(c => c.id === catId);
-        if (cat) {
-            setSelectedCategory(cat);
-            setCurrentBudgetAmount(allocations[catId] || '');
-        }
-    };
-
-    const handleAddUpdateAllocation = () => {
-        if (!selectedCategory) return;
-        handleAllocationChange(selectedCategory.id, currentBudgetAmount);
-        setSelectedCategory(null);
-        setCurrentBudgetAmount('');
-    };
-
-    const handleRemoveAllocation = (catId: number) => {
-        setAllocations(prev => {
-            const next = { ...prev };
-            delete next[catId];
-            return next;
-        });
     };
 
     if (loading) {

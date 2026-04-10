@@ -582,7 +582,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLinkToGoalRequest = async (tx: Transaction) => {
+  const handleLinkToGoalRequest = async (_tx: Transaction) => {
     setModalVisible(false);
     try {
       const goals = await savingsService.getGoals();
@@ -598,7 +598,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLinkToIncomeRequest = async (tx: Transaction) => {
+  const handleLinkToIncomeRequest = async (_tx: Transaction) => {
     setModalVisible(false);
     try {
       const sources = await incomeService.getSources();
@@ -956,7 +956,7 @@ export default function HomeScreen() {
         windowSize={5}
         removeClippedSubviews={true}
         updateCellsBatchingPeriod={50}
-        getItemLayout={(data, index) => (
+        getItemLayout={(_data, index) => (
           { length: 86, offset: 86 * index, index }
         )}
         refreshControl={

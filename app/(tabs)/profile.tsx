@@ -173,7 +173,7 @@ export default function ProfileScreen() {
         setCategories(cats);
     };
 
-    const handleCategoryAdded = async (newCategory: Category) => {
+    const handleCategoryAdded = async (_newCategory: Category) => {
         await loadCategories();
         Alert.alert('Success', 'Category added successfully');
     };
