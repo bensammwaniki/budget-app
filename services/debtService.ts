@@ -7,7 +7,7 @@ import { getCategoryIdByName } from './database';
 export const debtService = {
     /**
      * Creates a new Debt Record.
-     * Optionally creates a Ledger Transaction if linked to an account (e.g., Money entering an account).
+     * Always creates a principal Ledger Transaction so debt inception impacts month-level spending math.
      */
     async createDebt(payload: {
         userId: string;
@@ -25,6 +25,8 @@ export const debtService = {
         const debtId = generateUUID();
         const now = new Date().toISOString();
         const startDate = payload.startDate ? payload.startDate.toISOString() : now;
+        const requestedAccountId = payload.accountId || null;
+        let resolvedAccountIdForReturn: string | undefined = requestedAccountId || undefined;
 
         const flatInterest = (!payload.isReducingBalance && payload.interestRate)
             ? payload.amount * (payload.interestRate / 100)
@@ -32,6 +34,24 @@ export const debtService = {
         const initialBalance = payload.amount + flatInterest;
 
         await db.withTransactionAsync(async () => {
+            // Resolve account fallback so debt creation always creates principal transaction.
+            let resolvedAccountId: string | null = requestedAccountId;
+            if (!resolvedAccountId) {
+                const fallbackAccount = await db.getFirstAsync<{ id: string }>(
+                    `SELECT id
+                     FROM accounts
+                     WHERE id IN ('ACC-MPESA-DEFAULT', 'ACC-CASH-DEFAULT')
+                     ORDER BY CASE id
+                         WHEN 'ACC-MPESA-DEFAULT' THEN 1
+                         WHEN 'ACC-CASH-DEFAULT' THEN 2
+                         ELSE 3
+                     END
+                     LIMIT 1`
+                );
+                resolvedAccountId = fallbackAccount?.id || null;
+            }
+            resolvedAccountIdForReturn = resolvedAccountId || undefined;
+
             // 1. Create Debt Record
             await db.runAsync(`
                 INSERT INTO debts (
@@ -41,7 +61,7 @@ export const debtService = {
             `, [
                 debtId,
                 payload.userId,
-                payload.accountId || null,
+                resolvedAccountId,
                 payload.name,
                 payload.type,
                 payload.amount,
@@ -55,47 +75,49 @@ export const debtService = {
                 now, now
             ]);
 
-            // 2. If valid account provided, create Ledger Transaction (INCOME/DEBT_PRINCIPAL)
-            if (payload.accountId) {
-                const txType = payload.type === 'LIABILITY' ? 'RECEIVED' : 'SENT';
+            // 2. Always create principal transaction at debt start date.
+            const txType = payload.type === 'LIABILITY' ? 'RECEIVED' : 'SENT';
+            let newBalance = 0;
 
-                const account = await db.getFirstAsync<{ balance: number }>('SELECT balance FROM accounts WHERE id = ?', [payload.accountId]);
+            if (resolvedAccountId) {
+                const account = await db.getFirstAsync<{ balance: number }>('SELECT balance FROM accounts WHERE id = ?', [resolvedAccountId]);
                 if (!account) throw new Error("Account not found");
 
                 const balanceChange = txType === 'SENT' ? -payload.amount : payload.amount;
-                const newBalance = account.balance + balanceChange;
+                newBalance = account.balance + balanceChange;
 
-                await db.runAsync('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [newBalance, now, payload.accountId]);
-
-                const txId = generateUUID();
-                await db.runAsync(`
-                    INSERT INTO transactions (
-                        id, uuid, user_id, account_id, category_id,
-                        amount, type, transaction_kind,
-                        recipient_name, raw_sms,
-                        date, balance, balance_after, reference_id,
-                        created_at, updated_at, is_deleted, linked_debt_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-                `, [
-                    txId, txId, payload.userId, payload.accountId, null,
-                    payload.amount, txType, 'DEBT_PRINCIPAL',
-                    payload.name,
-                    `${payload.type === 'LIABILITY' ? 'Loan from' : 'Lent to'} ${payload.name}`,
-                    startDate,
-                    newBalance, newBalance,
-                    debtId,
-                    now, now,
-                    debtId
-                ]);
+                await db.runAsync('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [newBalance, now, resolvedAccountId]);
             }
+
+            const txId = generateUUID();
+            await db.runAsync(`
+                INSERT INTO transactions (
+                    id, uuid, user_id, account_id, category_id,
+                    amount, type, transaction_kind,
+                    recipient_name, raw_sms,
+                    date, balance, balance_after, reference_id,
+                    created_at, updated_at, is_deleted, linked_debt_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            `, [
+                txId, txId, payload.userId, resolvedAccountId, null,
+                payload.amount, txType, 'DEBT_PRINCIPAL',
+                payload.name,
+                `${payload.type === 'LIABILITY' ? 'Loan from' : 'Lent to'} ${payload.name}`,
+                startDate,
+                newBalance, newBalance,
+                debtId,
+                now, now,
+                debtId
+            ]);
         });
 
         notifyListeners('DEBTS');
+        notifyListeners('TRANSACTIONS');
 
         return {
             id: debtId,
             userId: payload.userId,
-            accountId: payload.accountId,
+            accountId: resolvedAccountIdForReturn,
             type: payload.type as 'LIABILITY' | 'RECEIVABLE',
             name: payload.name,
             principalAmount: payload.amount,

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
 import CashTransactionModal from '../../components/modals/CashTransactionModal';
@@ -36,6 +36,7 @@ import {
 } from '../../services/financialSettingsService';
 import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
 import { ledgerService } from '../../services/ledgerService';
+import { manualRecurringTransactionService } from '../../services/manualRecurringTransactionService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
 import { useScrollVisibility } from '../../services/ScrollContext';
 import { syncMessages } from '../../services/smsService';
@@ -77,6 +78,8 @@ export default function HomeScreen() {
   const [cashType, setCashType] = useState<'SENT' | 'RECEIVED'>('SENT');
   const [cashAmount, setCashAmount] = useState('');
   const [cashNote, setCashNote] = useState('');
+  const [cashAccountId, setCashAccountId] = useState<'ACC-CASH-DEFAULT' | 'ACC-MPESA-DEFAULT'>('ACC-CASH-DEFAULT');
+  const [cashIsRecurring, setCashIsRecurring] = useState(false);
   const [savingCashTx, setSavingCashTx] = useState(false);
 
   const formatCurrency = (amount: number) => {
@@ -256,6 +259,8 @@ export default function HomeScreen() {
     setCashType('SENT');
     setCashAmount('');
     setCashNote('');
+    setCashAccountId('ACC-CASH-DEFAULT');
+    setCashIsRecurring(false);
   };
 
   const handleSaveCashTransaction = async () => {
@@ -270,26 +275,39 @@ export default function HomeScreen() {
       return;
     }
 
-    const recipient = cashNote.trim() || (cashType === 'SENT' ? 'Cash expense' : 'Cash income');
+    const accountLabel = cashAccountId === 'ACC-MPESA-DEFAULT' ? 'M-PESA' : 'Cash';
+    const recipient = cashNote.trim() || (cashType === 'SENT' ? `${accountLabel} expense` : `${accountLabel} income`);
 
     setSavingCashTx(true);
     try {
       await ledgerService.recordTransaction({
-        accountId: 'ACC-CASH-DEFAULT',
+        accountId: cashAccountId,
         amount,
         type: cashType,
         kind: cashType === 'SENT' ? 'EXPENSE' : 'INCOME',
         date: new Date(),
         recipientName: recipient,
-        rawSms: `Manual cash ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
+        rawSms: `Manual ${accountLabel.toLowerCase()} ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
         userId: 'local_user',
       });
+
+      if (cashIsRecurring) {
+        await manualRecurringTransactionService.createTemplate({
+          userId: 'local_user',
+          accountId: cashAccountId,
+          amount,
+          type: cashType,
+          recipientName: recipient,
+          rawSms: `Manual ${accountLabel.toLowerCase()} ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
+          createdAt: new Date(),
+        });
+      }
 
       setCashModalVisible(false);
       resetCashForm();
       showAlert({
         title: 'Saved',
-        message: 'Cash transaction added successfully.',
+        message: `${accountLabel} transaction added successfully${cashIsRecurring ? ' with monthly recurring enabled.' : '.'}`,
         type: 'success',
         buttons: [{ text: 'OK' }],
       });
@@ -304,6 +322,26 @@ export default function HomeScreen() {
       setSavingCashTx(false);
     }
   };
+
+  useEffect(() => {
+    if (!dbReady) return;
+
+    const processRecurring = () => {
+      manualRecurringTransactionService.runDueMonthlyTransactions().catch((error) => {
+        console.error('Failed to process recurring manual transactions:', error);
+      });
+    };
+
+    processRecurring();
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        processRecurring();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [dbReady]);
 
   // Calculate date boundaries once
   const dateRange = useMemo(() => {
@@ -451,6 +489,12 @@ export default function HomeScreen() {
       }
     });
 
+    const loggedTransactionIds = new Set(logs.map((l) => l.transactionId).filter(Boolean));
+    const debtPrincipalInflows = filteredTransactions
+      .filter((t) => t.type === 'RECEIVED' && t.transactionKind === 'DEBT_PRINCIPAL' && !loggedTransactionIds.has(t.id))
+      .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+    income += debtPrincipalInflows;
+
     filteredTransactions.forEach((t: Transaction) => {
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
@@ -509,6 +553,11 @@ export default function HomeScreen() {
     openingCashModalRef.current = true;
     setCashModalVisible(true);
     openingCashModalRef.current = false;
+  };
+
+  const handleManageRecurring = () => {
+    setCashModalVisible(false);
+    router.push('/automation/manual-recurring');
   };
 
   const handleCategorySelect = async (category: Category) => {
@@ -705,7 +754,7 @@ export default function HomeScreen() {
             className="ml-3 px-4 py-2 rounded-[12px] bg-blue-50 dark:bg-blue-900/30 flex-row items-center"
           >
             <FontAwesome name="plus" size={12} color={isDark ? '#93c5fd' : '#2563eb'} />
-            <Text className="ml-2 text-xs font-bold text-blue-700 dark:text-blue-200 uppercase">Add Cash TXN</Text>
+            <Text className="ml-2 text-xs font-bold text-blue-700 dark:text-blue-200 uppercase">Add Manual TXN</Text>
           </TouchableOpacity>
         </View>
 
@@ -805,35 +854,19 @@ export default function HomeScreen() {
 
       {/* Grouped Transaction List Card Start */}
       <View className="mx-4 mt-6 bg-white dark:bg-[#1e293b] rounded-t-[16px] border-t border-x border-slate-100 dark:border-slate-700 overflow-hidden">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 4, paddingHorizontal: 16 }}
-        >
-          <View className="app-card flex-row items-center p-1 rounded-[20px] overflow-hidden">
-            {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period) => (
-              <TouchableOpacity
-                key={period}
-                className={`px-2.5 py-1.5 mr-1 rounded-[20px] ${selectedPeriod === period ? 'bg-blue-600' : ''}`}
-                onPress={() => {
-                  setPeriodLoading(true);
-                  setDisplayLimit(20);
-                  setTimeout(() => {
-                    setSelectedPeriod(period);
-                    setPeriodLoading(false);
-                  }, 100);
-                }}
-              >
-                <Text className={`font-medium text-[10px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-400'}`}>
-                  {getPeriodLabel(period)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Search bar */}
         <View className="px-4 pt-4 pb-2">
+          <View className="flex-row justify-between items-center mb-3">
+            <Text className="text-slate-900 dark:text-white text-sm font-bold">Recent Transactions</Text>
+            <View className="flex-row items-center">
+              {periodLoading && (
+                <ActivityIndicator size="small" color="#3b82f6" style={{ marginRight: 6 }} />
+              )}
+              <Text className="text-slate-500 text-xs">
+                {filteredTransactions.length} items
+              </Text>
+            </View>
+          </View>
+
           <View className="bg-slate-50 dark:bg-[#0f172a] h-12 px-3 rounded-[10px] flex-row items-center border border-slate-100 dark:border-slate-800">
             <View className="w-6 h-6 items-center justify-center mr-2">
               <Image
@@ -867,19 +900,33 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="px-4 pt-3 pb-2">
-          <View className="flex-row justify-between items-center">
-            <Text className="text-slate-900 dark:text-white text-sm font-bold">Recent Transactions</Text>
-            <Text className="text-slate-500 text-xs">
-              {filteredTransactions.length} items
-            </Text>
+        <View className="px-4 pb-3">
+          <View className="bg-slate-50 dark:bg-[#0f172a] p-1 rounded-[12px] border border-slate-100 dark:border-slate-800">
+            <View className="flex-row flex-wrap gap-1">
+              {(['THIS_MONTH', 'LAST_MONTH', 'LAST 3 MONTHS', 'CURRENT YEAR', 'ALL TIME'] as Period[]).map((period, index) => {
+                const isBottomRow = index >= 3;
+                return (
+                  <TouchableOpacity
+                    key={period}
+                    className={`py-2 rounded-[10px] items-center justify-center ${isBottomRow ? 'w-[49%]' : 'w-[32%]'} ${selectedPeriod === period ? 'bg-blue-600' : 'bg-white dark:bg-slate-800'}`}
+                    onPress={() => {
+                      setPeriodLoading(true);
+                      setDisplayLimit(20);
+                      setTimeout(() => {
+                        setSelectedPeriod(period);
+                        setPeriodLoading(false);
+                      }, 100);
+                    }}
+                  >
+                    <Text className={`font-semibold text-[10px] text-center ${selectedPeriod === period ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {getPeriodLabel(period)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
-        {periodLoading && (
-          <View className="px-4 pb-3">
-            <ActivityIndicator size="small" color="#3b82f6" />
-          </View>
-        )}
       </View>
     </View>
   );
@@ -920,10 +967,15 @@ export default function HomeScreen() {
         cashType={cashType}
         cashAmount={cashAmount}
         cashNote={cashNote}
+        cashAccountId={cashAccountId}
+        isRecurring={cashIsRecurring}
         onChangeType={setCashType}
         onChangeAmount={setCashAmount}
         onChangeNote={setCashNote}
+        onChangeAccountId={setCashAccountId}
+        onChangeRecurring={setCashIsRecurring}
         onSave={handleSaveCashTransaction}
+        onManageRecurring={handleManageRecurring}
         onClose={() => setCashModalVisible(false)}
         onCancel={() => {
           setCashModalVisible(false);

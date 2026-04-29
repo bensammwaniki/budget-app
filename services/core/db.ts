@@ -347,6 +347,25 @@ async function performInitialization() {
                 value TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS manual_recurring_transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT DEFAULT 'local_user',
+                account_id TEXT NOT NULL,
+                type TEXT NOT NULL CHECK (type IN ('SENT', 'RECEIVED')),
+                amount REAL NOT NULL,
+                recipient_name TEXT NOT NULL,
+                raw_sms TEXT,
+                start_month TEXT NOT NULL,
+                last_generated_month TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES accounts(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_manual_recurring_active_month
+            ON manual_recurring_transactions(is_active, last_generated_month);
+
             CREATE TABLE IF NOT EXISTS processed_sms (
                 sms_id TEXT PRIMARY KEY,
                 processed_at TEXT NOT NULL

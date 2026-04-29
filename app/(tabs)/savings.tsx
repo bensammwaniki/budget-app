@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, InteractionManager, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initDatabase, subscribeToDatabaseChanges } from '../../services/database';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
@@ -58,77 +57,66 @@ export default function SavingsScreen() {
     const renderGoal = ({ item }: { item: SavingsGoal }) => {
         const progress = Math.min((item.currentAmount / item.targetAmount) * 100, 100);
         const goalColor = item.color || '#3b82f6';
-        const clampedProgress = Math.max(0, Math.min(progress, 100));
-        const ringSize = 44;
-        const strokeWidth = 2.5;
-        const radius = (ringSize - strokeWidth) / 2;
-        const circumference = 2 * Math.PI * radius;
-        const strokeDashoffset = circumference - (clampedProgress / 100) * circumference;
+        const remaining = Math.max(0, item.targetAmount - item.currentAmount);
+        const isCompleted = item.status === 'COMPLETED';
 
         return (
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push(`/savings/${item.id}`)}
-                className="app-card p-3 mb-4 mx-4 relative overflow-hidden"
+                className="app-card p-4 mb-3 mx-4"
             >
-                <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: goalColor }} />
-                <View className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10" style={{ backgroundColor: goalColor }} />
-
-                <View className="flex-row justify-between items-start mb-1.5">
-                    <View className="flex-row items-start flex-1 pr-2.5 gap-2.5">
-                        <View style={{ width: ringSize, height: ringSize }} className="items-center justify-center">
-                            <Svg width={ringSize} height={ringSize} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-                                <Circle
-                                    cx={ringSize / 2}
-                                    cy={ringSize / 2}
-                                    r={radius}
-                                    stroke={isDark ? '#334155' : '#e2e8f0'}
-                                    strokeWidth={strokeWidth}
-                                    fill="none"
-                                />
-                                <Circle
-                                    cx={ringSize / 2}
-                                    cy={ringSize / 2}
-                                    r={radius}
-                                    stroke={goalColor}
-                                    strokeWidth={strokeWidth}
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${circumference}, ${circumference}`}
-                                    strokeDashoffset={strokeDashoffset}
-                                />
-                            </Svg>
-                            <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: `${goalColor}20` }}>
-                                <Image
-                                    source={require('../../assets/svg/savings-piggy.svg')}
-                                    style={{ width: 20, height: 20 }}
-                                    tintColor={goalColor}
-                                    contentFit="contain"
-                                />
-                            </View>
-                        </View>
-
-                        <View className="flex-1">
-                            <View className="flex-row items-center flex-wrap gap-1">
-                                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-[1px]">Savings Goal</Text>
-                                <Text className="text-slate-400 text-[10px] font-medium">
-                                    Target KES {item.targetAmount.toLocaleString()}
-                                </Text>
-                                {item.status === 'COMPLETED' && (
-                                    <View className="app-pill-success">
-                                        <Text className="app-pill-success-text">Done</Text>
-                                    </View>
-                                )}
-                            </View>
-                            <Text className="text-slate-900 dark:text-white font-black text-[15px] mt-0.5" numberOfLines={1}>
-                                {item.name}
+                <View className="flex-row justify-between items-start">
+                    <View className="flex-1 pr-3">
+                        <Text className="text-slate-900 dark:text-white font-bold text-[15px] flex-1 pr-2" numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-[11px] mt-1">
+                            Savings Goal • Target KES {item.targetAmount.toLocaleString()}
+                        </Text>
+                        {item.targetDate && (
+                            <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
+                                Goal Date {new Date(item.targetDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                             </Text>
+                        )}
+                        <View className="flex-row items-center flex-wrap gap-1 mt-1">
+                            <View className="flex-row items-center flex-wrap gap-1 pr-2">
+                                <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                    Remaining:
+                                </Text>
+                                <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                                    KES {remaining.toLocaleString()}
+                                </Text>
+                                <View className="mx-1 w-14 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <View
+                                        className="h-full rounded-full"
+                                        style={{ width: `${Math.max(0, Math.min(progress, 100))}%`, backgroundColor: goalColor }}
+                                    />
+                                </View>
+                                <Text style={{ color: goalColor }} className="text-[10px] font-semibold">
+                                    {progress.toFixed(1)}%
+                                </Text>
+                            </View>
                         </View>
                     </View>
 
                     <View className="items-end">
+                        {isCompleted && (
+                            <View className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
+                                <Text className="text-[9px] font-bold uppercase tracking-[0.8px] text-emerald-700 dark:text-emerald-300">
+                                    Done
+                                </Text>
+                            </View>
+                        )}
+                        <Text className="font-black text-[15px] text-slate-900 dark:text-white">
+                            KES {item.currentAmount.toLocaleString()}
+                        </Text>
+                        <Text className="text-slate-400 text-[10px] text-right mt-0.5">
+                            Saved
+                        </Text>
                         <TouchableOpacity
-                            className="w-7 h-7 rounded-full items-center justify-center mb-5"
+                            className="w-8 h-8 rounded-full items-center justify-center pt-3 mt-2 -mr-2"
+                            hitSlop={{ top: 8, bottom: 6, left: 8, right: 8 }}
                             onPress={(event) => {
                                 event.stopPropagation();
                                 router.push({ pathname: '/savings/add', params: { editId: item.id } });
@@ -139,41 +127,6 @@ export default function SavingsScreen() {
                     </View>
                 </View>
 
-                <View className="flex-row flex-wrap gap-1.5 mb-1">
-                    {item.targetDate && (
-                        <View className="app-pill">
-                            <Text className="app-pill-text">
-                                Goal Date {new Date(item.targetDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-
-                <View className="flex-row justify-between items-end gap-3">
-                    <View className="flex-row items-center flex-wrap gap-1 ml-[5px] flex-1">
-                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                            Remaining:
-                        </Text>
-                        <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
-                            KES {Math.max(0, item.targetAmount - item.currentAmount).toLocaleString()}
-                        </Text>
-                        <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
-                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                            Progress:
-                        </Text>
-                        <Text style={{ color: goalColor }} className="text-[10px] font-semibold">
-                            {progress.toFixed(1)}%
-                        </Text>
-                    </View>
-                    <View className="items-end">
-                        <Text className="font-black text-base text-slate-900 dark:text-white">
-                            KES {item.currentAmount.toLocaleString()}
-                        </Text>
-                        <Text className="text-slate-400 text-[10px] text-right mt-0.5">
-                            Saved so far
-                        </Text>
-                    </View>
-                </View>
             </TouchableOpacity>
         );
     };

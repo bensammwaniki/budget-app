@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initDatabase } from '../../services/database';
 import {
@@ -137,145 +136,83 @@ export default function IncomeScreen() {
         const remainingAmount = hasExpectedAmount
             ? Math.max(0, expectedAmountValue - displayTotalReceived)
             : 0;
-        const ringSize = 44;
-        const strokeWidth = 2.5;
-        const radius = (ringSize - strokeWidth) / 2;
-        const circumference = 2 * Math.PI * radius;
-        const strokeDashoffset = circumference - (Math.max(0, Math.min(progress, 100)) / 100) * circumference;
+        const frequencyLabel = item.isRecurring ? FREQ_LABELS[item.frequency] : 'One-time';
 
         return (
             <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => router.push(`/income/${item.id}`)}
-                className="app-card p-3 mb-4 mx-4 overflow-hidden relative"
+                className="app-card p-4 mb-3 mx-4"
             >
-                <View className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: themeColor }} />
-                <View className="absolute top-0 right-0 w-28 h-28 rounded-bl-full opacity-10" style={{ backgroundColor: themeColor }} />
-
-                <View className="flex-row justify-between items-start mb-1.5">
-                    <View className="flex-row items-start gap-2.5 flex-1">
-                        <View style={{ width: ringSize, height: ringSize }} className="items-center justify-center">
-                            <Svg width={ringSize} height={ringSize} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-                                <Circle
-                                    cx={ringSize / 2}
-                                    cy={ringSize / 2}
-                                    r={radius}
-                                    stroke={isDark ? '#334155' : '#e2e8f0'}
-                                    strokeWidth={strokeWidth}
-                                    fill="none"
-                                />
-                                <Circle
-                                    cx={ringSize / 2}
-                                    cy={ringSize / 2}
-                                    r={radius}
-                                    stroke={themeColor}
-                                    strokeWidth={strokeWidth}
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${circumference}, ${circumference}`}
-                                    strokeDashoffset={strokeDashoffset}
-                                />
-                            </Svg>
-                            <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: `${themeColor}20` }}>
-                                <Image
-                                    source={require('../../assets/svg/income.svg')}
-                                    style={{ width: 18, height: 18 }}
-                                    tintColor={themeColor}
-                                    contentFit="contain"
-                                />
-                            </View>
-                        </View>
-
-                        <View className="flex-1">
-                            <View className="flex-row items-center flex-wrap gap-1">
-                                <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-[1px]">Income Source</Text>
-                                {!hasExpectedAmount && item.isRecurring && (
-                                    <Text className="text-slate-400 text-[10px] font-medium">
-                                        {FREQ_LABELS[item.frequency]}
+                <View className="flex-row justify-between items-start">
+                    <View className="flex-1 pr-3">
+                        <Text className="text-slate-900 dark:text-white font-bold text-[15px]" numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        <Text className="text-slate-500 dark:text-slate-400 text-[11px] mt-1">
+                            Income Source • {frequencyLabel}
+                        </Text>
+                        {hasExpectedAmount && (
+                            <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
+                                Target KES {expectedAmountValue.toLocaleString()} • {progress.toFixed(1)}%
+                            </Text>
+                        )}
+                        {!hasExpectedAmount && (
+                            <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
+                                {entryCount} entr{entryCount === 1 ? 'y' : 'ies'} logged
+                            </Text>
+                        )}
+                        <View className="flex-row items-center flex-wrap gap-1 mt-1">
+                            {lastReceivedAt && (
+                                <>
+                                    <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                        Last:
                                     </Text>
-                                )}
-                                {!hasExpectedAmount && !item.isRecurring && (
-                                    <Text className="text-slate-400 text-[10px] font-medium">
-                                        One-time
+                                    <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                                        {new Date(lastReceivedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                                     </Text>
-                                )}
-                                {hasExpectedAmount && (
-                                    <Text className="text-slate-400 text-[10px] font-medium">
-                                        {item.isRecurring ? FREQ_LABELS[item.frequency] : 'One-time'}
-                                    </Text>
-                                )}
-                            </View>
-                            <View className="flex-row items-center flex-wrap gap-1 mt-0.5">
-                                <Text className="text-slate-900 dark:text-white font-black text-[15px]" numberOfLines={1}>
-                                    {item.name}
-                                </Text>
-                                {hasExpectedAmount && (
-                                    <>
-                                        <Text className="text-slate-300 dark:text-slate-600 text-[10px] mx-0.5">•</Text>
-                                        <Text className="text-slate-400 text-[10px] font-medium">
-                                            Target KES {expectedAmountValue.toLocaleString()}
-                                        </Text>
-                                    </>
-                                )}
-                            </View>
-                        </View>
-                    </View>
-
-                    {isPaidOff && (
-                        <View className="items-end">
-                            <View className="app-pill-success">
-                                <Text className="app-pill-success-text uppercase tracking-[1px]">Paid Off</Text>
-                            </View>
-                        </View>
-                    )}
-                </View>
-
-                <View className="flex-row flex-wrap gap-1.5 mb-1">
-                    {hasExpectedAmount && !isPaidOff && (
-                        <View className="app-pill">
-                            <Text className="app-pill-text">
-                                Remaining KES {remainingAmount.toLocaleString()}
+                                    <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
+                                </>
+                            )}
+                            <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                Entries:
+                            </Text>
+                            <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                                {entryCount}
                             </Text>
                         </View>
-                    )}
-                </View>
-
-                <View className="flex-row justify-between items-end gap-3">
-                    <View className="flex-row items-center flex-wrap gap-1 ml-[5px] flex-1">
-                        {lastReceivedAt && (
-                            <>
-                                <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                    Last:
-                                </Text>
-                                <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
-                                    {new Date(lastReceivedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                                </Text>
-                                <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
-                            </>
-                        )}
-                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                            Entries:
-                        </Text>
-                        <Text className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
-                            {entryCount}
-                        </Text>
-                        <Text className="text-[10px] text-slate-400 dark:text-slate-500">•</Text>
-                        <Text className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                            Progress:
-                        </Text>
-                        <Text style={{ color: themeColor }} className="text-[10px] font-semibold">
-                            {progress.toFixed(1)}%
-                        </Text>
                     </View>
+
                     <View className="items-end">
-                        <Text className="font-black text-base" style={{ color: themeColor }}>
+                        {isPaidOff && (
+                            <View className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
+                                <Text className="text-[9px] font-bold uppercase tracking-[0.8px] text-emerald-700 dark:text-emerald-300">
+                                    Paid Off
+                                </Text>
+                            </View>
+                        )}
+                        <Text className="font-black text-[15px]" style={{ color: themeColor }}>
                             KES {displayTotalReceived.toLocaleString()}
                         </Text>
                         <Text className="text-slate-400 text-[10px] text-right mt-0.5">
-                            Collected so far
+                            Collected
                         </Text>
+                        {hasExpectedAmount && !isPaidOff && (
+                            <Text className="text-slate-500 dark:text-slate-400 text-[10px] mt-1">
+                                Remaining KES {remainingAmount.toLocaleString()}
+                            </Text>
+                        )}
                     </View>
                 </View>
+
+                {hasExpectedAmount && !isPaidOff && (
+                    <View className="mt-3 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <View
+                            className="h-full rounded-full"
+                            style={{ width: `${Math.max(0, Math.min(progress, 100))}%`, backgroundColor: themeColor }}
+                        />
+                    </View>
+                )}
             </TouchableOpacity>
         );
     };

@@ -637,8 +637,8 @@ function AddDebtScreen() {
               <View className="bg-white dark:bg-[#0f172a] p-4 rounded-[12px] mb-6 border border-slate-200 dark:border-slate-700">
                 <Text className="text-sm font-semibold text-slate-500 mb-2">
                   {type === "LIABILITY"
-                    ? "Money Received Into (Optional)"
-                    : "Money Sent From (Optional)"}
+                    ? "Money Received Into"
+                    : "Money Sent From"}
                 </Text>
                 <View className="flex-row gap-2 flex-wrap">
                   {accounts.map((acc) => (
@@ -661,8 +661,8 @@ function AddDebtScreen() {
                 </View>
                 <Text className="text-xs text-slate-400 mt-2">
                   {type === "LIABILITY"
-                    ? "Select an account if you received this loan into it (we create an Income transaction)."
-                    : "Select an account if you sent this money from it (we create an Expense transaction)."}
+                    ? "We always create an Income transaction for this loan start date. If you skip selection, it will go to M-PESA by default."
+                    : "We always create an Expense transaction for this lending start date. If you skip selection, it will go to M-PESA by default."}
                 </Text>
               </View>
             )}
