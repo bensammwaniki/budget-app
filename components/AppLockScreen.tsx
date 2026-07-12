@@ -5,11 +5,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Pressable,
-    SafeAreaView,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppLock } from '../context/AppLockContext';
 import { useAuth } from '../services/AuthContext';
 

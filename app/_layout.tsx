@@ -2,10 +2,11 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import "../global.css";
 
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import CustomAlert from "../components/CustomAlert";
+import AppLockScreen from "../components/AppLockScreen";
 import { PermissionGuard } from "../components/PermissionGuard";
 import { AlertProvider } from "../context/AlertContext";
 import { AppLockProvider, useAppLock } from "../context/AppLockContext";
@@ -83,6 +84,7 @@ function LockAwareTree() {
   return (
     <AppLockProvider isAuthRoute={inAuthGroup}>
       <RootLayoutContent />
+      <AppLockScreen />
       <CustomAlert />
     </AppLockProvider>
   );
@@ -101,7 +103,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <AlertProvider>
-          <LockAwareTree />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            <LockAwareTree />
+          </KeyboardAvoidingView>
 
           {dbLoading && (
             <View

@@ -29,6 +29,7 @@ export default {
             "permissions": [
                 "READ_SMS"
             ],
+            "softwareKeyboardLayoutMode": "resize",
             "googleServicesFile": "./google-services.json",
             "edgeToEdgeEnabled": true,
             "predictiveBackGestureEnabled": false

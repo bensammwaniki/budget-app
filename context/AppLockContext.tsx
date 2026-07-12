@@ -11,7 +11,6 @@ import React, {
     useState,
 } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import AppLockScreen from '../components/AppLockScreen';
 import { getUserSettings, saveUserSettings } from '../services/database';
 import { useAuth } from '../services/AuthContext';
 
@@ -400,7 +399,6 @@ export function AppLockProvider({
     return (
         <AppLockContext.Provider value={contextValue}>
             {children}
-            <AppLockScreen />
         </AppLockContext.Provider>
     );
 }
