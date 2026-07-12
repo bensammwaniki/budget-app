@@ -33,7 +33,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             id: txId, // Standardize ID with IM_ prefix
             uuid: txId,
             userId: 'local_user',
-            accountId: 'ACC-MPESA-DEFAULT', // Default to MPESA for now
+            accountId: 'ACC-BANK-DEFAULT',
             transactionKind: 'EXPENSE',
             amount: amount,
             type: 'SENT',
@@ -67,7 +67,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             id: txId, // SAME ID as the transfer message
             uuid: txId,
             userId: 'local_user',
-            accountId: 'ACC-MPESA-DEFAULT',
+            accountId: 'ACC-BANK-DEFAULT',
             transactionKind: 'INCOME',
             amount: amount,
             type: 'RECEIVED', // Receipt should probably be received
@@ -103,7 +103,7 @@ const parseImBankSms = (smsText: string): Transaction | null => {
             id: txId, // Generate a unique ID
             uuid: txId,
             userId: 'local_user',
-            accountId: 'ACC-MPESA-DEFAULT',
+            accountId: 'ACC-BANK-DEFAULT',
             transactionKind: 'EXPENSE',
             amount: amount,
             type: 'SENT',

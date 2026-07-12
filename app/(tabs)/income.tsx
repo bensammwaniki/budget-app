@@ -92,7 +92,7 @@ export default function IncomeScreen() {
     };
 
     const sourceSummaries = useMemo(() => {
-        const grouped = new Map<string, { totalReceived: number; entryCount: number; lastReceivedAt: string | null }>();
+        const grouped = new Map<string, { entryCount: number; lastReceivedAt: string | null }>();
 
         for (const log of effectiveLogs) {
             const current = grouped.get(log.sourceId);
@@ -100,7 +100,6 @@ export default function IncomeScreen() {
 
             if (!current) {
                 grouped.set(log.sourceId, {
-                    totalReceived: log.amount,
                     entryCount: 1,
                     lastReceivedAt: log.receivedAt,
                 });
@@ -108,7 +107,6 @@ export default function IncomeScreen() {
             }
 
             const currentLastTime = current.lastReceivedAt ? new Date(current.lastReceivedAt).getTime() : 0;
-            current.totalReceived += log.amount;
             current.entryCount += 1;
             if (receivedAtTime > currentLastTime) {
                 current.lastReceivedAt = log.receivedAt;
@@ -120,22 +118,11 @@ export default function IncomeScreen() {
 
     const renderSource = ({ item }: { item: IncomeSource }) => {
         const summary = sourceSummaries.get(item.id);
-        const totalReceived = summary?.totalReceived ?? 0;
         const entryCount = summary?.entryCount ?? 0;
         const lastReceivedAt = summary?.lastReceivedAt ?? null;
         const expectedAmountValue = parseAmountValue(item.expectedAmount);
         const hasExpectedAmount = expectedAmountValue > 0;
-        const isPaidOff = (item.status || '').toUpperCase() === 'INACTIVE';
-        const displayTotalReceived = isPaidOff && hasExpectedAmount
-            ? Math.max(totalReceived, expectedAmountValue)
-            : totalReceived;
         const themeColor = item.color || '#10b981';
-        const progress = hasExpectedAmount
-            ? Math.min((displayTotalReceived / expectedAmountValue) * 100, 100)
-            : (isPaidOff ? 100 : 0);
-        const remainingAmount = hasExpectedAmount
-            ? Math.max(0, expectedAmountValue - displayTotalReceived)
-            : 0;
         const frequencyLabel = item.isRecurring ? FREQ_LABELS[item.frequency] : 'One-time';
 
         return (
@@ -154,7 +141,7 @@ export default function IncomeScreen() {
                         </Text>
                         {hasExpectedAmount && (
                             <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
-                                Target KES {expectedAmountValue.toLocaleString()} • {progress.toFixed(1)}%
+                                Expected KES {expectedAmountValue.toLocaleString()} per period
                             </Text>
                         )}
                         {!hasExpectedAmount && (
@@ -184,35 +171,9 @@ export default function IncomeScreen() {
                     </View>
 
                     <View className="items-end">
-                        {isPaidOff && (
-                            <View className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
-                                <Text className="text-[9px] font-bold uppercase tracking-[0.8px] text-emerald-700 dark:text-emerald-300">
-                                    Paid Off
-                                </Text>
-                            </View>
-                        )}
-                        <Text className="font-black text-[15px]" style={{ color: themeColor }}>
-                            KES {displayTotalReceived.toLocaleString()}
-                        </Text>
-                        <Text className="text-slate-400 text-[10px] text-right mt-0.5">
-                            Collected
-                        </Text>
-                        {hasExpectedAmount && !isPaidOff && (
-                            <Text className="text-slate-500 dark:text-slate-400 text-[10px] mt-1">
-                                Remaining KES {remainingAmount.toLocaleString()}
-                            </Text>
-                        )}
+                        <View className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: themeColor }} />
                     </View>
                 </View>
-
-                {hasExpectedAmount && !isPaidOff && (
-                    <View className="mt-3 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                        <View
-                            className="h-full rounded-full"
-                            style={{ width: `${Math.max(0, Math.min(progress, 100))}%`, backgroundColor: themeColor }}
-                        />
-                    </View>
-                )}
             </TouchableOpacity>
         );
     };

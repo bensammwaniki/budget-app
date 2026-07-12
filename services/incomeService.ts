@@ -1,6 +1,7 @@
 import { generateUUID } from '../utils/uuid';
 import { getDb, initDatabase, notifyListeners } from './core/db';
 import { getTransactions } from './database';
+import { ledgerService } from './ledgerService';
 
 export type IncomeFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'IRREGULAR';
 
@@ -9,9 +10,12 @@ export interface IncomeSource {
     userId: string;
     name: string;
     categoryId?: number;
+    accountId?: string;
     isRecurring: boolean;
     expectedAmount?: number;
     frequency: IncomeFrequency;
+    scheduledDate?: string;
+    smsSenderId?: string;
     color?: string;
     status: 'ACTIVE' | 'INACTIVE';
     lastReceived?: string;
@@ -26,6 +30,7 @@ export interface IncomeLog {
     amount: number;
     receivedAt: string;
     notes?: string;
+    isScheduled: boolean;
     createdAt: string;
 }
 
@@ -72,18 +77,23 @@ export const incomeService = {
         const normalizedExpectedAmount = data.isRecurring ? (data.expectedAmount ?? null) : null;
 
         await db.runAsync(`
-            INSERT INTO income_sources(id, user_id, name, category_id, is_recurring, expected_amount, frequency, color, status, created_at, updated_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+            INSERT INTO income_sources(id, user_id, name, category_id, account_id, is_recurring, expected_amount, frequency, scheduled_date, color, status, created_at, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
         `, [
-            id, userId, data.name, data.categoryId ?? null,
+            id, userId, data.name, data.categoryId ?? null, data.accountId ?? null,
             data.isRecurring ? 1 : 0,
             normalizedExpectedAmount,
             normalizedFrequency,
+            data.scheduledDate ?? now,
             data.color ?? null,
             now, now
         ]);
 
         const source = (await this.getSourceById(id))!;
+
+        if (source.isRecurring && source.expectedAmount && source.scheduledDate) {
+            await this.populateScheduledIncome(source);
+        }
 
         // Handle initial backdated log if provided
         if (data.initialAmount && data.initialAmount > 0) {
@@ -113,6 +123,8 @@ export const incomeService = {
         if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
         if (updates.isRecurring !== undefined) { setClauses.push('is_recurring = ?'); values.push(updates.isRecurring ? 1 : 0); }
         if (updates.categoryId !== undefined) { setClauses.push('category_id = ?'); values.push(updates.categoryId); }
+        if (updates.accountId !== undefined) { setClauses.push('account_id = ?'); values.push(updates.accountId); }
+        if (updates.scheduledDate !== undefined) { setClauses.push('scheduled_date = ?'); values.push(updates.scheduledDate); }
 
         if (setClauses.length === 0) return;
 
@@ -155,21 +167,23 @@ export const incomeService = {
         return rows.map(this.mapDbToLog);
     },
 
-    async logIncome(sourceId: string, amount: number, receivedAt: string, transactionId?: string, notes?: string): Promise<IncomeLog> {
+    async logIncome(sourceId: string, amount: number, receivedAt: string, transactionId?: string, notes?: string, isScheduled = false): Promise<IncomeLog> {
         await initDatabase();
         const db = getDb();
         const id = generateUUID();
         const now = new Date().toISOString();
 
         await db.runAsync(`
-            INSERT INTO income_logs(id, source_id, transaction_id, amount, received_at, notes, created_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?)
-        `, [id, sourceId, transactionId ?? null, amount, receivedAt, notes ?? null, now]);
+            INSERT INTO income_logs(id, source_id, transaction_id, amount, received_at, notes, is_scheduled, created_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        `, [id, sourceId, transactionId ?? null, amount, receivedAt, notes ?? null, isScheduled ? 1 : 0, now]);
 
-        // Update last_received on the source
-        await db.runAsync(`
-            UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?
-        `, [receivedAt, now, sourceId]);
+        // A scheduled entry is only a forecast; it must not make the source look paid.
+        if (!isScheduled) {
+            await db.runAsync(`
+                UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?
+            `, [receivedAt, now, sourceId]);
+        }
 
         notifyListeners('INCOME_LOGS');
 
@@ -192,8 +206,186 @@ export const incomeService = {
         if (existing) throw new Error('Transaction is already linked to an income source');
 
         const receivedAt = tx.date ?? new Date().toISOString();
-        await this.logIncome(sourceId, tx.amount, receivedAt, transactionId);
+        await this.confirmScheduledOrLog(sourceId, tx.amount, receivedAt, transactionId);
+        if (tx.recipient_id) {
+            await db.runAsync(
+                'UPDATE income_sources SET sms_sender_id = ?, updated_at = ? WHERE id = ?',
+                [tx.recipient_id, new Date().toISOString(), sourceId]
+            );
+            notifyListeners('INCOME_SOURCES');
+        }
         notifyListeners('INCOME_LOGS');
+    },
+
+    /** Links an incoming SMS when its sender was previously taught to an income source. */
+    async autoLinkTransaction(transaction: { id: string; type: string; amount: number; date: Date; recipientId?: string }): Promise<boolean> {
+        if (transaction.type !== 'RECEIVED' || !transaction.recipientId) return false;
+        await initDatabase();
+        const db = getDb();
+        const source = await db.getFirstAsync<{ id: string }>(
+            "SELECT id FROM income_sources WHERE status = 'ACTIVE' AND is_recurring = 1 AND sms_sender_id = ? LIMIT 1",
+            [transaction.recipientId]
+        );
+        if (!source) return false;
+        const existing = await db.getFirstAsync<{ id: string }>('SELECT id FROM income_logs WHERE transaction_id = ?', [transaction.id]);
+        if (existing) return false;
+        await this.confirmScheduledOrLog(source.id, transaction.amount, transaction.date.toISOString(), transaction.id);
+        notifyListeners('INCOME_LOGS');
+        notifyListeners('INCOME_SOURCES');
+        return true;
+    },
+
+    /**
+     * Reconciles an incoming SMS against a scheduled ledger entry. Returning true
+     * means the SMS must not be saved as a second transaction.
+     */
+    async reconcileIncomingSms(transaction: { id: string; type: string; amount: number; date: Date; recipientId?: string; recipientName?: string; rawSms?: string; balance?: number }): Promise<boolean> {
+        if (transaction.type !== 'RECEIVED' || !transaction.recipientId) return false;
+        await initDatabase();
+        const db = getDb();
+
+        const alreadyReconciled = await db.getFirstAsync<{ id: string }>(
+            'SELECT id FROM income_logs WHERE sms_transaction_id = ? LIMIT 1',
+            [transaction.id]
+        );
+        if (alreadyReconciled) return true;
+
+        const source = await db.getFirstAsync<{ id: string }>(
+            "SELECT id FROM income_sources WHERE status = 'ACTIVE' AND is_recurring = 1 AND sms_sender_id = ? LIMIT 1",
+            [transaction.recipientId]
+        );
+        if (!source) return false;
+
+        const scheduled = await db.getFirstAsync<{ id: string; transaction_id: string; amount: number }>(
+            `SELECT id, transaction_id, amount FROM income_logs
+             WHERE source_id = ? AND is_scheduled = 1 AND transaction_id IS NOT NULL AND sms_transaction_id IS NULL
+             ORDER BY ABS(julianday(received_at) - julianday(?)) ASC
+             LIMIT 1`,
+            [source.id, transaction.date.toISOString()]
+        );
+        if (!scheduled?.transaction_id) return false;
+
+        const ledgerEntry = await db.getFirstAsync<{ account_id: string | null; amount: number }>(
+            'SELECT account_id, amount FROM transactions WHERE id = ? AND is_deleted = 0',
+            [scheduled.transaction_id]
+        );
+        if (!ledgerEntry?.account_id) return false;
+
+        const scheduledTransactionId = scheduled.transaction_id;
+        const accountId = ledgerEntry.account_id;
+        const smsSenderId = transaction.recipientId!;
+        const reportedBalance = typeof transaction.balance === 'number' && Number.isFinite(transaction.balance)
+            ? transaction.balance
+            : null;
+        const difference = transaction.amount - ledgerEntry.amount;
+        const now = new Date().toISOString();
+        await db.withTransactionAsync(async () => {
+            if (difference !== 0) {
+                await db.runAsync(
+                    'UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE id = ?',
+                    [difference, now, accountId]
+                );
+            }
+            await db.runAsync(
+                `UPDATE transactions
+                 SET amount = ?, recipient_id = ?, recipient_name = ?, date = ?, raw_sms = ?,
+                     balance = COALESCE(?, balance), balance_after = COALESCE(?, balance_after), updated_at = ?
+                 WHERE id = ?`,
+                [
+                    transaction.amount,
+                    smsSenderId,
+                    transaction.recipientName ?? 'Income received',
+                    transaction.date.toISOString(),
+                    transaction.rawSms ?? null,
+                    reportedBalance,
+                    reportedBalance,
+                    now,
+                    scheduledTransactionId
+                ]
+            );
+            await db.runAsync(
+                `UPDATE income_logs SET amount = ?, notes = 'Confirmed by SMS', sms_transaction_id = ? WHERE id = ?`,
+                [transaction.amount, transaction.id, scheduled.id]
+            );
+            await db.runAsync(
+                'UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?',
+                [transaction.date.toISOString(), now, source.id]
+            );
+        });
+        notifyListeners('TRANSACTIONS');
+        notifyListeners('INCOME_LOGS');
+        notifyListeners('INCOME_SOURCES');
+        return true;
+    },
+
+    /** Creates schedule entries through today. They are plans, not ledger transactions. */
+    async populateScheduledIncome(source: IncomeSource): Promise<number> {
+        if (!source.isRecurring || !source.expectedAmount || !source.scheduledDate || source.frequency === 'IRREGULAR') return 0;
+        await initDatabase();
+        const db = getDb();
+        const start = new Date(source.scheduledDate);
+        if (Number.isNaN(start.getTime())) return 0;
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        let occurrence = new Date(start);
+        let inserted = 0;
+        while (occurrence <= today) {
+            const iso = occurrence.toISOString();
+            const existing = await db.getFirstAsync<{ id: string }>(
+                'SELECT id FROM income_logs WHERE source_id = ? AND received_at = ? AND is_scheduled = 1',
+                [source.id, iso]
+            );
+            if (!existing) {
+                const ledgerEntry = source.accountId
+                    ? await ledgerService.recordTransaction({
+                        accountId: source.accountId,
+                        amount: source.expectedAmount,
+                        type: 'RECEIVED',
+                        kind: 'INCOME',
+                        date: occurrence,
+                        recipientName: source.name,
+                        rawSms: `Scheduled income: ${source.name}`,
+                        userId: source.userId,
+                        categoryId: source.categoryId,
+                    })
+                    : undefined;
+                await this.logIncome(source.id, source.expectedAmount, iso, ledgerEntry?.id, 'Scheduled income', true);
+                inserted++;
+            }
+            occurrence = this.nextOccurrence(occurrence, source.frequency);
+        }
+        return inserted;
+    },
+
+    nextOccurrence(date: Date, frequency: IncomeFrequency): Date {
+        const next = new Date(date);
+        if (frequency === 'WEEKLY') next.setDate(next.getDate() + 7);
+        else if (frequency === 'BI_WEEKLY') next.setDate(next.getDate() + 14);
+        else if (frequency === 'MONTHLY') next.setMonth(next.getMonth() + 1);
+        return next;
+    },
+
+    async confirmScheduledOrLog(sourceId: string, amount: number, receivedAt: string, transactionId: string): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const scheduled = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM income_logs
+             WHERE source_id = ? AND is_scheduled = 1 AND transaction_id IS NULL
+             ORDER BY ABS(julianday(received_at) - julianday(?)) ASC
+             LIMIT 1`,
+            [sourceId, receivedAt]
+        );
+        if (scheduled) {
+            await db.runAsync(
+                `UPDATE income_logs
+                 SET transaction_id = ?, amount = ?, notes = 'Confirmed by SMS'
+                 WHERE id = ?`,
+                [transactionId, amount, scheduled.id]
+            );
+            await db.runAsync('UPDATE income_sources SET last_received = ?, updated_at = ? WHERE id = ?', [receivedAt, new Date().toISOString(), sourceId]);
+            return;
+        }
+        await this.logIncome(sourceId, amount, receivedAt, transactionId, 'Confirmed by SMS');
     },
 
     async unlinkTransaction(transactionId: string): Promise<void> {
@@ -309,9 +501,12 @@ export const incomeService = {
             userId: row.user_id,
             name: row.name,
             categoryId: row.category_id,
+            accountId: row.account_id,
             isRecurring: row.is_recurring === 1,
             expectedAmount: row.expected_amount,
             frequency: row.frequency,
+            scheduledDate: row.scheduled_date,
+            smsSenderId: row.sms_sender_id,
             color: row.color,
             status: row.status,
             lastReceived: row.last_received,
@@ -328,6 +523,7 @@ export const incomeService = {
             amount: row.amount,
             receivedAt: row.received_at,
             notes: row.notes,
+            isScheduled: row.is_scheduled === 1,
             createdAt: row.created_at,
         };
     }

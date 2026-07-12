@@ -11,11 +11,13 @@ import {
     getTransactionIdsInRange,
     getUserSettings,
     initDatabase,
+    reconcileMpesaAccountBalance,
     saveFulizaTransaction,
     saveTransaction,
     saveUserSettings
 } from './database';
 import { debtService } from './debtService';
+import { incomeService } from './incomeService';
 
 export interface SMSMessage {
     _id: string;
@@ -194,7 +196,11 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
                 const parsed = parseMpesaSms(msg.body);
                 if (parsed) {
                     if (!existingTxIds.has(parsed.id)) {
-                        await saveTransaction(parsed, false, enabledRules);
+                        const reconciled = await incomeService.reconcileIncomingSms(parsed);
+                        if (!reconciled) {
+                            await saveTransaction(parsed, false, enabledRules);
+                            await incomeService.autoLinkTransaction(parsed);
+                        }
                         existingTxIds.add(parsed.id);
                         newTransactionsCount++;
                     }
@@ -280,7 +286,11 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
 
                     if (!existingTxIds.has(parsed.id)) {
                         parsed.date = new Date(msg.date);
-                        await saveTransaction(parsed, false, enabledRules);
+                        const reconciled = await incomeService.reconcileIncomingSms(parsed);
+                        if (!reconciled) {
+                            await saveTransaction(parsed, false, enabledRules);
+                            await incomeService.autoLinkTransaction(parsed);
+                        }
                         existingTxIds.add(parsed.id);
                         newTransactionsCount++;
                     }
@@ -290,6 +300,10 @@ export const syncMessages = async (days: number = 30, fullHistory: boolean = fal
 
         // Save sync time
         await saveUserSettings('last_sync_timestamp', Date.now().toString());
+
+        // SMS statement balances are authoritative for the M-PESA account.
+        // This keeps SMS imports and manual ledger entries from drifting apart.
+        await reconcileMpesaAccountBalance();
 
         // Final reconciliation check for Fuliza
         await debtService.reconcileFulizaBalance();

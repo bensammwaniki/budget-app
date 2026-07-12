@@ -4,10 +4,12 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IncomeFrequency, incomeService } from '../../services/incomeService';
+import { accountService } from '../../services/accountService';
+import { Account } from '../../types/account';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#ef4444', '#06b6d4'];
 const FREQUENCIES: { value: IncomeFrequency; label: string; icon: string }[] = [
@@ -16,6 +18,11 @@ const FREQUENCIES: { value: IncomeFrequency; label: string; icon: string }[] = [
     { value: 'WEEKLY', label: 'Weekly', icon: 'refresh' },
     { value: 'IRREGULAR', label: 'Irregular', icon: 'random' },
 ];
+const RECEIVE_ACCOUNTS = [
+    { type: 'CASH', label: 'Cash', icon: 'money' },
+    { type: 'M-PESA', label: 'M-PESA', icon: 'mobile' },
+    { type: 'BANK', label: 'Bank', icon: 'university' },
+] as const;
 
 export default function AddIncomeSourceScreen() {
     const router = useRouter();
@@ -31,6 +38,17 @@ export default function AddIncomeSourceScreen() {
     const [loading, setLoading] = useState(false);
     const [incomeDate, setIncomeDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [accounts, setAccounts] = useState<Account[]>([]);
+    const [accountId, setAccountId] = useState('');
+
+    useEffect(() => {
+        accountService.getAccounts().then((items) => {
+            setAccounts(items);
+            const mpesa = items.find(item => item.type === 'M-PESA');
+            if (mpesa) setAccountId(mpesa.id);
+            else if (items.length > 0) setAccountId(items[0].id);
+        }).catch((error) => console.error('Failed to load accounts:', error));
+    }, []);
 
     const formatWithCommas = (value: string) => {
         const numeric = value.replace(/,/g, '').replace(/[^0-9]/g, '');
@@ -53,13 +71,19 @@ export default function AddIncomeSourceScreen() {
             Alert.alert('Invalid Amount', 'Please enter a valid expected amount.');
             return;
         }
+        if (!accountId) {
+            Alert.alert('Account required', 'Choose the account where this income is received.');
+            return;
+        }
 
         setLoading(true);
         try {
             await incomeService.createSource({
                 name: name.trim(),
+                accountId,
                 expectedAmount: amount,
                 frequency: isRecurring ? frequency : 'IRREGULAR',
+                scheduledDate: incomeDate.toISOString(),
                 color: selectedColor,
                 isRecurring,
             });
@@ -116,6 +140,33 @@ export default function AddIncomeSourceScreen() {
                             onChangeText={handleAmountChange}
                             keyboardType="numeric"
                         />
+                    </View>
+
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Received Into</Text>
+                    <View className="flex-row gap-3 mb-6">
+                        {RECEIVE_ACCOUNTS.map(option => {
+                            const account = accounts.find(item => item.type === option.type);
+                            const selected = account?.id === accountId;
+                            return (
+                                <TouchableOpacity
+                                    key={option.type}
+                                    disabled={!account}
+                                    onPress={() => account && setAccountId(account.id)}
+                                    className={`flex-1 items-center py-3 rounded-xl border ${selected
+                                        ? 'border-transparent'
+                                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'} ${!account ? 'opacity-40' : ''}`}
+                                    style={selected ? { backgroundColor: `${selectedColor}20`, borderColor: selectedColor } : {}}
+                                >
+                                    <FontAwesome name={option.icon as any} size={16} color={selected ? selectedColor : '#94a3b8'} />
+                                    <Text
+                                        className="mt-1 text-[10px] font-bold"
+                                        style={{ color: selected ? selectedColor : (isDark ? '#cbd5e1' : '#475569') }}
+                                    >
+                                        {option.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
                     {/* Income Date */}

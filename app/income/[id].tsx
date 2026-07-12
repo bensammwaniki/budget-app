@@ -82,10 +82,9 @@ export default function IncomeDetailScreen() {
     const loadData = useCallback(async () => {
         if (!id) return;
         try {
-            const [src, srcLogs] = await Promise.all([
-                incomeService.getSourceById(id),
-                incomeService.getLogs(id),
-            ]);
+            const src = await incomeService.getSourceById(id);
+            if (src) await incomeService.populateScheduledIncome(src);
+            const srcLogs = await incomeService.getLogs(id);
             setSource(src);
             setLogs(srcLogs.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()));
         } catch (e) {
@@ -285,13 +284,9 @@ export default function IncomeDetailScreen() {
     }
 
     const themeColor = source.color || '#10b981';
-    const totalReceived = logs.reduce((sum, l) => sum + l.amount, 0);
     const expectedAmountValue = parseAmountValue(source.expectedAmount);
     const hasExpectedAmount = expectedAmountValue > 0;
     const isPaidOff = (source.status || '').toUpperCase() === 'INACTIVE';
-    const displayTotalReceived = isPaidOff && hasExpectedAmount
-        ? Math.max(totalReceived, expectedAmountValue)
-        : totalReceived;
     const FREQ_LABELS: Record<string, string> = {
         MONTHLY: 'Monthly', WEEKLY: 'Weekly', BI_WEEKLY: 'Bi-weekly', IRREGULAR: 'Irregular'
     };
@@ -324,8 +319,10 @@ export default function IncomeDetailScreen() {
 
                     <View className="flex-row justify-between items-start mb-4">
                         <View>
-                            <Text className="text-slate-400 text-sm mb-1">Total Received</Text>
-                            <Text className="text-4xl font-bold text-slate-900 dark:text-white">KES {displayTotalReceived.toLocaleString()}</Text>
+                            <Text className="text-slate-400 text-sm mb-1">Income schedule</Text>
+                            <Text className="text-2xl font-bold text-slate-900 dark:text-white">
+                                {source.isRecurring ? FREQ_LABELS[source.frequency] : 'One-time'}
+                            </Text>
                         </View>
                         <View className="px-3 py-1 rounded-full" style={{ backgroundColor: `${themeColor}20` }}>
                             <Text className="text-xs font-bold" style={{ color: themeColor }}>
@@ -356,6 +353,7 @@ export default function IncomeDetailScreen() {
 
                 {/* Actions */}
                 <View className="flex-row gap-3 mb-8">
+                    {!source.smsSenderId && (
                     <TouchableOpacity
                         onPress={fetchLinkable}
                         disabled={openingLinkModal || showModal}
@@ -368,10 +366,11 @@ export default function IncomeDetailScreen() {
                             tintColor={themeColor}
                             contentFit="contain"
                         />
-                        <Text className="font-bold text-sm" style={{ color: themeColor }}>Link SMS</Text>
+                        <Text className="font-bold text-sm" style={{ color: themeColor }}>Set up SMS match</Text>
                     </TouchableOpacity>
+                    )}
 
-                    <TouchableOpacity
+                    {!source.isRecurring && <TouchableOpacity
                         onPress={openManualModal}
                         disabled={showManualModal || recordingManual}
                         className="flex-1 p-4 rounded-2xl flex-row justify-center items-center gap-2"
@@ -385,7 +384,15 @@ export default function IncomeDetailScreen() {
                         />
                         <Text className="font-bold text-white text-sm">Record Income</Text>
                     </TouchableOpacity>
+                    }
                 </View>
+
+                {source.isRecurring && source.smsSenderId && (
+                    <View className="mb-8 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-900/20">
+                        <Text className="font-bold text-emerald-800 dark:text-emerald-300">SMS auto-recording is on</Text>
+                        <Text className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">New incoming SMS messages from the linked sender are added here automatically.</Text>
+                    </View>
+                )}
 
                 {/* History */}
                 <Text className="text-slate-900 dark:text-white font-bold text-lg mb-4">Income History</Text>
@@ -394,7 +401,7 @@ export default function IncomeDetailScreen() {
                     <View className="bg-white dark:bg-[#0f172a] p-8 rounded-3xl border border-slate-100 dark:border-slate-800 items-center">
                         <FontAwesome name="inbox" size={40} color="#cbd5e1" />
                         <Text className="text-slate-500 mt-4 text-center font-medium">No entries yet.</Text>
-                        <Text className="text-slate-400 text-xs mt-1 text-center">Link income transactions to start tracking.</Text>
+                        <Text className="text-slate-400 text-xs mt-1 text-center">Your scheduled income will appear here automatically.</Text>
                     </View>
                 ) : (
                     <View className="space-y-3">
@@ -415,7 +422,7 @@ export default function IncomeDetailScreen() {
                                                 </Text>
                                                 <Text className="text-slate-300 dark:text-slate-600 text-xs">•</Text>
                                                 <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium">
-                                                    {log.transactionId ? 'Linked SMS' : 'Manual entry'}
+                                                    {log.transactionId ? 'Confirmed SMS' : log.isScheduled ? 'Scheduled' : 'Manual entry'}
                                                 </Text>
                                             </View>
                                         </View>

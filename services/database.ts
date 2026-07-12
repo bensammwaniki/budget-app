@@ -352,6 +352,40 @@ export const saveTransaction = async (
     }
 };
 
+/** Uses the latest M-PESA statement balance as the authoritative account balance. */
+export const reconcileMpesaAccountBalance = async (): Promise<number | null> => {
+    await initDatabase();
+    const database = getDb();
+    const latestStatement = await database.getFirstAsync<{ balance_after: number; date: string }>(
+        `SELECT balance_after, date
+         FROM transactions
+         WHERE account_id = 'ACC-MPESA-DEFAULT'
+           AND is_deleted = 0
+           AND raw_sms LIKE '%M-PESA balance%'
+           AND balance_after IS NOT NULL
+         ORDER BY date DESC
+         LIMIT 1`
+    );
+    if (!latestStatement || !Number.isFinite(latestStatement.balance_after)) return null;
+
+    const laterLedgerDelta = await database.getFirstAsync<{ total: number }>(
+        `SELECT COALESCE(SUM(CASE WHEN type = 'RECEIVED' THEN amount ELSE -amount END), 0) as total
+         FROM transactions
+         WHERE account_id = 'ACC-MPESA-DEFAULT'
+           AND is_deleted = 0
+           AND date > ?
+           AND (raw_sms IS NULL OR raw_sms NOT LIKE '%M-PESA balance%')`,
+        [latestStatement.date]
+    );
+    const reconciledBalance = latestStatement.balance_after + (laterLedgerDelta?.total || 0);
+
+    await database.runAsync(
+        "UPDATE accounts SET balance = ?, updated_at = ? WHERE id = 'ACC-MPESA-DEFAULT'",
+        [reconciledBalance, new Date().toISOString()]
+    );
+    return reconciledBalance;
+};
+
 export const getTransactions = async (): Promise<Transaction[]> => {
     await initDatabase();
     const database = getDb();
@@ -430,7 +464,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
     const account = await database.getFirstAsync<{ balance: number }>(
-        "SELECT balance FROM accounts WHERE name = 'M-PESA'"
+        'SELECT COALESCE(SUM(balance), 0) as balance FROM accounts WHERE is_active = 1'
     );
 
     const daily = await database.getFirstAsync<{ total: number }>(

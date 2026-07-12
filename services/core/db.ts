@@ -35,6 +35,34 @@ export const initDatabase = async () => {
     return initPromise;
 };
 
+/**
+ * This database is intentionally a single on-device profile. Before a different
+ * Firebase user is allowed into the app, AuthContext clears this profile so one
+ * person's SMS and financial data cannot be shown to another person.
+ */
+export const clearLocalProfileData = async (): Promise<void> => {
+    await initDatabase();
+    const database = getDb();
+    const tables = [
+        'debt_payments', 'income_logs', 'transactions', 'fuliza_transactions',
+        'debts', 'savings_goals', 'manual_recurring_transactions', 'recipients',
+        'category_budgets', 'monthly_budgets', 'monthly_summaries', 'category_trends',
+        'net_worth_history', 'automation_rules', 'user_settings', 'processed_sms',
+        'income_sources', 'accounts', 'categories'
+    ];
+
+    await database.withTransactionAsync(async () => {
+        for (const table of tables) {
+            await database.runAsync(`DELETE FROM ${table}`);
+        }
+    });
+
+    await seedCategories(database);
+    await seedDefaultAccounts(database);
+    ['TRANSACTIONS', 'CATEGORIES', 'BUDGETS', 'SETTINGS', 'INCOME_LOGS', 'DEBTS', 'SAVINGS', 'INCOME_SOURCES']
+        .forEach((type) => notifyListenersImmediate(type as DatabaseChangeType));
+};
+
 // Re-export for consistency across layers
 export { generateUUID };
 
@@ -62,6 +90,7 @@ async function performInitialization() {
                 id TEXT,
                 type TEXT,
                 category_id INTEGER,
+                account_id TEXT,
                 last_seen TEXT,
                 PRIMARY KEY (id, type),
                 FOREIGN KEY (category_id) REFERENCES categories (id)
@@ -162,6 +191,8 @@ async function performInitialization() {
                 is_recurring INTEGER DEFAULT 1,
                 expected_amount REAL,
                 frequency TEXT DEFAULT 'MONTHLY' CHECK (frequency IN ('WEEKLY', 'BI_WEEKLY', 'MONTHLY', 'IRREGULAR')),
+                scheduled_date TEXT,
+                sms_sender_id TEXT,
                 color TEXT,
                 status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
                 last_received TEXT,
@@ -177,9 +208,11 @@ async function performInitialization() {
                 id TEXT PRIMARY KEY,
                 source_id TEXT NOT NULL,
                 transaction_id TEXT,
+                sms_transaction_id TEXT,
                 amount REAL NOT NULL,
                 received_at TEXT NOT NULL,
                 notes TEXT,
+                is_scheduled INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (source_id) REFERENCES income_sources(id) ON DELETE CASCADE,
                 FOREIGN KEY (transaction_id) REFERENCES transactions(id)
@@ -421,6 +454,29 @@ async function performInitialization() {
             await database.execAsync('ALTER TABLE monthly_budgets RENAME COLUMN totalIncome TO total_income');
         }
 
+        // Income-source schedule and SMS matching were added after the first release.
+        // Keep existing on-device databases compatible with the recurring-income flow.
+        const incomeSourceInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(income_sources)');
+        const incomeSourceCols = incomeSourceInfo.map(c => c.name);
+        for (const column of [
+            { name: 'scheduled_date', type: 'TEXT' },
+            { name: 'sms_sender_id', type: 'TEXT' },
+            { name: 'account_id', type: 'TEXT' },
+        ]) {
+            if (!incomeSourceCols.includes(column.name)) {
+                await database.execAsync(`ALTER TABLE income_sources ADD COLUMN ${column.name} ${column.type}`);
+            }
+        }
+
+        const incomeLogInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(income_logs)');
+        if (!incomeLogInfo.some(c => c.name === 'is_scheduled')) {
+            await database.execAsync('ALTER TABLE income_logs ADD COLUMN is_scheduled INTEGER DEFAULT 0');
+        }
+        if (!incomeLogInfo.some(c => c.name === 'sms_transaction_id')) {
+            await database.execAsync('ALTER TABLE income_logs ADD COLUMN sms_transaction_id TEXT');
+        }
+        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_income_sources_sms_sender ON income_sources(sms_sender_id)');
+
         const accountInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(accounts)');
         const accountCols = accountInfo.map(c => c.name);
         if (accountCols.includes('isActive') && !accountCols.includes('is_active')) {
@@ -479,6 +535,7 @@ async function seedCategories(database: SQLite.SQLiteDatabase) {
 async function seedDefaultAccounts(database: SQLite.SQLiteDatabase) {
     const mpesaId = 'ACC-MPESA-DEFAULT';
     const cashId = 'ACC-CASH-DEFAULT';
+    const bankId = 'ACC-BANK-DEFAULT';
     const now = new Date().toISOString();
 
     console.log('🌱 Seeding Default Accounts...');
@@ -486,8 +543,9 @@ async function seedDefaultAccounts(database: SQLite.SQLiteDatabase) {
         INSERT OR IGNORE INTO accounts (id, user_id, name, type, balance, currency, is_active, created_at, updated_at)
         VALUES 
             (?, 'local_user', 'M-PESA', 'M-PESA', 0, 'KES', 1, ?, ?),
-            (?, 'local_user', 'Cash', 'CASH', 0, 'KES', 1, ?, ?)
-    `, [mpesaId, now, now, cashId, now, now]);
+            (?, 'local_user', 'Cash', 'CASH', 0, 'KES', 1, ?, ?),
+            (?, 'local_user', 'Bank', 'BANK', 0, 'KES', 1, ?, ?)
+    `, [mpesaId, now, now, cashId, now, now, bankId, now, now]);
 }
 
 async function backfillTransactionData(database: SQLite.SQLiteDatabase) {

@@ -1,9 +1,13 @@
 import { signOut as firebaseSignOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { backupNowToAws, isAwsBackupConfigured, startAwsBackupSession, stopAwsBackupSession } from './cloudBackupService';
 import { getUserSettings, saveUserSettings } from './database';
 import { auth, storage } from './firebaseConfig';
+import { clearLocalProfileData } from './core/db';
+
+const LOCAL_PROFILE_OWNER_KEY = 'local_profile_owner_uid';
 
 interface AuthContextType {
     user: User | null;
@@ -32,9 +36,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
+            setLoading(true);
             if (currentUser) {
                 try {
+                    const previousOwner = await AsyncStorage.getItem(LOCAL_PROFILE_OWNER_KEY);
+                    if (previousOwner && previousOwner !== currentUser.uid) {
+                        await clearLocalProfileData();
+                    }
+                    await AsyncStorage.setItem(LOCAL_PROFILE_OWNER_KEY, currentUser.uid);
+
                     // Database is initialized by HomeScreen, just load settings here
                     const storedPhone = await getUserSettings('phoneNumber');
                     setPhoneNumber(storedPhone);
@@ -49,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         console.error('AWS backup sync failed on login:', error);
                     }
                 }
+                setUser(currentUser);
             } else {
                 try {
                     await stopAwsBackupSession();
@@ -56,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     console.error('Failed to stop AWS backup session:', error);
                 }
                 setPhoneNumber(null);
+                setUser(null);
             }
             setLoading(false);
         });
