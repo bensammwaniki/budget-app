@@ -18,6 +18,9 @@ import { useAuth } from '../services/AuthContext';
 const DEFAULT_LOCK_TIMEOUT_MS = 3 * 60 * 1000;
 const BIOMETRICS_ENABLED_KEY = 'app_lock_biometrics_enabled';
 const LOCK_TIMEOUT_KEY = 'app_lock_timeout_ms';
+const PIN_GUARD_PREFIX = 'app_lock_pin_guard.';
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 5 * 60 * 1000;
 
 type BiometricLabel = 'Face ID' | 'Fingerprint' | 'Biometrics';
 
@@ -44,6 +47,24 @@ const AppLockContext = createContext<AppLockContextType | undefined>(undefined);
 const getPinKey = (uid: string) => {
     const safeUid = uid.replace(/[^a-zA-Z0-9._-]/g, '_');
     return `app_lock_pin.${safeUid}`;
+};
+
+const getPinGuardKey = (uid: string) => `${PIN_GUARD_PREFIX}${uid.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+
+type PinGuard = { attempts: number; lockedUntil: number };
+
+const readPinGuard = async (uid: string): Promise<PinGuard> => {
+    const raw = await SecureStore.getItemAsync(getPinGuardKey(uid));
+    if (!raw) return { attempts: 0, lockedUntil: 0 };
+    try {
+        const parsed = JSON.parse(raw) as Partial<PinGuard>;
+        return {
+            attempts: Number.isFinite(parsed.attempts) ? Math.max(0, Number(parsed.attempts)) : 0,
+            lockedUntil: Number.isFinite(parsed.lockedUntil) ? Math.max(0, Number(parsed.lockedUntil)) : 0,
+        };
+    } catch {
+        return { attempts: 0, lockedUntil: 0 };
+    }
 };
 
 const resolveBiometricLabel = (types: LocalAuthentication.AuthenticationType[]): BiometricLabel => {
@@ -118,10 +139,23 @@ export function AppLockProvider({
     const unlockWithPin = useCallback(async (pin: string) => {
         if (!user) return false;
 
+        const guard = await readPinGuard(user.uid);
+        const now = Date.now();
+        if (guard.lockedUntil > now) return false;
+
         const storedPin = await SecureStore.getItemAsync(getPinKey(user.uid));
         if (storedPin !== pin) {
+            const attempts = guard.attempts + 1;
+            const nextGuard: PinGuard = attempts >= MAX_PIN_ATTEMPTS
+                ? { attempts: 0, lockedUntil: now + PIN_LOCKOUT_MS }
+                : { attempts, lockedUntil: 0 };
+            await SecureStore.setItemAsync(getPinGuardKey(user.uid), JSON.stringify(nextGuard), {
+                keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+            });
             return false;
         }
+
+        await SecureStore.deleteItemAsync(getPinGuardKey(user.uid));
 
         setIsLocked(false);
         setRequiresPinSetup(false);
@@ -135,6 +169,7 @@ export function AppLockProvider({
         await SecureStore.setItemAsync(getPinKey(user.uid), pin, {
             keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
         });
+        await SecureStore.deleteItemAsync(getPinGuardKey(user.uid));
         await saveUserSettings(BIOMETRICS_ENABLED_KEY, '1');
 
         setRequiresPinSetup(false);

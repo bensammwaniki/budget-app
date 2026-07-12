@@ -151,6 +151,12 @@ export const isInternalTransfer = (
     return false;
 };
 
+/** Internal moves change account locations, not the user's income or spending. */
+export const isCashflowTransaction = (
+    transaction: Transaction,
+    options?: { userPhoneNumber?: string | null }
+): boolean => !isInternalTransfer(transaction, options);
+
 export const getFreshStartEffectiveDate = (freshStart: FreshStartConfig | null): Date | null => {
     if (!freshStart?.effectiveDate) return null;
     const parsed = new Date(freshStart.effectiveDate);

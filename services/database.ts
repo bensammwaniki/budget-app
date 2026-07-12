@@ -314,6 +314,14 @@ export const saveTransaction = async (
         }
     }
 
+    const rawSmsForStorage = transaction.rawSms?.startsWith('Manual ') ||
+        transaction.rawSms?.startsWith('Scheduled income:') ||
+        transaction.rawSms?.startsWith('Internal Transfer:')
+        ? transaction.rawSms
+        : /m-pesa balance\s+is/i.test(transaction.rawSms || '')
+            ? 'Imported SMS transaction - M-PESA balance reported'
+            : 'Imported SMS transaction';
+
     await database.runAsync(
         `INSERT OR REPLACE INTO transactions 
         (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, created_at, updated_at, is_deleted) 
@@ -333,7 +341,7 @@ export const saveTransaction = async (
             transaction.balance || 0,
             transaction.balanceAfter || transaction.balance || 0,
             transaction.transactionCost || 0,
-            transaction.rawSms ?? null,
+            rawSmsForStorage,
             new Date().toISOString(),
             new Date().toISOString(),
             0
@@ -468,14 +476,14 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
     );
 
     const daily = await database.getFirstAsync<{ total: number }>(
-        "SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND is_deleted = 0",
+        "SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND is_deleted = 0",
         [startOfDay]
     );
 
     const monthly = await database.getFirstAsync<{ totalSpent: number, income: number, costs: number, count: number }>(`
         SELECT 
-            SUM(CASE WHEN type = 'SENT' THEN amount ELSE 0 END) as totalSpent,
-            SUM(CASE WHEN type = 'RECEIVED' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') THEN amount ELSE 0 END) as totalSpent,
+            SUM(CASE WHEN type = 'RECEIVED' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') THEN amount ELSE 0 END) as income,
             SUM(transaction_cost) as costs,
             COUNT(*) as count
         FROM transactions 

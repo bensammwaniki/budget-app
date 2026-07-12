@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import CategorizationModal from '../../components/CategorizationModal';
 import CashTransactionModal from '../../components/modals/CashTransactionModal';
@@ -32,9 +32,10 @@ import {
   getFinancialSettings,
   getFreshStartEffectiveDate,
   getPreviousFinancialMonthRange,
+  isCashflowTransaction,
   isInternalTransfer,
 } from '../../services/financialSettingsService';
-import { IncomeLog, IncomeSource, incomeService } from '../../services/incomeService';
+import { IncomeSource, incomeService } from '../../services/incomeService';
 import { ledgerService } from '../../services/ledgerService';
 import { manualRecurringTransactionService } from '../../services/manualRecurringTransactionService';
 import { SavingsGoal, savingsService } from '../../services/savingsService';
@@ -69,7 +70,6 @@ export default function HomeScreen() {
   const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
   const [freshStartConfig, setFreshStartConfig] = useState<FreshStartConfig | null>(null);
   const [imBankEnabled, setImBankEnabled] = useState(false);
-  const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,30 +167,6 @@ export default function HomeScreen() {
     const unsubscribe = subscribeToDatabaseChanges((type) => {
       if (type === 'TRANSACTIONS' || type === 'DEBTS' || type === 'SAVINGS' || type === 'INCOME_LOGS' || type === 'INCOME_SOURCES') {
         loadDebtSummary();
-      }
-    });
-
-    return unsubscribe;
-  }, [dbReady]);
-
-  // Load income logs
-  useEffect(() => {
-    if (!dbReady) return;
-
-    const loadIncomeLogs = async () => {
-      try {
-        const fetchedLogs = await incomeService.getLogs();
-        setLogs(fetchedLogs);
-      } catch (error) {
-        console.error('Error loading income logs:', error);
-      }
-    };
-
-    loadIncomeLogs();
-
-    const unsubscribe = subscribeToDatabaseChanges((type) => {
-      if (type === 'INCOME_LOGS' || type === 'INCOME_SOURCES' || type === 'TRANSACTIONS') {
-        loadIncomeLogs();
       }
     });
 
@@ -375,7 +351,7 @@ export default function HomeScreen() {
       return txDate >= startOfLastMonth &&
         txDate <= endOfLastMonth &&
         !t.isDeleted &&
-        !(hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber }));
+        isCashflowTransaction(t, { userPhoneNumber: phoneNumber });
     });
 
     const income = lastMonthTransactions
@@ -387,7 +363,7 @@ export default function HomeScreen() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     return income - expense;
-  }, [allTransactions, dateRange, freshStartConfig, hideInternalTransfers, phoneNumber]);
+  }, [allTransactions, dateRange, freshStartConfig, phoneNumber]);
 
   const carriedForwardPeriodLabel = useMemo(() => {
     const { endOfLastMonth } = dateRange;
@@ -465,41 +441,14 @@ export default function HomeScreen() {
     let expense = 0;
     let cost = 0;
 
-    const { startOfThisMonth, startOfLastMonth, endOfLastMonth, startOfCurrentYear, startOfLast3Months } = dateRange;
-
-    // Calculate income from explicit Income logs based on the selected period
-    logs.forEach((l) => {
-      const logDate = new Date(l.receivedAt);
-      let isInPeriod = false;
-
-      if (selectedPeriod === 'THIS_MONTH') {
-        isInPeriod = logDate >= startOfThisMonth;
-      } else if (selectedPeriod === 'LAST_MONTH') {
-        isInPeriod = logDate >= startOfLastMonth && logDate <= endOfLastMonth;
-      } else if (selectedPeriod === 'LAST 3 MONTHS') {
-        isInPeriod = logDate >= startOfLast3Months;
-      } else if (selectedPeriod === 'CURRENT YEAR') {
-        isInPeriod = logDate >= startOfCurrentYear;
-      } else {
-        isInPeriod = true;
-      }
-
-      if (isInPeriod) {
-        income += l.amount;
-      }
-    });
-
-    const loggedTransactionIds = new Set(logs.map((l) => l.transactionId).filter(Boolean));
-    const debtPrincipalInflows = filteredTransactions
-      .filter((t) => t.type === 'RECEIVED' && t.transactionKind === 'DEBT_PRINCIPAL' && !loggedTransactionIds.has(t.id))
-      .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
-    income += debtPrincipalInflows;
-
     filteredTransactions.forEach((t: Transaction) => {
+      if (!isCashflowTransaction(t, { userPhoneNumber: phoneNumber })) return;
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
 
-      if (t.type !== 'RECEIVED') {
+      if (t.type === 'RECEIVED') {
+        income += amount;
+      } else {
         expense += amount;
       }
       cost += fee;
@@ -510,7 +459,7 @@ export default function HomeScreen() {
       expense,
       cost
     };
-  }, [filteredTransactions, logs, selectedPeriod, dateRange]);
+  }, [filteredTransactions, phoneNumber]);
 
 
   const getPeriodLabel = (period: Period) => {

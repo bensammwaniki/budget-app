@@ -206,7 +206,7 @@ export default function AddIncomeSourceScreen() {
                                     <Text className="font-bold text-slate-900 dark:text-white">Recurring Income</Text>
                                     <Text className="text-slate-400 text-xs mt-0.5">
                                         {isRecurring
-                                            ? 'Track this as a repeating income stream.'
+                                            ? 'Posts each due amount through today; matching SMS confirms it.'
                                             : 'One-time source for the selected month.'}
                                     </Text>
                                 </View>

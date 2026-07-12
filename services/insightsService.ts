@@ -3,6 +3,7 @@ import { getDb, initDatabase } from './core/db';
 import { getTransactions } from './database';
 import { debtService } from './debtService';
 import { savingsService } from './savingsService';
+import { isCashflowTransaction } from './financialSettingsService';
 
 export interface KeyMetrics {
     // Income & Expenses
@@ -65,10 +66,10 @@ export const insightsService = {
         const allTx = providedTx || await getTransactions();
 
         // --- Income & Expenses ---
-        const thisMonthTx = allTx.filter(t => new Date(t.date) >= new Date(startOfThisMonth));
+        const thisMonthTx = allTx.filter(t => isCashflowTransaction(t) && new Date(t.date) >= new Date(startOfThisMonth));
         const lastMonthTx = allTx.filter(t => {
             const d = new Date(t.date);
-            return d >= new Date(startOfLastMonth) && d <= new Date(endOfLastMonth);
+            return isCashflowTransaction(t) && d >= new Date(startOfLastMonth) && d <= new Date(endOfLastMonth);
         });
 
         const thisMonthIncome = thisMonthTx.filter(t => t.type === 'RECEIVED').reduce((s, t) => s + t.amount, 0);
@@ -150,10 +151,10 @@ export const insightsService = {
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
         const allTx = providedTx || await getTransactions();
-        const thisMonthExpTx = allTx.filter(t => t.type === 'SENT' && new Date(t.date) >= startOfThisMonth);
+        const thisMonthExpTx = allTx.filter(t => isCashflowTransaction(t) && t.type === 'SENT' && new Date(t.date) >= startOfThisMonth);
         const lastMonthExpTx = allTx.filter(t => {
             const d = new Date(t.date);
-            return t.type === 'SENT' && d >= startOfLastMonth && d <= endOfLastMonth;
+            return isCashflowTransaction(t) && t.type === 'SENT' && d >= startOfLastMonth && d <= endOfLastMonth;
         });
 
         const thisMonthTotal = thisMonthExpTx.reduce((s, t) => s + t.amount, 0);

@@ -16,7 +16,6 @@ export default function SavingsScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
-    const isDark = colorScheme === 'dark';
 
     const loadGoals = async () => {
         try {

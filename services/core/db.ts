@@ -219,6 +219,16 @@ async function performInitialization() {
             );
         `);
 
+        // Kept outside normal cloud-restore tables so a failed or unwanted
+        // restore can be recovered locally.
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS restore_snapshots (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+        `);
+
         // 9. Monthly Summaries Table (Phase 5 - Financial Intelligence)
         await database.execAsync(`
             CREATE TABLE IF NOT EXISTS monthly_summaries (
@@ -487,6 +497,7 @@ async function performInitialization() {
         await seedCategories(database);
         await seedDefaultAccounts(database);
         await backfillTransactionData(database);
+        await redactStoredSmsBodies(database);
 
         // FINALLY set the global db instance once everything is ready
         db = database;
@@ -530,6 +541,24 @@ async function seedCategories(database: SQLite.SQLiteDatabase) {
             cat
         );
     }
+}
+
+/** Keep only the structured transaction data; SMS bodies contain unnecessary PII. */
+async function redactStoredSmsBodies(database: SQLite.SQLiteDatabase) {
+    await database.runAsync(`
+        UPDATE transactions
+        SET raw_sms = CASE
+            WHEN raw_sms LIKE '%M-PESA balance%' THEN 'Imported SMS transaction - M-PESA balance reported'
+            ELSE 'Imported SMS transaction'
+        END
+        WHERE raw_sms IS NOT NULL
+          AND raw_sms NOT LIKE 'Manual %'
+          AND raw_sms NOT LIKE 'Scheduled income:%'
+          AND raw_sms NOT LIKE 'Internal Transfer:%'
+    `);
+    await database.runAsync(
+        "UPDATE fuliza_transactions SET raw_sms = 'Imported SMS transaction' WHERE raw_sms IS NOT NULL"
+    );
 }
 
 async function seedDefaultAccounts(database: SQLite.SQLiteDatabase) {

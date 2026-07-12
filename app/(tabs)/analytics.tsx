@@ -9,10 +9,10 @@ import { getTransactions, initDatabase, subscribeToDatabaseChanges } from '../..
 import {
   getFinancialMonthRange,
   getFinancialSettings,
+  isCashflowTransaction,
   isInternalTransfer,
 } from '../../services/financialSettingsService';
 import { ForecastResult, forecastService } from '../../services/forecastService';
-import { IncomeLog, incomeService } from '../../services/incomeService';
 import { CategoryTrend, KeyMetrics, insightsService } from '../../services/insightsService';
 import { Transaction } from '../../types/transaction';
 
@@ -28,7 +28,6 @@ export default function AnalyticsScreen() {
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
   const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
 
-  const [logs, setLogs] = useState<IncomeLog[]>([]);
 
   // Phase 5 intelligence state
   const [metrics, setMetrics] = useState<KeyMetrics | null>(null);
@@ -53,16 +52,14 @@ export default function AnalyticsScreen() {
 
       // Load intelligence data in parallel
       try {
-        const [kMetrics, kTrends, kForecast, fetchedLogs] = await Promise.all([
+        const [kMetrics, kTrends, kForecast] = await Promise.all([
           insightsService.getKeyMetrics('local_user', allTransactions),
           insightsService.getCategoryTrends(allTransactions),
           forecastService.forecast(allTransactions),
-          incomeService.getLogs(),
         ]);
         setMetrics(kMetrics);
         setTrends(kTrends);
         setForecast(kForecast);
-        setLogs(fetchedLogs);
       } catch (e) {
         console.warn('Insights load failed:', e);
       }
@@ -105,25 +102,28 @@ export default function AnalyticsScreen() {
   }, [hideInternalTransfers, phoneNumber, selectedMonthRange.end, selectedMonthRange.start, transactions]);
 
   // Calculate statistics
-  const { thisMonthTotal } = useMemo(() => {
+  const thisMonthTotal = useMemo(() => {
     const now = new Date();
     const thisMonthRange = getFinancialMonthRange(now, financialMonthStart);
-    const thisTotal = logs.filter(l => {
-      const receivedAt = new Date(l.receivedAt);
-      return receivedAt >= thisMonthRange.start && receivedAt <= thisMonthRange.end;
-    }).reduce((sum, l) => sum + l.amount, 0);
-    return { thisMonthTotal: thisTotal };
-  }, [financialMonthStart, logs]);
+    return transactions
+      .filter(t => {
+        const date = new Date(t.date);
+        return isCashflowTransaction(t, { userPhoneNumber: phoneNumber }) &&
+          t.type === 'RECEIVED' && date >= thisMonthRange.start && date <= thisMonthRange.end;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [financialMonthStart, phoneNumber, transactions]);
 
   //  old method   
   const stats = useMemo(() => {
-    const income = filteredTransactions.filter(t => t.type === 'RECEIVED').reduce((sum, t) => sum + t.amount, 0);
+    const cashflowTransactions = filteredTransactions.filter(t => isCashflowTransaction(t, { userPhoneNumber: phoneNumber }));
+    const income = cashflowTransactions.filter(t => t.type === 'RECEIVED').reduce((sum, t) => sum + t.amount, 0);
 
-    const expense = filteredTransactions.filter(t => t.type === 'SENT').reduce((sum, t) => sum + t.amount, 0);
+    const expense = cashflowTransactions.filter(t => t.type === 'SENT').reduce((sum, t) => sum + t.amount, 0);
 
     // Category breakdown
     const categoryMap: Record<string, { amount: number; color: string; count: number; icon: string }> = {};
-    filteredTransactions
+    cashflowTransactions
       .filter(t => t.type === 'SENT')
       .forEach(t => {
         const cat = t.categoryName || 'Uncategorized';
@@ -150,16 +150,16 @@ export default function AnalyticsScreen() {
       expense,
       net: income - expense,
       categories,
-      avgTransaction: filteredTransactions.length > 0 ? expense / filteredTransactions.filter(t => t.type === 'SENT').length : 0
+      avgTransaction: cashflowTransactions.filter(t => t.type === 'SENT').length > 0 ? expense / cashflowTransactions.filter(t => t.type === 'SENT').length : 0
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, phoneNumber]);
 
   const currentYear = new Date().getFullYear();
 
   const yearlyStats = useMemo(() => {
     const yearlyTransactions = transactions.filter(t => {
       if (t.isDeleted) return false;
-      if (hideInternalTransfers && isInternalTransfer(t, { userPhoneNumber: phoneNumber })) return false;
+      if (!isCashflowTransaction(t, { userPhoneNumber: phoneNumber })) return false;
       const txDate = t.date instanceof Date ? t.date : new Date(t.date);
       return txDate.getFullYear() === currentYear;
     });
@@ -201,7 +201,7 @@ export default function AnalyticsScreen() {
       totalExpense: expenseData.reduce((sum, item) => sum + item.value, 0),
       totalIncome: incomeData.reduce((sum, item) => sum + item.value, 0)
     };
-  }, [currentYear, hideInternalTransfers, phoneNumber, transactions]);
+  }, [currentYear, phoneNumber, transactions]);
 
 
 

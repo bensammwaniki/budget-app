@@ -1,4 +1,5 @@
 import { getTransactions } from './database';
+import { isCashflowTransaction } from './financialSettingsService';
 
 export interface ForecastResult {
     projectedExpenses: number;   // Predicted total for next month
@@ -30,6 +31,7 @@ export const forecastService = {
         }
 
         for (const tx of allTx) {
+            if (!isCashflowTransaction(tx)) continue;
             const d = new Date(tx.date);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             if (monthlyData[key]) {
@@ -76,7 +78,7 @@ export const forecastService = {
         const dayOfMonth = now.getDate();
         const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const thisMonthExpenses = allTx
-            .filter(t => t.type === 'SENT' && new Date(t.date) >= thisMonthStart)
+            .filter(t => isCashflowTransaction(t) && t.type === 'SENT' && new Date(t.date) >= thisMonthStart)
             .reduce((s, t) => s + t.amount, 0);
 
         const dailyVelocity = dayOfMonth > 0 ? thisMonthExpenses / dayOfMonth : 0;

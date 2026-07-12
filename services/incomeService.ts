@@ -2,6 +2,7 @@ import { generateUUID } from '../utils/uuid';
 import { getDb, initDatabase, notifyListeners } from './core/db';
 import { getTransactions } from './database';
 import { ledgerService } from './ledgerService';
+import { isCashflowTransaction } from './financialSettingsService';
 
 export type IncomeFrequency = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'IRREGULAR';
 
@@ -296,7 +297,9 @@ export const incomeService = {
                     smsSenderId,
                     transaction.recipientName ?? 'Income received',
                     transaction.date.toISOString(),
-                    transaction.rawSms ?? null,
+                    reportedBalance !== null
+                        ? 'Imported SMS transaction - M-PESA balance reported'
+                        : 'Imported SMS transaction',
                     reportedBalance,
                     reportedBalance,
                     now,
@@ -447,7 +450,7 @@ export const incomeService = {
         const allTx = await getTransactions();
 
         // Focus only on income transactions
-        const incomeTx = allTx.filter(t => t.type === 'RECEIVED' && t.amount > 0);
+        const incomeTx = allTx.filter(t => isCashflowTransaction(t) && t.type === 'RECEIVED' && t.amount > 0);
 
         // Group by recipientName (sender name for income)
         const grouped: Record<string, typeof incomeTx> = {};

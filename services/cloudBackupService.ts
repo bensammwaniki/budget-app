@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, AppStateStatus, NativeEventSubscription, Platform } from 'react-native';
-import { DatabaseChangeType, getDb, initDatabase, notifyListenersImmediate, subscribeToDatabaseChanges } from './core/db';
+import { DatabaseChangeType, generateUUID, getDb, initDatabase, notifyListenersImmediate, subscribeToDatabaseChanges } from './core/db';
 
 type BackupPrimitive = string | number | null;
 type BackupRow = Record<string, BackupPrimitive>;
@@ -29,6 +29,7 @@ interface BackupSession {
 }
 
 const BACKUP_SCHEMA_VERSION = 1;
+const MAX_RESTORE_ROWS = 50000;
 const AUTO_BACKUP_DEBOUNCE_MS = 12000;
 const MIN_BACKUP_INTERVAL_MS = 20000;
 
@@ -229,6 +230,30 @@ const readPayloadFromResponse = async (response: Response): Promise<CloudBackupP
     };
 };
 
+const validateRestorePayload = (payload: CloudBackupPayload, expectedUserId: string): void => {
+    if (payload.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+        throw new Error(`Unsupported backup schema version: ${payload.schemaVersion}`);
+    }
+    if (payload.userId !== expectedUserId) {
+        throw new Error('Backup belongs to a different user');
+    }
+    if (!Number.isFinite(parseTimestamp(payload.exportedAt))) {
+        throw new Error('Backup has an invalid export date');
+    }
+
+    let rowCount = 0;
+    for (const [table, rows] of Object.entries(payload.tables)) {
+        if (!BACKUP_TABLES.includes(table as typeof BACKUP_TABLES[number]) || !Array.isArray(rows)) {
+            throw new Error('Backup contains an invalid table');
+        }
+        rowCount += rows.length;
+        if (rowCount > MAX_RESTORE_ROWS) throw new Error('Backup contains too many rows');
+        if (rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
+            throw new Error('Backup contains an invalid row');
+        }
+    }
+};
+
 const downloadCloudPayload = async (session: BackupSession): Promise<CloudBackupPayload | null> => {
     const url = getAwsDownloadUrl(session.userId);
     if (!url) return null;
@@ -279,9 +304,39 @@ const getTableColumns = async (table: string): Promise<Set<string>> => {
     return new Set(cols.map((col) => col.name));
 };
 
-const restorePayloadToLocalDb = async (payload: CloudBackupPayload): Promise<void> => {
+const redactSmsFieldsForRestore = (table: string, row: BackupRow): BackupRow => {
+    if (typeof row.raw_sms !== 'string') return row;
+    if (table === 'fuliza_transactions') return { ...row, raw_sms: 'Imported SMS transaction' };
+    if (table !== 'transactions') return row;
+
+    const raw = row.raw_sms;
+    if (raw.startsWith('Manual ') || raw.startsWith('Scheduled income:') || raw.startsWith('Internal Transfer:')) {
+        return row;
+    }
+    return {
+        ...row,
+        raw_sms: /m-pesa balance\s+is/i.test(raw)
+            ? 'Imported SMS transaction - M-PESA balance reported'
+            : 'Imported SMS transaction'
+    };
+};
+
+const restorePayloadToLocalDb = async (payload: CloudBackupPayload, expectedUserId: string): Promise<void> => {
+    validateRestorePayload(payload, expectedUserId);
     await initDatabase();
     const db = getDb();
+
+    // Preserve the current local state before the destructive transaction. The
+    // restore itself is transactional, so a failed insert also rolls back.
+    const snapshot = await buildPayloadFromLocalDb(expectedUserId);
+    await db.runAsync(
+        'INSERT INTO restore_snapshots (id, created_at, payload_json) VALUES (?, ?, ?)',
+        [generateUUID(), new Date().toISOString(), JSON.stringify(snapshot)]
+    );
+    await db.runAsync(
+        `DELETE FROM restore_snapshots
+         WHERE id NOT IN (SELECT id FROM restore_snapshots ORDER BY created_at DESC LIMIT 3)`
+    );
 
     const tableColumnsMap = new Map<string, Set<string>>();
     for (const table of BACKUP_TABLES) {
@@ -298,7 +353,8 @@ const restorePayloadToLocalDb = async (payload: CloudBackupPayload): Promise<voi
             if (!rows || !Array.isArray(rows) || rows.length === 0) continue;
 
             const validColumns = tableColumnsMap.get(table) || new Set<string>();
-            for (const row of rows) {
+            for (const originalRow of rows) {
+                const row = redactSmsFieldsForRestore(table, originalRow);
                 const entries = Object.entries(row).filter(([key, value]) => {
                     return validColumns.has(key) && value !== undefined;
                 });
@@ -392,10 +448,11 @@ const syncFromCloudOnLogin = async (): Promise<void> => {
             return;
         }
 
+        validateRestorePayload(remotePayload, activeSession.userId);
         const remoteMs = parseTimestamp(remotePayload.exportedAt);
 
-        if (localRows === 0 || remoteMs > localLastChangeMs + 1000) {
-            await restorePayloadToLocalDb(remotePayload);
+        if (localRows === 0) {
+            await restorePayloadToLocalDb(remotePayload, activeSession.userId);
             await markLocalDataChanged(activeSession.userId, remotePayload.exportedAt);
             notifyAllDbConsumers();
             console.log('☁️ AWS backup restored on login');
@@ -404,6 +461,9 @@ const syncFromCloudOnLogin = async (): Promise<void> => {
 
         if (localLastChangeMs > remoteMs + 1000) {
             await uploadCurrentLocalState(activeSession, 'login-seed');
+        } else if (remoteMs > localLastChangeMs + 1000) {
+            // Never replace non-empty local data without an explicit user action.
+            console.warn('AWS backup is newer than local data; automatic restore skipped until the user confirms it.');
         }
     } catch (error) {
         console.warn('AWS backup login sync failed:', error);
