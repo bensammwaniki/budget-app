@@ -1,5 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useSafeBack } from '../hooks/Usesafeback';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import React from 'react';
@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
 export default function PrivacyPolicyScreen() {
-    const router = useRouter();
+    const goBack = useSafeBack();
     const { colorScheme } = useColorScheme();
 
     return (
@@ -17,7 +17,7 @@ export default function PrivacyPolicyScreen() {
 
             {/* Header */}
             <View className="px-6 py-4 flex-row items-center border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-[#0f172a]">
-                    <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+                    <TouchableOpacity onPress={() => goBack()} className="p-2 -ml-2">
                         <Image
                             source={require('../assets/svg/back.svg')}
                             style={{ width: 24, height: 24 }}
