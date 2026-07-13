@@ -1,6 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import React from 'react';
-import { Modal, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { FreshStartConfig, getFinancialMonthRange, getFreshStartEffectiveDate } from '../../services/financialSettingsService';
 
 const FRESH_START_OPTIONS = [
@@ -52,6 +53,9 @@ interface FinancialSettingsModalProps {
   isSaving: boolean;
   primaryLabel: string;
   onPrimaryAction: () => void;
+  resetFromDate: Date;
+  onChangeResetFromDate: (date: Date) => void;
+  onResetFinancialData: () => void;
   onClose: () => void;
 }
 
@@ -68,9 +72,13 @@ export default function FinancialSettingsModal({
   isSaving,
   primaryLabel,
   onPrimaryAction,
+  resetFromDate,
+  onChangeResetFromDate,
+  onResetFinancialData,
   onClose,
 }: FinancialSettingsModalProps) {
   const isDark = colorScheme === 'dark';
+  const [showResetDatePicker, setShowResetDatePicker] = React.useState(false);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -187,6 +195,42 @@ export default function FinancialSettingsModal({
                     </Text>
                   </View>
                 )}
+              </View>
+
+              <View className="rounded-[12px] border border-red-200 dark:border-red-900/70 bg-red-50 dark:bg-red-950/20 p-4 mb-5">
+                <Text className="text-red-800 dark:text-red-200 font-bold text-sm">Reset financial data from a date</Text>
+                <Text className="text-red-700 dark:text-red-300 text-xs mt-1">
+                  Permanently removes financial history on this date and every date before it. Categories and automation stay.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowResetDatePicker(true)}
+                  disabled={isSaving}
+                  className="mt-3 px-3 py-3 rounded-xl bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900 flex-row justify-between items-center"
+                >
+                  <Text className="text-slate-900 dark:text-white font-semibold">
+                    {resetFromDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                  <Text className="text-red-600 dark:text-red-300 font-bold text-xs">Choose date</Text>
+                </TouchableOpacity>
+                {showResetDatePicker && (
+                  <DateTimePicker
+                    value={resetFromDate}
+                    mode="date"
+                    maximumDate={new Date()}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_event, date) => {
+                      setShowResetDatePicker(Platform.OS === 'ios');
+                      if (date) onChangeResetFromDate(date);
+                    }}
+                  />
+                )}
+                <TouchableOpacity
+                  onPress={onResetFinancialData}
+                  disabled={isSaving}
+                  className="mt-3 py-3 rounded-xl items-center bg-red-600"
+                >
+                  <Text className="text-white font-bold">Reset history through this date</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>

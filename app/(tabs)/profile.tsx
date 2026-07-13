@@ -14,6 +14,7 @@ import ProfileEditModal from '../../components/modals/ProfileEditModal';
 import { useAppLock } from '../../context/AppLockContext';
 import { useAuth } from '../../services/AuthContext';
 import { deleteCategory, getCategories, initDatabase } from '../../services/database';
+import { resetFinancialDataThroughDate } from '../../services/financialDataResetService';
 import { exportFinancialSpreadsheet, ExportPeriod } from '../../services/exportService';
 import {
     buildFreshStartConfig,
@@ -110,6 +111,7 @@ export default function ProfileScreen() {
     const [freshStartOptions, setFreshStartOptions] = useState(DEFAULT_FRESH_START_OPTIONS);
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
     const [isFinancialSettingsSaving, setIsFinancialSettingsSaving] = useState(false);
+    const [resetFromDate, setResetFromDate] = useState(new Date());
     const [isThemeSwitching, setIsThemeSwitching] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
     const [exportPeriodModalVisible, setExportPeriodModalVisible] = useState(false);
@@ -455,6 +457,34 @@ export default function ProfileScreen() {
         );
     };
 
+    const handleResetFinancialData = () => {
+        const label = resetFromDate.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+        Alert.alert(
+            'Reset financial data?',
+            `This permanently removes financial history on ${label} and all dates before it, including parsed SMS transactions. Categories, learned categorization, and automation rules stay for future use. This cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Reset data',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setIsFinancialSettingsSaving(true);
+                            const result = await resetFinancialDataThroughDate(resetFromDate);
+                            await loadSettings();
+                            Alert.alert('Financial history reset', `${result.transactionsRemoved} transaction${result.transactionsRemoved === 1 ? '' : 's'} removed through ${label}.`);
+                        } catch (error) {
+                            console.error('Failed to reset financial data:', error);
+                            Alert.alert('Reset failed', 'Your data was not fully reset. Please try again.');
+                        } finally {
+                            setIsFinancialSettingsSaving(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
     return (
         <Animated.ScrollView
             className="flex-1 app-screen"
@@ -661,6 +691,9 @@ export default function ProfileScreen() {
                 isSaving={isFinancialSettingsSaving}
                 primaryLabel={Object.values(freshStartOptions).some(Boolean) ? 'Start Fresh From This Month' : 'Recalculate'}
                 onPrimaryAction={handleStartFreshFromCurrentMonth}
+                resetFromDate={resetFromDate}
+                onChangeResetFromDate={setResetFromDate}
+                onResetFinancialData={handleResetFinancialData}
                 onClose={handleCloseFinancialMonthModal}
             />
 

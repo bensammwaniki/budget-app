@@ -78,6 +78,7 @@ export default function HomeScreen() {
   const [cashType, setCashType] = useState<'SENT' | 'RECEIVED'>('SENT');
   const [cashAmount, setCashAmount] = useState('');
   const [cashNote, setCashNote] = useState('');
+  const [cashDate, setCashDate] = useState(new Date());
   const [cashAccountId, setCashAccountId] = useState<'ACC-CASH-DEFAULT' | 'ACC-MPESA-DEFAULT'>('ACC-CASH-DEFAULT');
   const [cashIsRecurring, setCashIsRecurring] = useState(false);
   const [savingCashTx, setSavingCashTx] = useState(false);
@@ -235,6 +236,7 @@ export default function HomeScreen() {
     setCashType('SENT');
     setCashAmount('');
     setCashNote('');
+    setCashDate(new Date());
     setCashAccountId('ACC-CASH-DEFAULT');
     setCashIsRecurring(false);
   };
@@ -256,17 +258,6 @@ export default function HomeScreen() {
 
     setSavingCashTx(true);
     try {
-      await ledgerService.recordTransaction({
-        accountId: cashAccountId,
-        amount,
-        type: cashType,
-        kind: cashType === 'SENT' ? 'EXPENSE' : 'INCOME',
-        date: new Date(),
-        recipientName: recipient,
-        rawSms: `Manual ${accountLabel.toLowerCase()} ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
-        userId: 'local_user',
-      });
-
       if (cashIsRecurring) {
         await manualRecurringTransactionService.createTemplate({
           userId: 'local_user',
@@ -275,7 +266,19 @@ export default function HomeScreen() {
           type: cashType,
           recipientName: recipient,
           rawSms: `Manual ${accountLabel.toLowerCase()} ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
-          createdAt: new Date(),
+          createdAt: cashDate,
+        });
+        await manualRecurringTransactionService.runDueMonthlyTransactions();
+      } else {
+        await ledgerService.recordTransaction({
+          accountId: cashAccountId,
+          amount,
+          type: cashType,
+          kind: cashType === 'SENT' ? 'EXPENSE' : 'INCOME',
+          date: cashDate,
+          recipientName: recipient,
+          rawSms: `Manual ${accountLabel.toLowerCase()} ${cashType === 'SENT' ? 'expense' : 'income'} entry`,
+          userId: 'local_user',
         });
       }
 
@@ -283,7 +286,9 @@ export default function HomeScreen() {
       resetCashForm();
       showAlert({
         title: 'Saved',
-        message: `${accountLabel} transaction added successfully${cashIsRecurring ? ' with monthly recurring enabled.' : '.'}`,
+        message: cashIsRecurring
+          ? `${accountLabel} transaction saved and monthly entries were added through today.`
+          : `${accountLabel} transaction added successfully.`,
         type: 'success',
         buttons: [{ text: 'OK' }],
       });
@@ -916,11 +921,13 @@ export default function HomeScreen() {
         cashType={cashType}
         cashAmount={cashAmount}
         cashNote={cashNote}
+        cashDate={cashDate}
         cashAccountId={cashAccountId}
         isRecurring={cashIsRecurring}
         onChangeType={setCashType}
         onChangeAmount={setCashAmount}
         onChangeNote={setCashNote}
+        onChangeDate={setCashDate}
         onChangeAccountId={setCashAccountId}
         onChangeRecurring={setCashIsRecurring}
         onSave={handleSaveCashTransaction}

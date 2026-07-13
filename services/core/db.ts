@@ -400,6 +400,8 @@ async function performInitialization() {
                 raw_sms TEXT,
                 start_month TEXT NOT NULL,
                 last_generated_month TEXT NOT NULL,
+                start_date TEXT,
+                last_generated_date TEXT,
                 is_active INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -486,6 +488,16 @@ async function performInitialization() {
             await database.execAsync('ALTER TABLE income_logs ADD COLUMN sms_transaction_id TEXT');
         }
         await database.execAsync('CREATE INDEX IF NOT EXISTS idx_income_sources_sms_sender ON income_sources(sms_sender_id)');
+
+        const manualRecurringInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(manual_recurring_transactions)');
+        for (const column of [
+            { name: 'start_date', type: 'TEXT' },
+            { name: 'last_generated_date', type: 'TEXT' },
+        ]) {
+            if (!manualRecurringInfo.some((item) => item.name === column.name)) {
+                await database.execAsync(`ALTER TABLE manual_recurring_transactions ADD COLUMN ${column.name} ${column.type}`);
+            }
+        }
 
         const accountInfo = await database.getAllAsync<{ name: string }>('PRAGMA table_info(accounts)');
         const accountCols = accountInfo.map(c => c.name);

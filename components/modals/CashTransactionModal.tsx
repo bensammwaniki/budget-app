@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -21,11 +22,13 @@ interface CashTransactionModalProps {
   cashType: 'SENT' | 'RECEIVED';
   cashAmount: string;
   cashNote: string;
+  cashDate: Date;
   cashAccountId: 'ACC-CASH-DEFAULT' | 'ACC-MPESA-DEFAULT';
   isRecurring: boolean;
   onChangeType: (type: 'SENT' | 'RECEIVED') => void;
   onChangeAmount: (value: string) => void;
   onChangeNote: (value: string) => void;
+  onChangeDate: (value: Date) => void;
   onChangeAccountId: (accountId: 'ACC-CASH-DEFAULT' | 'ACC-MPESA-DEFAULT') => void;
   onChangeRecurring: (value: boolean) => void;
   onSave: () => void;
@@ -42,11 +45,13 @@ export default function CashTransactionModal({
   cashType,
   cashAmount,
   cashNote,
+  cashDate,
   cashAccountId,
   isRecurring,
   onChangeType,
   onChangeAmount,
   onChangeNote,
+  onChangeDate,
   onChangeAccountId,
   onChangeRecurring,
   onSave,
@@ -54,6 +59,8 @@ export default function CashTransactionModal({
   onClose,
   onCancel,
 }: CashTransactionModalProps) {
+  const [showDatePicker, setShowDatePicker] = React.useState(false);
+
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={() => !saving && onClose()}>
       <KeyboardAvoidingView
@@ -170,6 +177,32 @@ export default function CashTransactionModal({
 
               </View>
 
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                className="flex-row items-center justify-between rounded-xl px-4 py-3 mb-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+              >
+                <View>
+                  <Text className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-bold">Transaction date</Text>
+                  <Text className="text-slate-900 dark:text-white font-bold mt-0.5">
+                    {cashDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+                <Text className="text-blue-600 dark:text-blue-300 font-bold text-sm">Change</Text>
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={cashDate}
+                  mode="date"
+                  maximumDate={new Date()}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(_event, selectedDate) => {
+                    setShowDatePicker(Platform.OS === 'ios');
+                    if (selectedDate) onChangeDate(selectedDate);
+                  }}
+                />
+              )}
+
               <Text className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold mb-2">Amount (KES)</Text>
               <View className="h-12 rounded-xl px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 justify-center mb-4">
                 <TextInput
@@ -196,8 +229,12 @@ export default function CashTransactionModal({
               <View className="rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-5">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 pr-3">
-                    <Text className="text-slate-900 dark:text-white font-bold text-sm">Recurring Monthly</Text>
-                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">Auto-create this transaction on day 1 of each new month.</Text>
+                    <Text className="text-slate-900 dark:text-white font-bold text-sm">Repeat monthly</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                      {isRecurring
+                        ? `Adds each month on the ${cashDate.getDate()}${cashDate.getDate() === 1 ? 'st' : cashDate.getDate() === 2 ? 'nd' : cashDate.getDate() === 3 ? 'rd' : 'th'}, from this date through today.`
+                        : 'Save this as a one-time transaction.'}
+                    </Text>
                   </View>
                   <Switch
                     value={isRecurring}

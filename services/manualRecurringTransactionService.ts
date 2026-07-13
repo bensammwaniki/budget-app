@@ -10,6 +10,7 @@ export interface ManualRecurringTransactionTemplate {
   amount: number;
   recipientName: string;
   rawSms: string;
+  startDate: string | null;
   startMonth: string;
   lastGeneratedMonth: string;
   isActive: boolean;
@@ -24,7 +25,7 @@ interface CreateManualRecurringTransactionPayload {
   amount: number;
   recipientName: string;
   rawSms: string;
-  createdAt?: Date;
+  createdAt: Date;
 }
 
 interface UpdateManualRecurringTransactionPayload {
@@ -72,6 +73,7 @@ const mapRowToTemplate = (row: any): ManualRecurringTransactionTemplate => ({
   amount: Number(row.amount) || 0,
   recipientName: row.recipient_name,
   rawSms: row.raw_sms || '',
+  startDate: row.start_date || null,
   startMonth: row.start_month,
   lastGeneratedMonth: row.last_generated_month,
   isActive: row.is_active === 1,
@@ -107,7 +109,7 @@ export const manualRecurringTransactionService = {
     await initDatabase();
     const db = getDb();
 
-    const now = payload.createdAt || new Date();
+    const now = payload.createdAt;
     const nowIso = now.toISOString();
     const monthKey = toMonthKey(now);
     const id = generateUUID();
@@ -115,8 +117,8 @@ export const manualRecurringTransactionService = {
     await db.runAsync(
       `INSERT INTO manual_recurring_transactions (
         id, user_id, account_id, type, amount, recipient_name, raw_sms,
-        start_month, last_generated_month, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        start_month, last_generated_month, start_date, last_generated_date, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         id,
         payload.userId || 'local_user',
@@ -126,7 +128,9 @@ export const manualRecurringTransactionService = {
         payload.recipientName,
         payload.rawSms,
         monthKey,
-        monthKey,
+        '',
+        nowIso,
+        null,
         nowIso,
         nowIso,
       ]
@@ -142,8 +146,9 @@ export const manualRecurringTransactionService = {
       amount: payload.amount,
       recipientName: payload.recipientName,
       rawSms: payload.rawSms,
+      startDate: nowIso,
       startMonth: monthKey,
-      lastGeneratedMonth: monthKey,
+      lastGeneratedMonth: '',
       isActive: true,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -240,8 +245,7 @@ export const manualRecurringTransactionService = {
     const db = getDb();
 
     const nowIso = new Date().toISOString();
-    const currentMonthKey = toMonthKey(referenceDate);
-
+    const throughDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate(), 23, 59, 59, 999);
     const templates = await db.getAllAsync<any>(
       `SELECT * FROM manual_recurring_transactions
        WHERE is_active = 1`
@@ -250,13 +254,27 @@ export const manualRecurringTransactionService = {
     let createdCount = 0;
 
     for (const template of templates) {
-      const lastMonthDate = fromMonthKeyToDate(template.last_generated_month);
-      if (!lastMonthDate) continue;
+      const startDate = template.start_date
+        ? new Date(template.start_date)
+        : (() => {
+            const previousMonth = fromMonthKeyToDate(template.last_generated_month);
+            return previousMonth ? addMonths(previousMonth, 1) : null;
+          })();
+      if (!startDate || Number.isNaN(startDate.getTime())) continue;
 
-      let nextMonthDate = addMonths(lastMonthDate, 1);
+      const lastGeneratedDate = template.last_generated_date ? new Date(template.last_generated_date) : null;
+      let candidate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 12, 0, 0, 0);
+      const anchorDay = startDate.getDate();
 
-      while (toMonthKey(nextMonthDate) <= currentMonthKey) {
-        const monthKey = toMonthKey(nextMonthDate);
+      while (lastGeneratedDate && candidate <= lastGeneratedDate) {
+        const nextMonth = candidate.getMonth() + 1;
+        const nextYear = candidate.getFullYear() + Math.floor(nextMonth / 12);
+        const normalizedMonth = nextMonth % 12;
+        candidate = new Date(nextYear, normalizedMonth, Math.min(anchorDay, new Date(nextYear, normalizedMonth + 1, 0).getDate()), 12, 0, 0, 0);
+      }
+
+      while (candidate <= throughDate) {
+        const monthKey = toMonthKey(candidate);
         const recurringRef = `MREC:${template.id}:${monthKey}`;
 
         const existing = await db.getFirstAsync<{ count: number }>(
@@ -270,7 +288,7 @@ export const manualRecurringTransactionService = {
             amount: Math.abs(Number(template.amount) || 0),
             type: template.type,
             kind: toKind(template.type),
-            date: new Date(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), 1, 0, 0, 0, 0),
+            date: candidate,
             recipientName: template.recipient_name,
             rawSms: `${template.raw_sms} (Auto recurring)`,
             userId: template.user_id || 'local_user',
@@ -279,14 +297,20 @@ export const manualRecurringTransactionService = {
           createdCount += 1;
         }
 
-        await db.runAsync(
+        if (!lastGeneratedDate || candidate > lastGeneratedDate) {
+          await db.runAsync(
           `UPDATE manual_recurring_transactions
-           SET last_generated_month = ?, updated_at = ?
+           SET last_generated_month = ?, last_generated_date = ?, updated_at = ?
            WHERE id = ?`,
-          [monthKey, nowIso, template.id]
-        );
+            [monthKey, candidate.toISOString(), nowIso, template.id]
+          );
+        }
 
-        nextMonthDate = addMonths(nextMonthDate, 1);
+        const nextMonth = candidate.getMonth() + 1;
+        const nextYear = candidate.getFullYear() + Math.floor(nextMonth / 12);
+        const normalizedMonth = nextMonth % 12;
+        const daysInMonth = new Date(nextYear, normalizedMonth + 1, 0).getDate();
+        candidate = new Date(nextYear, normalizedMonth, Math.min(anchorDay, daysInMonth), 12, 0, 0, 0);
       }
     }
 
