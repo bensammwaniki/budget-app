@@ -1,12 +1,17 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Slot, Stack, useRouter, useSegments } from "expo-router";
 import "../global.css";
 
 import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  View,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import CustomAlert from "../components/CustomAlert";
 import AppLockScreen from "../components/AppLockScreen";
+import CustomAlert from "../components/CustomAlert";
 import { PermissionGuard } from "../components/PermissionGuard";
 import { AlertProvider } from "../context/AlertContext";
 import { AppLockProvider, useAppLock } from "../context/AppLockContext";
@@ -71,6 +76,7 @@ function RootLayoutContent() {
               }}
             />
           </Stack>
+          <Slot />
         </View>
       </ScrollProvider>
     </PermissionGuard>
@@ -95,7 +101,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initDatabase()
-      .catch(err => console.error("DB init failed:", err))
+      .catch((err) => console.error("DB init failed:", err))
       .finally(() => setDbLoading(false));
   }, []);
 
@@ -104,7 +110,7 @@ export default function RootLayout() {
       <AuthProvider>
         <AlertProvider>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={{ flex: 1 }}
           >
             <LockAwareTree />
