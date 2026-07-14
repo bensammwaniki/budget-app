@@ -179,14 +179,39 @@ export const isInternalTransfer = (
   const userPhone = normalizePhoneForComparison(options?.userPhoneNumber);
   const recipientPhone = normalizePhoneForComparison(transaction.recipientId);
 
-  if (
-    transaction.transactionKind === "TRANSFER" ||
-    transaction.transactionKind === "SAVINGS_TRANSFER"
-  ) {
+  const hasTransferLabel =
+    rawSms.includes("internal transfer:") ||
+    rawSms.includes("mpesa-bank transfer") ||
+    rawSms.includes("bank to m-pesa transfer") ||
+    rawSms.includes("bank to mpesa transfer") ||
+    recipientName.includes("mpesa-bank transfer") ||
+    recipientName.includes("bank to m-pesa transfer") ||
+    recipientName.includes("bank to mpesa transfer");
+
+  if (hasTransferLabel) {
     return true;
   }
 
+  const isTransferKind =
+    transaction.transactionKind === "TRANSFER" ||
+    transaction.transactionKind === "SAVINGS_TRANSFER";
+
+  if (isTransferKind) {
+    const looksLikeInternalTransfer =
+      recipientId === "self" ||
+      recipientName.startsWith("transfer to ") ||
+      recipientName.startsWith("transfer from ");
+
+    if (looksLikeInternalTransfer) {
+      return true;
+    }
+  }
+
   if (transaction.id.startsWith("IM_TRANSFER_")) {
+    return true;
+  }
+
+  if (transaction.id.startsWith("IM_") && isTransferKind) {
     return true;
   }
 
@@ -199,21 +224,6 @@ export const isInternalTransfer = (
     userPhone &&
     recipientPhone &&
     recipientPhone === userPhone
-  ) {
-    return true;
-  }
-
-  if (
-    rawSms.includes("internal transfer:") ||
-    rawSms.includes("bank to m-pesa transfer") ||
-    rawSms.includes("bank to mpesa transfer")
-  ) {
-    return true;
-  }
-
-  if (
-    recipientName.startsWith("transfer to ") ||
-    recipientName.startsWith("transfer from ")
   ) {
     return true;
   }

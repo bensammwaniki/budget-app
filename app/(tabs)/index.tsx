@@ -544,7 +544,19 @@ export default function HomeScreen() {
       const isCashflow = isCashflowTransaction(t, {
         userPhoneNumber: phoneNumber,
       });
-      if (!isCashflow) return;
+      const isExplicitTransfer =
+        isInternalTransfer(t, {
+          userPhoneNumber: phoneNumber,
+        }) ||
+        t.transactionKind === "TRANSFER" ||
+        t.transactionKind === "SAVINGS_TRANSFER" ||
+        t.id.startsWith("IM_TRANSFER_") ||
+        /internal transfer:/i.test(t.rawSms || "") ||
+        /mpesa-bank transfer/i.test(t.rawSms || "") ||
+        /bank to m-pesa transfer/i.test(t.rawSms || "") ||
+        /bank to mpesa transfer/i.test(t.rawSms || "");
+
+      if (!isCashflow || isExplicitTransfer) return;
 
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
@@ -591,13 +603,16 @@ export default function HomeScreen() {
 
   const handleTransactionPress = (tx: Transaction) => {
     if (modalVisible) return;
-    // Fuliza transactions are automated and should not be manually categorized
+
     const isFuliza =
       tx.recipientId === "FULIZA_REPAYMENT" ||
       tx.id?.startsWith("FULIZA-FEES-") ||
       tx.categoryId === 12;
 
     if (isFuliza) return;
+
+    const isTransfer = isInternalTransfer(tx, { userPhoneNumber: phoneNumber });
+    if (isTransfer) return;
 
     setSelectedTransaction(tx);
     setModalVisible(true);

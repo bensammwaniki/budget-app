@@ -2,6 +2,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Image as ExpoImage } from "expo-image";
 import React from "react";
 import {
+    ActivityIndicator,
     Modal,
     Platform,
     ScrollView,
@@ -71,6 +72,8 @@ interface FinancialSettingsModalProps {
   resetFromDate: Date;
   onChangeResetFromDate: (date: Date) => void;
   onResetFinancialData: () => void;
+  onSyncSms: () => Promise<void> | void;
+  isSyncingSms?: boolean;
   onClose: () => void;
 }
 
@@ -88,6 +91,8 @@ export default function FinancialSettingsModal({
   resetFromDate,
   onChangeResetFromDate,
   onResetFinancialData,
+  onSyncSms,
+  isSyncingSms = false,
   onClose,
 }: FinancialSettingsModalProps) {
   const isDark = colorScheme === "dark";
@@ -227,6 +232,32 @@ export default function FinancialSettingsModal({
                       </Text>
                     </View>
                   )}
+              </View>
+
+              <View className="rounded-[12px] border border-blue-200 dark:border-blue-900/70 bg-blue-50 dark:bg-blue-950/20 p-4 mb-5">
+                <Text className="text-blue-800 dark:text-blue-200 font-bold text-sm">
+                  Sync SMS history
+                </Text>
+                <Text className="text-blue-700 dark:text-blue-300 text-xs mt-1">
+                  Re-parse your M-PESA and bank SMS messages to refresh the
+                  transaction history.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => onSyncSms()}
+                  disabled={isSaving || isSyncingSms}
+                  className="mt-3 py-3 rounded-xl items-center bg-blue-600"
+                >
+                  {isSyncingSms ? (
+                    <View className="flex-row items-center">
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text className="text-white font-bold ml-2">
+                        Syncing…
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text className="text-white font-bold">Sync all SMS</Text>
+                  )}
+                </TouchableOpacity>
               </View>
 
               <View className="rounded-[12px] border border-red-200 dark:border-red-900/70 bg-red-50 dark:bg-red-950/20 p-4 mb-5">

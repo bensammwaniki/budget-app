@@ -1,6 +1,7 @@
 import { FontAwesome } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { isInternalTransfer } from "../services/financialSettingsService";
 import { Transaction } from "../types/transaction";
 
 interface TransactionItemProps {
@@ -33,16 +34,26 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
           ? "BANK"
           : undefined);
   const isBankTransaction = accountType === "BANK" || tx.id.startsWith("IM_");
-  const sourceLabel =
-    accountType === "BANK"
+  const isTransfer = isInternalTransfer(tx);
+  const isBankTransferLike =
+    !isTransfer &&
+    (tx.transactionKind === "TRANSFER" ||
+      tx.transactionKind === "SAVINGS_TRANSFER" ||
+      tx.id.startsWith("IM_TRANSFER_") ||
+      /transfer/i.test(tx.rawSms || "") ||
+      /transfer/i.test(tx.recipientName || ""));
+  const sourceLabel = isBankTransferLike
+    ? "MPESA-BANK TRANSFER"
+    : accountType === "BANK"
       ? (tx.accountName || "BANK").toUpperCase()
       : accountType === "CASH"
         ? "CASH"
         : accountType === "DEBT"
           ? "DEBT"
           : "M-PESA";
-  const sourceTextClass =
-    accountType === "BANK"
+  const sourceTextClass = isBankTransferLike
+    ? "text-violet-700 dark:text-violet-400"
+    : accountType === "BANK"
       ? "text-blue-700 dark:text-blue-400"
       : accountType === "CASH"
         ? "text-amber-700 dark:text-amber-400"
@@ -57,9 +68,11 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     >
       <View
         className={`w-10 h-10 rounded-full items-center justify-center mr-3 border ${
-          accountType === "BANK"
-            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-            : "bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700"
+          isBankTransferLike
+            ? "bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800"
+            : accountType === "BANK"
+              ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+              : "bg-gray-50 dark:bg-[#0f172a] border-gray-100 dark:border-slate-700"
         }`}
       >
         <FontAwesome
@@ -74,11 +87,13 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
           size={16}
           color={
             tx.categoryColor ||
-            (accountType === "BANK"
-              ? "#2563eb"
-              : tx.type === "RECEIVED"
-                ? "#4ade80"
-                : "#94a3b8")
+            (isBankTransferLike
+              ? "#7c3aed"
+              : accountType === "BANK"
+                ? "#2563eb"
+                : tx.type === "RECEIVED"
+                  ? "#4ade80"
+                  : "#94a3b8")
           }
         />
       </View>

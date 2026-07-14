@@ -419,6 +419,18 @@ export const saveTransaction = async (
         ? "Imported SMS transaction - M-PESA balance reported"
         : "Imported SMS transaction";
 
+  const normalizedTransactionKind =
+    transaction.transactionKind === "TRANSFER" ||
+    transaction.transactionKind === "SAVINGS_TRANSFER" ||
+    transaction.id?.startsWith("IM_TRANSFER_") ||
+    /internal transfer:/i.test(transaction.rawSms || "") ||
+    /mpesa-bank transfer/i.test(transaction.rawSms || "") ||
+    /bank to m-pesa transfer/i.test(transaction.rawSms || "") ||
+    /bank to mpesa transfer/i.test(transaction.rawSms || "")
+      ? "TRANSFER"
+      : transaction.transactionKind ||
+        (transaction.type === "SENT" ? "EXPENSE" : "INCOME");
+
   await database.runAsync(
     `INSERT OR REPLACE INTO transactions 
         (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, reference_id, created_at, updated_at, is_deleted) 
@@ -431,8 +443,7 @@ export const saveTransaction = async (
       transaction.categoryId ?? null,
       transaction.amount,
       transaction.type,
-      transaction.transactionKind ||
-        (transaction.type === "SENT" ? "EXPENSE" : "INCOME"),
+      normalizedTransactionKind,
       transaction.recipientId ?? null,
       transaction.recipientName ?? null,
       transaction.date.toISOString(),
@@ -591,7 +602,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
   );
 
   const daily = await database.getFirstAsync<{ total: number }>(
-    "SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND is_deleted = 0",
+    `SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' AND is_deleted = 0`,
     [startOfDay],
   );
 
@@ -603,8 +614,8 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
   }>(
     `
         SELECT 
-            SUM(CASE WHEN type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') THEN amount ELSE 0 END) as totalSpent,
-            SUM(CASE WHEN type = 'RECEIVED' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' THEN amount ELSE 0 END) as totalSpent,
+            SUM(CASE WHEN type = 'RECEIVED' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' THEN amount ELSE 0 END) as income,
             SUM(transaction_cost) as costs,
             COUNT(*) as count
         FROM transactions 
