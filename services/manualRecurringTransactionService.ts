@@ -1,12 +1,12 @@
-import { generateUUID } from '../utils/uuid';
-import { getDb, initDatabase, notifyListeners } from './core/db';
-import { ledgerService } from './ledgerService';
+import { generateUUID } from "../utils/uuid";
+import { getDb, initDatabase, notifyListeners } from "./core/db";
+import { ledgerService } from "./ledgerService";
 
 export interface ManualRecurringTransactionTemplate {
   id: string;
   userId: string;
   accountId: string;
-  type: 'SENT' | 'RECEIVED';
+  type: "SENT" | "RECEIVED";
   amount: number;
   recipientName: string;
   rawSms: string;
@@ -21,7 +21,7 @@ export interface ManualRecurringTransactionTemplate {
 interface CreateManualRecurringTransactionPayload {
   userId?: string;
   accountId: string;
-  type: 'SENT' | 'RECEIVED';
+  type: "SENT" | "RECEIVED";
   amount: number;
   recipientName: string;
   rawSms: string;
@@ -30,7 +30,7 @@ interface CreateManualRecurringTransactionPayload {
 
 interface UpdateManualRecurringTransactionPayload {
   accountId?: string;
-  type?: 'SENT' | 'RECEIVED';
+  type?: "SENT" | "RECEIVED";
   amount?: number;
   recipientName?: string;
   rawSms?: string;
@@ -44,16 +44,21 @@ export interface ManualRecurringRunInfo {
 
 const toMonthKey = (date: Date): string => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
 };
 
 const fromMonthKeyToDate = (monthKey: string): Date | null => {
-  const parts = monthKey.split('-');
+  const parts = monthKey.split("-");
   if (parts.length !== 2) return null;
   const year = Number(parts[0]);
   const monthIndex = Number(parts[1]) - 1;
-  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(monthIndex) ||
+    monthIndex < 0 ||
+    monthIndex > 11
+  ) {
     return null;
   }
   return new Date(year, monthIndex, 1, 0, 0, 0, 0);
@@ -63,7 +68,8 @@ const addMonths = (date: Date, months: number): Date => {
   return new Date(date.getFullYear(), date.getMonth() + months, 1, 0, 0, 0, 0);
 };
 
-const toKind = (type: 'SENT' | 'RECEIVED') => (type === 'SENT' ? 'EXPENSE' : 'INCOME');
+const toKind = (type: "SENT" | "RECEIVED") =>
+  type === "SENT" ? "EXPENSE" : "INCOME";
 
 const mapRowToTemplate = (row: any): ManualRecurringTransactionTemplate => ({
   id: row.id,
@@ -72,7 +78,7 @@ const mapRowToTemplate = (row: any): ManualRecurringTransactionTemplate => ({
   type: row.type,
   amount: Number(row.amount) || 0,
   recipientName: row.recipient_name,
-  rawSms: row.raw_sms || '',
+  rawSms: row.raw_sms || "",
   startDate: row.start_date || null,
   startMonth: row.start_month,
   lastGeneratedMonth: row.last_generated_month,
@@ -82,30 +88,36 @@ const mapRowToTemplate = (row: any): ManualRecurringTransactionTemplate => ({
 });
 
 export const manualRecurringTransactionService = {
-  async getTemplates(userId: string = 'local_user'): Promise<ManualRecurringTransactionTemplate[]> {
+  async getTemplates(
+    userId: string = "local_user",
+  ): Promise<ManualRecurringTransactionTemplate[]> {
     await initDatabase();
     const db = getDb();
     const rows = await db.getAllAsync<any>(
       `SELECT * FROM manual_recurring_transactions
        WHERE user_id = ?
        ORDER BY created_at DESC`,
-      [userId]
+      [userId],
     );
 
     return rows.map(mapRowToTemplate);
   },
 
-  async getTemplateById(id: string): Promise<ManualRecurringTransactionTemplate | null> {
+  async getTemplateById(
+    id: string,
+  ): Promise<ManualRecurringTransactionTemplate | null> {
     await initDatabase();
     const db = getDb();
     const row = await db.getFirstAsync<any>(
-      'SELECT * FROM manual_recurring_transactions WHERE id = ? LIMIT 1',
-      [id]
+      "SELECT * FROM manual_recurring_transactions WHERE id = ? LIMIT 1",
+      [id],
     );
     return row ? mapRowToTemplate(row) : null;
   },
 
-  async createTemplate(payload: CreateManualRecurringTransactionPayload): Promise<ManualRecurringTransactionTemplate> {
+  async createTemplate(
+    payload: CreateManualRecurringTransactionPayload,
+  ): Promise<ManualRecurringTransactionTemplate> {
     await initDatabase();
     const db = getDb();
 
@@ -118,29 +130,29 @@ export const manualRecurringTransactionService = {
       `INSERT INTO manual_recurring_transactions (
         id, user_id, account_id, type, amount, recipient_name, raw_sms,
         start_month, last_generated_month, start_date, last_generated_date, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         id,
-        payload.userId || 'local_user',
+        payload.userId || "local_user",
         payload.accountId,
         payload.type,
         payload.amount,
         payload.recipientName,
         payload.rawSms,
         monthKey,
-        '',
+        "",
         nowIso,
         null,
         nowIso,
         nowIso,
-      ]
+      ],
     );
 
-    notifyListeners('TRANSACTIONS');
+    notifyListeners("TRANSACTIONS");
 
     return {
       id,
-      userId: payload.userId || 'local_user',
+      userId: payload.userId || "local_user",
       accountId: payload.accountId,
       type: payload.type,
       amount: payload.amount,
@@ -148,14 +160,17 @@ export const manualRecurringTransactionService = {
       rawSms: payload.rawSms,
       startDate: nowIso,
       startMonth: monthKey,
-      lastGeneratedMonth: '',
+      lastGeneratedMonth: "",
       isActive: true,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
   },
 
-  async updateTemplate(id: string, updates: UpdateManualRecurringTransactionPayload): Promise<void> {
+  async updateTemplate(
+    id: string,
+    updates: UpdateManualRecurringTransactionPayload,
+  ): Promise<void> {
     await initDatabase();
     const db = getDb();
     const now = new Date().toISOString();
@@ -164,43 +179,43 @@ export const manualRecurringTransactionService = {
     const values: any[] = [];
 
     if (updates.accountId !== undefined) {
-      sets.push('account_id = ?');
+      sets.push("account_id = ?");
       values.push(updates.accountId);
     }
     if (updates.type !== undefined) {
-      sets.push('type = ?');
+      sets.push("type = ?");
       values.push(updates.type);
     }
     if (updates.amount !== undefined) {
-      sets.push('amount = ?');
+      sets.push("amount = ?");
       values.push(Math.abs(Number(updates.amount) || 0));
     }
     if (updates.recipientName !== undefined) {
-      sets.push('recipient_name = ?');
+      sets.push("recipient_name = ?");
       values.push(updates.recipientName);
     }
     if (updates.rawSms !== undefined) {
-      sets.push('raw_sms = ?');
+      sets.push("raw_sms = ?");
       values.push(updates.rawSms);
     }
     if (updates.isActive !== undefined) {
-      sets.push('is_active = ?');
+      sets.push("is_active = ?");
       values.push(updates.isActive ? 1 : 0);
     }
 
     if (sets.length === 0) return;
 
-    sets.push('updated_at = ?');
+    sets.push("updated_at = ?");
     values.push(now, id);
 
     await db.runAsync(
       `UPDATE manual_recurring_transactions
-       SET ${sets.join(', ')}
+       SET ${sets.join(", ")}
        WHERE id = ?`,
-      values
+      values,
     );
 
-    notifyListeners('TRANSACTIONS');
+    notifyListeners("TRANSACTIONS");
   },
 
   async setTemplateActive(id: string, isActive: boolean): Promise<void> {
@@ -210,11 +225,16 @@ export const manualRecurringTransactionService = {
   async deleteTemplate(id: string): Promise<void> {
     await initDatabase();
     const db = getDb();
-    await db.runAsync('DELETE FROM manual_recurring_transactions WHERE id = ?', [id]);
-    notifyListeners('TRANSACTIONS');
+    await db.runAsync(
+      "DELETE FROM manual_recurring_transactions WHERE id = ?",
+      [id],
+    );
+    notifyListeners("TRANSACTIONS");
   },
 
-  async getTemplateRunInfo(template: ManualRecurringTransactionTemplate): Promise<ManualRecurringRunInfo> {
+  async getTemplateRunInfo(
+    template: ManualRecurringTransactionTemplate,
+  ): Promise<ManualRecurringRunInfo> {
     await initDatabase();
     const db = getDb();
 
@@ -225,7 +245,7 @@ export const manualRecurringTransactionService = {
          AND is_deleted = 0
        ORDER BY date DESC
        LIMIT 1`,
-      [`MREC:${template.id}:%`]
+      [`MREC:${template.id}:%`],
     );
 
     const lastMonthDate = fromMonthKeyToDate(template.lastGeneratedMonth);
@@ -240,15 +260,25 @@ export const manualRecurringTransactionService = {
     };
   },
 
-  async runDueMonthlyTransactions(referenceDate: Date = new Date()): Promise<number> {
+  async runDueMonthlyTransactions(
+    referenceDate: Date = new Date(),
+  ): Promise<number> {
     await initDatabase();
     const db = getDb();
 
     const nowIso = new Date().toISOString();
-    const throughDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate(), 23, 59, 59, 999);
+    const throughDate = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth(),
+      referenceDate.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
     const templates = await db.getAllAsync<any>(
       `SELECT * FROM manual_recurring_transactions
-       WHERE is_active = 1`
+       WHERE is_active = 1`,
     );
 
     let createdCount = 0;
@@ -257,20 +287,43 @@ export const manualRecurringTransactionService = {
       const startDate = template.start_date
         ? new Date(template.start_date)
         : (() => {
-            const previousMonth = fromMonthKeyToDate(template.last_generated_month);
+            const previousMonth = fromMonthKeyToDate(
+              template.last_generated_month,
+            );
             return previousMonth ? addMonths(previousMonth, 1) : null;
           })();
       if (!startDate || Number.isNaN(startDate.getTime())) continue;
 
-      const lastGeneratedDate = template.last_generated_date ? new Date(template.last_generated_date) : null;
-      let candidate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 12, 0, 0, 0);
+      const lastGeneratedDate = template.last_generated_date
+        ? new Date(template.last_generated_date)
+        : null;
+      let candidate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        12,
+        0,
+        0,
+        0,
+      );
       const anchorDay = startDate.getDate();
 
       while (lastGeneratedDate && candidate <= lastGeneratedDate) {
         const nextMonth = candidate.getMonth() + 1;
         const nextYear = candidate.getFullYear() + Math.floor(nextMonth / 12);
         const normalizedMonth = nextMonth % 12;
-        candidate = new Date(nextYear, normalizedMonth, Math.min(anchorDay, new Date(nextYear, normalizedMonth + 1, 0).getDate()), 12, 0, 0, 0);
+        candidate = new Date(
+          nextYear,
+          normalizedMonth,
+          Math.min(
+            anchorDay,
+            new Date(nextYear, normalizedMonth + 1, 0).getDate(),
+          ),
+          12,
+          0,
+          0,
+          0,
+        );
       }
 
       while (candidate <= throughDate) {
@@ -278,8 +331,8 @@ export const manualRecurringTransactionService = {
         const recurringRef = `MREC:${template.id}:${monthKey}`;
 
         const existing = await db.getFirstAsync<{ count: number }>(
-          'SELECT COUNT(*) as count FROM transactions WHERE reference_id = ?',
-          [recurringRef]
+          "SELECT COUNT(*) as count FROM transactions WHERE reference_id = ?",
+          [recurringRef],
         );
 
         if (!existing || existing.count === 0) {
@@ -291,7 +344,7 @@ export const manualRecurringTransactionService = {
             date: candidate,
             recipientName: template.recipient_name,
             rawSms: `${template.raw_sms} (Auto recurring)`,
-            userId: template.user_id || 'local_user',
+            userId: template.user_id || "local_user",
             referenceId: recurringRef,
           });
           createdCount += 1;
@@ -299,23 +352,35 @@ export const manualRecurringTransactionService = {
 
         if (!lastGeneratedDate || candidate > lastGeneratedDate) {
           await db.runAsync(
-          `UPDATE manual_recurring_transactions
+            `UPDATE manual_recurring_transactions
            SET last_generated_month = ?, last_generated_date = ?, updated_at = ?
            WHERE id = ?`,
-            [monthKey, candidate.toISOString(), nowIso, template.id]
+            [monthKey, candidate.toISOString(), nowIso, template.id],
           );
         }
 
         const nextMonth = candidate.getMonth() + 1;
         const nextYear = candidate.getFullYear() + Math.floor(nextMonth / 12);
         const normalizedMonth = nextMonth % 12;
-        const daysInMonth = new Date(nextYear, normalizedMonth + 1, 0).getDate();
-        candidate = new Date(nextYear, normalizedMonth, Math.min(anchorDay, daysInMonth), 12, 0, 0, 0);
+        const daysInMonth = new Date(
+          nextYear,
+          normalizedMonth + 1,
+          0,
+        ).getDate();
+        candidate = new Date(
+          nextYear,
+          normalizedMonth,
+          Math.min(anchorDay, daysInMonth),
+          12,
+          0,
+          0,
+          0,
+        );
       }
     }
 
     if (createdCount > 0) {
-      notifyListeners('TRANSACTIONS');
+      notifyListeners("TRANSACTIONS");
     }
 
     return createdCount;

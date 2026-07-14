@@ -75,8 +75,8 @@ function RootLayoutContent() {
                 gestureEnabled: true,
               }}
             />
+            <Slot />
           </Stack>
-          <Slot />
         </View>
       </ScrollProvider>
     </PermissionGuard>
