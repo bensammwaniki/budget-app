@@ -99,7 +99,7 @@ export default function HomeScreen() {
   const [cashNote, setCashNote] = useState("");
   const [cashDate, setCashDate] = useState(new Date());
   const [cashAccountId, setCashAccountId] = useState<
-    "ACC-CASH-DEFAULT" | "ACC-MPESA-DEFAULT"
+    "ACC-CASH-DEFAULT" | "ACC-MPESA-DEFAULT" | "ACC-BANK-DEFAULT"
   >("ACC-CASH-DEFAULT");
   const [cashIsRecurring, setCashIsRecurring] = useState(false);
   const [savingCashTx, setSavingCashTx] = useState(false);
@@ -291,7 +291,11 @@ export default function HomeScreen() {
     }
 
     const accountLabel =
-      cashAccountId === "ACC-MPESA-DEFAULT" ? "M-PESA" : "Cash";
+      cashAccountId === "ACC-MPESA-DEFAULT"
+        ? "M-PESA"
+        : cashAccountId === "ACC-BANK-DEFAULT"
+          ? "Bank"
+          : "Cash";
     const recipient =
       cashNote.trim() ||
       (cashType === "SENT"
@@ -537,13 +541,17 @@ export default function HomeScreen() {
     let cost = 0;
 
     filteredTransactions.forEach((t: Transaction) => {
-      if (!isCashflowTransaction(t, { userPhoneNumber: phoneNumber })) return;
+      const isCashflow = isCashflowTransaction(t, {
+        userPhoneNumber: phoneNumber,
+      });
+      if (!isCashflow) return;
+
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
 
       if (t.type === "RECEIVED") {
         income += amount;
-      } else {
+      } else if (t.type === "SENT") {
         expense += amount;
       }
       cost += fee;

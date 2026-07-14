@@ -61,23 +61,19 @@ function RootLayoutContent() {
   return (
     <PermissionGuard>
       <ScrollProvider>
-        <View
-          style={{ flex: 1 }}
-          className="app-screen"
-          onTouchStart={recordActivity}
-        >
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen
-              name="debt/add"
-              options={{
-                presentation: "modal",
-                animation: "slide_from_bottom",
-                gestureEnabled: true,
-              }}
-            />
-            <Slot />
-          </Stack>
-        </View>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="debt/add"
+            options={{
+              presentation: "modal",
+              animation: "slide_from_bottom",
+              gestureEnabled: true,
+            }}
+          />
+          <Slot />
+        </Stack>
       </ScrollProvider>
     </PermissionGuard>
   );
