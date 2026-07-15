@@ -33,17 +33,12 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         : tx.accountId === "ACC-BANK-DEFAULT"
           ? "BANK"
           : undefined);
-  const isBankTransaction = accountType === "BANK" || tx.id.startsWith("IM_");
   const isTransfer = isInternalTransfer(tx);
-  const isBankTransferLike =
-    !isTransfer &&
-    (tx.transactionKind === "TRANSFER" ||
-      tx.transactionKind === "SAVINGS_TRANSFER" ||
-      tx.id.startsWith("IM_TRANSFER_") ||
-      /transfer/i.test(tx.rawSms || "") ||
-      /transfer/i.test(tx.recipientName || ""));
-  const sourceLabel = isBankTransferLike
-    ? "MPESA-BANK TRANSFER"
+  // Purple is reserved for a persisted internal movement. A normal bank
+  // expense must keep the standard blue bank appearance.
+  const isBankMpesaTransfer = isTransfer;
+  const sourceLabel = isBankMpesaTransfer
+    ? "BANK M-PESA TRANSFER"
     : accountType === "BANK"
       ? (tx.accountName || "BANK").toUpperCase()
       : accountType === "CASH"
@@ -51,7 +46,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         : accountType === "DEBT"
           ? "DEBT"
           : "M-PESA";
-  const sourceTextClass = isBankTransferLike
+  const sourceTextClass = isBankMpesaTransfer
     ? "text-violet-700 dark:text-violet-400"
     : accountType === "BANK"
       ? "text-blue-700 dark:text-blue-400"
@@ -68,7 +63,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     >
       <View
         className={`w-10 h-10 rounded-full items-center justify-center mr-3 border ${
-          isBankTransferLike
+          isBankMpesaTransfer
             ? "bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800"
             : accountType === "BANK"
               ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
@@ -87,7 +82,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
           size={16}
           color={
             tx.categoryColor ||
-            (isBankTransferLike
+            (isBankMpesaTransfer
               ? "#7c3aed"
               : accountType === "BANK"
                 ? "#2563eb"

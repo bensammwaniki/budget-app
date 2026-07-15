@@ -12,6 +12,11 @@ export interface Transaction {
     amount: number;
     type: 'SENT' | 'RECEIVED'; // Legacy/Display direction
     transactionKind: TransactionKind;
+    /** True only for money moved between the user's own accounts. */
+    isInternalTransfer?: boolean;
+    foreignAmount?: number;
+    foreignCurrency?: string;
+    isAmountConfirmed?: boolean;
 
     recipientId?: string;
     recipientName: string;

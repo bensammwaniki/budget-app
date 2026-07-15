@@ -534,29 +534,44 @@ export default function HomeScreen() {
     searchQuery,
   ]);
 
+  // The card represents the selected financial period, not the currently
+  // searched/hidden list. Keeping this separate prevents a search from
+  // changing reported income or expenses.
+  const summaryTransactions = useMemo(() => {
+    return allTransactions.filter((t: Transaction) => {
+      if (t.isDeleted) return false;
+      if (t.id.startsWith("IM_") && !imBankEnabled) return false;
+
+      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
+      if (Number.isNaN(txDate.getTime())) return false;
+
+      const {
+        startOfThisMonth,
+        startOfLastMonth,
+        endOfLastMonth,
+        startOfCurrentYear,
+        startOfLast3Months,
+      } = dateRange;
+
+      if (selectedPeriod === "THIS_MONTH") return txDate >= startOfThisMonth;
+      if (selectedPeriod === "LAST_MONTH") return txDate >= startOfLastMonth && txDate <= endOfLastMonth;
+      if (selectedPeriod === "LAST 3 MONTHS") return txDate >= startOfLast3Months;
+      if (selectedPeriod === "CURRENT YEAR") return txDate >= startOfCurrentYear;
+      return true;
+    });
+  }, [allTransactions, dateRange, imBankEnabled, selectedPeriod]);
+
   // Calculate summary statistics for the selected period
   const periodSummary = useMemo(() => {
     let income = 0;
     let expense = 0;
     let cost = 0;
 
-    filteredTransactions.forEach((t: Transaction) => {
+    summaryTransactions.forEach((t: Transaction) => {
       const isCashflow = isCashflowTransaction(t, {
         userPhoneNumber: phoneNumber,
       });
-      const isExplicitTransfer =
-        isInternalTransfer(t, {
-          userPhoneNumber: phoneNumber,
-        }) ||
-        t.transactionKind === "TRANSFER" ||
-        t.transactionKind === "SAVINGS_TRANSFER" ||
-        t.id.startsWith("IM_TRANSFER_") ||
-        /internal transfer:/i.test(t.rawSms || "") ||
-        /mpesa-bank transfer/i.test(t.rawSms || "") ||
-        /bank to m-pesa transfer/i.test(t.rawSms || "") ||
-        /bank to mpesa transfer/i.test(t.rawSms || "");
-
-      if (!isCashflow || isExplicitTransfer) return;
+      if (!isCashflow || t.transactionKind === "SAVINGS_TRANSFER") return;
 
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
@@ -574,7 +589,7 @@ export default function HomeScreen() {
       expense,
       cost,
     };
-  }, [filteredTransactions, phoneNumber]);
+  }, [phoneNumber, summaryTransactions]);
 
   const getPeriodLabel = (period: Period) => {
     const now = new Date();
@@ -607,7 +622,8 @@ export default function HomeScreen() {
     const isFuliza =
       tx.recipientId === "FULIZA_REPAYMENT" ||
       tx.id?.startsWith("FULIZA-FEES-") ||
-      tx.categoryId === 12;
+      tx.categoryId === 12 ||
+      tx.transactionKind === "DEBT_PRINCIPAL";
 
     if (isFuliza) return;
 

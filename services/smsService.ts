@@ -1,7 +1,7 @@
 import { PermissionsAndroid, Platform } from "react-native";
 // @ts-ignore
 import SmsAndroid from "react-native-get-sms-android";
-import { extractMpesaRefFromBankSms, parseBankSms } from "../utils/bankParser";
+import { extractMpesaRefFromBankSms, parseBankSms, parseImBankShortTermLoanSms } from "../utils/bankParser";
 import {
     parseFulizaLoan,
     parseFulizaRepayment,
@@ -30,6 +30,11 @@ export interface SMSMessage {
   date: number;
   type: number;
 }
+
+const isOwnBankCounterparty = (transaction: { type: string; recipientName?: string | null }): boolean => {
+  if (transaction.type !== "RECEIVED") return false;
+  return /\b(i\s*&\s*m|i\s+and\s+m|im\s*bank|imbank)\b/i.test(transaction.recipientName || "");
+};
 
 const cleanupMirroredBankTransfers = async (
   knownMpesaRefs: Set<string>,
@@ -86,7 +91,7 @@ const reconcileInternalTransferByReference = async (
   const database = getDb();
   const now = new Date().toISOString();
   const existing = await database.getFirstAsync<any>(
-    `SELECT id, transaction_kind
+    `SELECT id, transaction_kind, is_internal_transfer
          FROM transactions
          WHERE is_deleted = 0
            AND (id = ? OR reference_id = ?)
@@ -95,10 +100,10 @@ const reconcileInternalTransferByReference = async (
   );
 
   if (!existing) return;
-  if (existing.transaction_kind !== "TRANSFER") {
+  if (existing.transaction_kind !== "TRANSFER" || existing.is_internal_transfer !== 1) {
     await database.runAsync(
       `UPDATE transactions
-             SET transaction_kind = 'TRANSFER', updated_at = ?
+             SET transaction_kind = 'TRANSFER', is_internal_transfer = 1, updated_at = ?
              WHERE id = ?`,
       [now, existing.id],
     );
@@ -230,6 +235,7 @@ export const syncMessages = async (
     );
     const debtRepaymentCategoryId = await getCategoryIdByName("Debt Repayment");
     const mpesaRefsInBatch = new Set<string>();
+    const internalMpesaRefsInBatch = new Set<string>();
 
     // Pre-scan MPESA messages so bank mirror messages can be skipped regardless of processing order.
     for (const msg of messages) {
@@ -237,6 +243,9 @@ export const syncMessages = async (
       const parsed = parseMpesaSms(msg.body);
       if (parsed?.id) {
         mpesaRefsInBatch.add(parsed.id);
+        if (isOwnBankCounterparty(parsed)) {
+          internalMpesaRefsInBatch.add(parsed.id);
+        }
       }
     }
     const knownMpesaRefs = new Set<string>([
@@ -287,11 +296,19 @@ export const syncMessages = async (
       if (isMpesa) {
         const parsed = parseMpesaSms(msg.body);
         if (parsed) {
+          if (internalMpesaRefsInBatch.has(parsed.id)) {
+            parsed.isInternalTransfer = true;
+            parsed.transactionKind = "TRANSFER";
+          }
           if (!existingTxIds.has(parsed.id)) {
-            const reconciled = await incomeService.reconcileIncomingSms(parsed);
+            const reconciled = parsed.isInternalTransfer
+              ? false
+              : await incomeService.reconcileIncomingSms(parsed);
             if (!reconciled) {
               await saveTransaction(parsed, false, enabledRules);
-              await incomeService.autoLinkTransaction(parsed);
+              if (!parsed.isInternalTransfer) {
+                await incomeService.autoLinkTransaction(parsed);
+              }
             }
             existingTxIds.add(parsed.id);
             newTransactionsCount++;
@@ -349,9 +366,8 @@ export const syncMessages = async (
                 );
               }
 
-              if (fulizaRepayment.accountBalance !== undefined) {
-                const mpesaTxId = fulizaRepayment.id;
-                if (!existingTxIds.has(mpesaTxId)) {
+              const mpesaTxId = fulizaRepayment.id;
+              if (!existingTxIds.has(mpesaTxId)) {
                   await saveTransaction(
                     {
                       id: mpesaTxId,
@@ -364,7 +380,7 @@ export const syncMessages = async (
                       recipientId: "FULIZA_REPAYMENT",
                       recipientName: "Fuliza Repayment",
                       date: fulizaRepayment.date,
-                      balance: fulizaRepayment.accountBalance,
+                      balance: fulizaRepayment.accountBalance ?? 0,
                       transactionCost: 0,
                       categoryId: debtRepaymentCategoryId ?? undefined,
                       rawSms: fulizaRepayment.rawSms,
@@ -378,25 +394,48 @@ export const syncMessages = async (
                   );
                   existingTxIds.add(mpesaTxId);
                   newTransactionsCount++;
-                }
-
-                await debtService.recordDebtPayment({
-                  debtId: fulizaDebt.id,
-                  transactionId: mpesaTxId,
-                  amount: fulizaRepayment.amount,
-                  date: new Date(fulizaRepayment.date).toISOString(),
-                });
               }
+
+              await debtService.recordDebtPayment({
+                debtId: fulizaDebt.id,
+                transactionId: mpesaTxId,
+                amount: fulizaRepayment.amount,
+                date: new Date(fulizaRepayment.date).toISOString(),
+              });
             }
             continue;
           }
         }
       } else if (isBank) {
+        const bankLoan = parseImBankShortTermLoanSms(msg.body, msg.date);
+        if (bankLoan) {
+          if (!existingTxIds.has(bankLoan.id)) {
+            const debt = await debtService.createDebt({
+              userId: "local_user",
+              type: "LIABILITY",
+              name: "I&M Short-term Loan",
+              amount: bankLoan.amount,
+              accountId: "ACC-BANK-DEFAULT",
+              startDate: bankLoan.date,
+              dueDate: bankLoan.dueDate,
+              referenceId: bankLoan.id,
+            });
+            if (bankLoan.fees > 0) {
+              await debtService.increaseDebtAmount(debt.id, bankLoan.fees, false);
+            }
+            existingTxIds.add(bankLoan.id);
+            newTransactionsCount++;
+          }
+          continue;
+        }
+
         const parsed = parseBankSms(msg.body, msg.address);
         if (parsed) {
           const mpesaRef = extractMpesaRefFromBankSms(msg.body);
           if (mpesaRef) {
-            await reconcileInternalTransferByReference(mpesaRef);
+            if (internalMpesaRefsInBatch.has(mpesaRef)) {
+              await reconcileInternalTransferByReference(mpesaRef);
+            }
             if (knownMpesaRefs.has(mpesaRef)) {
               continue;
             }

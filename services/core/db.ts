@@ -146,12 +146,16 @@ async function performInitialization() {
                 amount REAL,
                 type TEXT,
                 transaction_kind TEXT DEFAULT 'EXPENSE',
+                is_internal_transfer INTEGER DEFAULT 0,
                 recipient_id TEXT,
                 recipient_name TEXT,
                 date TEXT,
                 balance REAL,
                 balance_after REAL,
                 transaction_cost REAL,
+                foreign_amount REAL,
+                foreign_currency TEXT,
+                is_amount_confirmed INTEGER DEFAULT 1,
                 raw_sms TEXT,
                 is_deleted INTEGER DEFAULT 0,
                 deleted_at TEXT,
@@ -313,10 +317,14 @@ async function performInitialization() {
         const requiredColumns = [
             { name: 'category_id', type: 'INTEGER' },
             { name: 'transaction_kind', type: "TEXT DEFAULT 'EXPENSE'" },
+            { name: 'is_internal_transfer', type: 'INTEGER DEFAULT 0' },
             { name: 'recipient_id', type: 'TEXT' },
             { name: 'recipient_name', type: 'TEXT' },
             { name: 'balance_after', type: 'REAL' },
             { name: 'transaction_cost', type: 'REAL' },
+            { name: 'foreign_amount', type: 'REAL' },
+            { name: 'foreign_currency', type: 'TEXT' },
+            { name: 'is_amount_confirmed', type: 'INTEGER DEFAULT 1' },
             { name: 'raw_sms', type: 'TEXT' },
             { name: 'linked_debt_id', type: 'TEXT' },
             { name: 'linked_goal_id', type: 'TEXT' },
@@ -343,6 +351,7 @@ async function performInitialization() {
             CREATE INDEX IF NOT EXISTS idx_tx_uuid ON transactions(uuid);
             CREATE INDEX IF NOT EXISTS idx_tx_active_date ON transactions(is_deleted, date);
             CREATE INDEX IF NOT EXISTS idx_tx_type_date ON transactions(type, date);
+            CREATE INDEX IF NOT EXISTS idx_tx_internal_transfer ON transactions(is_internal_transfer, date);
             CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, date);
             CREATE INDEX IF NOT EXISTS idx_tx_recipient_type_date ON transactions(recipient_id, type, date);
             CREATE INDEX IF NOT EXISTS idx_tx_linked_debt ON transactions(linked_debt_id);
@@ -509,6 +518,7 @@ async function performInitialization() {
         await seedCategories(database);
         await seedDefaultAccounts(database);
         await backfillTransactionData(database);
+        await backfillInternalTransferClassification(database);
         await redactStoredSmsBodies(database);
 
         // FINALLY set the global db instance once everything is ready
@@ -607,5 +617,50 @@ async function backfillTransactionData(database: SQLite.SQLiteDatabase) {
             updated_at = COALESCE(updated_at, date),
             is_deleted = 0
         WHERE account_id IS NULL OR uuid IS NULL;
+    `);
+}
+
+/** Preserve known bank/M-PESA pairs created before `is_internal_transfer` existed. */
+async function backfillInternalTransferClassification(database: SQLite.SQLiteDatabase) {
+    await database.execAsync(`
+        -- Older imports marked every bank-to-M-PESA payment as internal. A
+        -- named person is an external payment and must remain an expense.
+        UPDATE transactions
+        SET is_internal_transfer = 0,
+            transaction_kind = CASE WHEN type = 'SENT' THEN 'EXPENSE' ELSE 'INCOME' END
+        WHERE transaction_kind = 'TRANSFER'
+          AND type = 'SENT'
+          AND LOWER(COALESCE(recipient_name, '')) NOT LIKE '%im bank%'
+          AND LOWER(COALESCE(recipient_name, '')) NOT LIKE '%i&m%'
+          AND LOWER(COALESCE(recipient_name, '')) NOT LIKE '%i and m%'
+          AND COALESCE(raw_sms, '') NOT LIKE 'Internal Transfer:%';
+
+        UPDATE transactions
+        SET is_internal_transfer = 1,
+            transaction_kind = 'TRANSFER'
+        WHERE raw_sms LIKE 'Internal Transfer:%'
+           OR (
+                id LIKE 'IM_TRANSFER_%'
+                AND (
+                    type = 'RECEIVED'
+                    OR LOWER(COALESCE(recipient_name, '')) LIKE '%im bank%'
+                    OR LOWER(COALESCE(recipient_name, '')) LIKE '%i&m%'
+                    OR LOWER(COALESCE(recipient_name, '')) LIKE '%i and m%'
+                )
+           );
+
+        UPDATE transactions
+        SET is_internal_transfer = 1,
+            transaction_kind = 'TRANSFER'
+        WHERE reference_id IN (
+            SELECT reference_id FROM transactions
+            WHERE is_internal_transfer = 1 AND reference_id IS NOT NULL
+        )
+          AND (
+            type = 'RECEIVED'
+            OR LOWER(COALESCE(recipient_name, '')) LIKE '%im bank%'
+            OR LOWER(COALESCE(recipient_name, '')) LIKE '%i&m%'
+            OR LOWER(COALESCE(recipient_name, '')) LIKE '%i and m%'
+          );
     `);
 }

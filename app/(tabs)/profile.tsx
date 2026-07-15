@@ -44,6 +44,7 @@ import {
     saveFreshStartConfig,
 } from "../../services/financialSettingsService";
 import { useScrollVisibility } from "../../services/ScrollContext";
+import { syncMessages } from "../../services/smsService";
 import { Category } from "../../types/transaction";
 
 const EXPORT_PERIOD_OPTIONS: {
@@ -146,6 +147,7 @@ export default function ProfileScreen() {
   const [dayPickerVisible, setDayPickerVisible] = useState(false);
   const [isFinancialSettingsSaving, setIsFinancialSettingsSaving] =
     useState(false);
+  const [isSyncingSms, setIsSyncingSms] = useState(false);
   const [resetFromDate, setResetFromDate] = useState(new Date());
   const [isThemeSwitching, setIsThemeSwitching] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -567,6 +569,28 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSyncSms = async () => {
+    try {
+      setIsSyncingSms(true);
+      const result = await syncMessages(366, true);
+      if (!result.success) {
+        throw new Error(
+          typeof result.error === "string"
+            ? result.error
+            : "Could not sync SMS messages.",
+        );
+      }
+      Alert.alert(
+        "SMS synced",
+        `${result.count || 0} new transaction${result.count === 1 ? "" : "s"} imported.`,
+      );
+    } catch (error: any) {
+      Alert.alert("SMS sync failed", error?.message || "Could not sync SMS messages.");
+    } finally {
+      setIsSyncingSms(false);
+    }
+  };
+
   return (
     <Animated.ScrollView
       className="flex-1 app-screen"
@@ -867,6 +891,8 @@ export default function ProfileScreen() {
         resetFromDate={resetFromDate}
         onChangeResetFromDate={setResetFromDate}
         onResetFinancialData={handleResetFinancialData}
+        onSyncSms={handleSyncSms}
+        isSyncingSms={isSyncingSms}
         onClose={handleCloseFinancialMonthModal}
       />
 

@@ -163,8 +163,8 @@ export const ledgerService = {
         `
                 INSERT INTO transactions (
                     id, uuid, user_id, account_id, amount, type, transaction_kind,
-                    recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, 'SENT', 'TRANSFER', ?, ?, ?, ?, ?, ?, ?, 0)
+                    is_internal_transfer, recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
+                ) VALUES (?, ?, ?, ?, ?, 'SENT', 'TRANSFER', 1, ?, ?, ?, ?, ?, ?, ?, 0)
             `,
         [
           debitId,
@@ -201,8 +201,8 @@ export const ledgerService = {
         `
                 INSERT INTO transactions (
                     id, uuid, user_id, account_id, amount, type, transaction_kind,
-                    recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, 'RECEIVED', 'TRANSFER', ?, ?, ?, ?, ?, ?, ?, 0)
+                    is_internal_transfer, recipient_name, raw_sms, date, balance_after, reference_id, created_at, updated_at, is_deleted
+                ) VALUES (?, ?, ?, ?, ?, 'RECEIVED', 'TRANSFER', 1, ?, ?, ?, ?, ?, ?, ?, 0)
             `,
         [
           creditId,

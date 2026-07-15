@@ -159,25 +159,16 @@ export const buildFreshStartConfig = (
 
 const normalizeText = (value?: string | null): string =>
   (value || "").trim().toLowerCase();
-const normalizePhoneForComparison = (value?: string | null): string => {
-  const digits = (value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.length >= 9) return digits.slice(-9);
-  return digits;
-};
-
 export const isInternalTransfer = (
   transaction: Transaction,
-  options?: {
+  _options?: {
     userPhoneNumber?: string | null;
   },
 ): boolean => {
+  if (transaction.isInternalTransfer) return true;
   const rawSms = normalizeText(transaction.rawSms);
   const recipientName = normalizeText(transaction.recipientName);
   const recipientId = normalizeText(transaction.recipientId);
-  const txId = normalizeText(transaction.id);
-  const userPhone = normalizePhoneForComparison(options?.userPhoneNumber);
-  const recipientPhone = normalizePhoneForComparison(transaction.recipientId);
 
   const hasTransferLabel =
     rawSms.includes("internal transfer:") ||
@@ -207,27 +198,6 @@ export const isInternalTransfer = (
     }
   }
 
-  if (transaction.id.startsWith("IM_TRANSFER_")) {
-    return true;
-  }
-
-  if (transaction.id.startsWith("IM_") && isTransferKind) {
-    return true;
-  }
-
-  if (txId.startsWith("im_transfer_") && recipientId === "self") {
-    return true;
-  }
-
-  if (
-    txId.startsWith("im_transfer_") &&
-    userPhone &&
-    recipientPhone &&
-    recipientPhone === userPhone
-  ) {
-    return true;
-  }
-
   if (recipientId === "self") {
     return true;
   }
@@ -239,7 +209,7 @@ export const isInternalTransfer = (
 export const isCashflowTransaction = (
   transaction: Transaction,
   options?: { userPhoneNumber?: string | null },
-): boolean => !isInternalTransfer(transaction, options);
+): boolean => !isInternalTransfer(transaction, options) && transaction.transactionKind !== "DEBT_PRINCIPAL";
 
 export const getFreshStartEffectiveDate = (
   freshStart: FreshStartConfig | null,

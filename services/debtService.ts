@@ -19,6 +19,7 @@ export const debtService = {
         startDate?: Date;
         dueDate?: Date;
         isReducingBalance?: boolean;
+        referenceId?: string;
     }): Promise<Debt> {
         await initDatabase();
         const db = getDb();
@@ -105,7 +106,7 @@ export const debtService = {
                 `${payload.type === 'LIABILITY' ? 'Loan from' : 'Lent to'} ${payload.name}`,
                 startDate,
                 newBalance, newBalance,
-                debtId,
+                payload.referenceId || debtId,
                 now, now,
                 debtId
             ]);
@@ -212,6 +213,8 @@ export const debtService = {
         const now = new Date().toISOString();
 
         await db.withTransactionAsync(async () => {
+            const existing = await db.getFirstAsync<{ id: string }>('SELECT id FROM debt_payments WHERE transaction_id = ? LIMIT 1', [payload.transactionId]);
+            if (existing) return;
             const paymentId = generateUUID();
             await db.runAsync(`
                 INSERT INTO debt_payments (id, debt_id, transaction_id, amount, date, created_at)

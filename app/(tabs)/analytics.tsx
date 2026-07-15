@@ -101,20 +101,8 @@ export default function AnalyticsScreen() {
     });
   }, [hideInternalTransfers, phoneNumber, selectedMonthRange.end, selectedMonthRange.start, transactions]);
 
-  // Calculate statistics
-  const thisMonthTotal = useMemo(() => {
-    const now = new Date();
-    const thisMonthRange = getFinancialMonthRange(now, financialMonthStart);
-    return transactions
-      .filter(t => {
-        const date = new Date(t.date);
-        return isCashflowTransaction(t, { userPhoneNumber: phoneNumber }) &&
-          t.type === 'RECEIVED' && date >= thisMonthRange.start && date <= thisMonthRange.end;
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [financialMonthStart, phoneNumber, transactions]);
-
-  //  old method   
+  // Selected-period summary. Income, expense, and net intentionally share the
+  // same date-filtered set so changing month updates all three together.
   const stats = useMemo(() => {
     const cashflowTransactions = filteredTransactions.filter(t => isCashflowTransaction(t, { userPhoneNumber: phoneNumber }));
     const income = cashflowTransactions.filter(t => t.type === 'RECEIVED').reduce((sum, t) => sum + t.amount, 0);
@@ -490,12 +478,12 @@ export default function AnalyticsScreen() {
         <View className="flex-row items-center border-t border-slate-50 dark:border-slate-800/50 -mx-4 pt-4 px-4 pb-4">
           <View className="flex-1 items-center border-r border-slate-100 dark:border-slate-800/50">
             <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1 text-center">Income</Text>
-            <Text className="text-green-600 dark:text-green-500 font-bold text-sm">KES {thisMonthTotal.toLocaleString()}</Text>
+            <Text className="text-green-600 dark:text-green-500 font-bold text-sm">KES {stats.income.toLocaleString()}</Text>
           </View>
           <View className="flex-1 items-center border-r border-slate-100 dark:border-slate-800/50">
             <Text className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1 text-center">Net Balance</Text>
-            <Text className={`font-bold text-sm ${(thisMonthTotal - stats.expense) >= 0 ? 'text-blue-600 dark:text-blue-500' : 'text-red-500'}`}>
-              KES {Math.abs(thisMonthTotal - stats.expense).toLocaleString()}
+            <Text className={`font-bold text-sm ${stats.net >= 0 ? 'text-blue-600 dark:text-blue-500' : 'text-red-500'}`}>
+              KES {Math.abs(stats.net).toLocaleString()}
             </Text>
           </View>
           <View className="flex-1 items-center">

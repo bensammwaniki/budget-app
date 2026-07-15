@@ -289,6 +289,24 @@ export const updateTransactionDate = async (
   notifyListenersImmediate("TRANSACTIONS");
 };
 
+export const confirmTransactionKesAmount = async (
+  transactionId: string,
+  amount: number,
+): Promise<void> => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Enter the actual KES amount charged by the bank.");
+  }
+  await initDatabase();
+  const database = getDb();
+  await database.runAsync(
+    `UPDATE transactions
+     SET amount = ?, is_amount_confirmed = 1, updated_at = ?
+     WHERE id = ?`,
+    [amount, new Date().toISOString(), transactionId],
+  );
+  notifyListenersImmediate("TRANSACTIONS");
+};
+
 export const transactionExists = async (id: string): Promise<boolean> => {
   await initDatabase();
   const database = getDb();
@@ -398,8 +416,9 @@ export const saveTransaction = async (
 ) => {
   await initDatabase();
   const database = getDb();
+  const isInternalTransfer = transaction.isInternalTransfer || /internal transfer:/i.test(transaction.rawSms || "");
 
-  if (!transaction.categoryId) {
+  if (!transaction.categoryId && !isInternalTransfer) {
     const enabledRules =
       preloadedEnabledRules ??
       (await getAutomationRules()).filter((r) => r.isEnabled);
@@ -420,21 +439,16 @@ export const saveTransaction = async (
         : "Imported SMS transaction";
 
   const normalizedTransactionKind =
-    transaction.transactionKind === "TRANSFER" ||
-    transaction.transactionKind === "SAVINGS_TRANSFER" ||
-    transaction.id?.startsWith("IM_TRANSFER_") ||
-    /internal transfer:/i.test(transaction.rawSms || "") ||
-    /mpesa-bank transfer/i.test(transaction.rawSms || "") ||
-    /bank to m-pesa transfer/i.test(transaction.rawSms || "") ||
-    /bank to mpesa transfer/i.test(transaction.rawSms || "")
+    transaction.isInternalTransfer ||
+    /internal transfer:/i.test(transaction.rawSms || "")
       ? "TRANSFER"
       : transaction.transactionKind ||
         (transaction.type === "SENT" ? "EXPENSE" : "INCOME");
 
   await database.runAsync(
-    `INSERT OR REPLACE INTO transactions 
-        (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, raw_sms, reference_id, created_at, updated_at, is_deleted) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO transactions
+        (id, uuid, user_id, account_id, category_id, amount, type, transaction_kind, is_internal_transfer, recipient_id, recipient_name, date, balance, balance_after, transaction_cost, foreign_amount, foreign_currency, is_amount_confirmed, raw_sms, reference_id, created_at, updated_at, is_deleted)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
     [
       transaction.id,
       transaction.uuid || transaction.id,
@@ -444,12 +458,16 @@ export const saveTransaction = async (
       transaction.amount,
       transaction.type,
       normalizedTransactionKind,
+      isInternalTransfer ? 1 : 0,
       transaction.recipientId ?? null,
       transaction.recipientName ?? null,
       transaction.date.toISOString(),
       transaction.balance || 0,
       transaction.balanceAfter || transaction.balance || 0,
       transaction.transactionCost || 0,
+      transaction.foreignAmount ?? null,
+      transaction.foreignCurrency ?? null,
+      transaction.isAmountConfirmed === false ? 0 : 1,
       rawSmsForStorage,
       transaction.referenceId ?? null,
       new Date().toISOString(),
@@ -552,6 +570,10 @@ export const getTransactions = async (): Promise<Transaction[]> => {
       amount: Math.abs(row.amount),
       type: row.type || (row.amount < 0 ? "SENT" : "RECEIVED"),
       transactionKind: row.transaction_kind,
+      isInternalTransfer: row.is_internal_transfer === 1,
+      foreignAmount: row.foreign_amount ?? undefined,
+      foreignCurrency: row.foreign_currency ?? undefined,
+      isAmountConfirmed: row.is_amount_confirmed !== 0,
       recipientId: row.recipient_id,
       recipientName: row.recipient_name,
       date: txDate,
@@ -602,7 +624,7 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
   );
 
   const daily = await database.getFirstAsync<{ total: number }>(
-    `SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' AND is_deleted = 0`,
+    `SELECT SUM(amount) as total FROM transactions WHERE date >= ? AND type = 'SENT' AND is_internal_transfer = 0 AND transaction_kind NOT IN ('SAVINGS_TRANSFER', 'DEBT_PRINCIPAL') AND is_deleted = 0`,
     [startOfDay],
   );
 
@@ -614,8 +636,8 @@ export const getSpendingSummary = async (): Promise<SpendingSummary> => {
   }>(
     `
         SELECT 
-            SUM(CASE WHEN type = 'SENT' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' THEN amount ELSE 0 END) as totalSpent,
-            SUM(CASE WHEN type = 'RECEIVED' AND transaction_kind NOT IN ('TRANSFER', 'SAVINGS_TRANSFER') AND id NOT LIKE 'IM_TRANSFER_%' AND COALESCE(raw_sms, '') NOT LIKE '%internal transfer:%' AND COALESCE(raw_sms, '') NOT LIKE '%mpesa-bank transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to m-pesa transfer%' AND COALESCE(raw_sms, '') NOT LIKE '%bank to mpesa transfer%' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'SENT' AND is_internal_transfer = 0 AND transaction_kind NOT IN ('SAVINGS_TRANSFER', 'DEBT_PRINCIPAL') THEN amount ELSE 0 END) as totalSpent,
+            SUM(CASE WHEN type = 'RECEIVED' AND is_internal_transfer = 0 AND transaction_kind NOT IN ('SAVINGS_TRANSFER', 'DEBT_PRINCIPAL') THEN amount ELSE 0 END) as income,
             SUM(transaction_cost) as costs,
             COUNT(*) as count
         FROM transactions 

@@ -52,7 +52,7 @@ export const parseMpesaSms = (smsText: string): any | null => {
       referenceId: match[1],
       amount: parseFloat(match[2].replace(/,/g, "")),
       type: "SENT",
-      transactionKind: "TRANSFER",
+      transactionKind: "EXPENSE",
       recipientId: match[4].trim().toUpperCase(), // Account Number is the identifier
       recipientName: `${match[3].trim()} - ${match[4].trim()}`,
       date: parseDate(match[5], match[6]),
@@ -107,15 +107,12 @@ export const parseMpesaSms = (smsText: string): any | null => {
   match = smsText.match(receivedPattern);
   if (match) {
     balanceMatch = smsText.match(/balance\s+is\s+Ksh\s*([\d,]+\.\d{2})/i);
-    const isImBankReceipt =
-      /IM\s*BANK/i.test(match[3]) || /IM BANK/i.test(smsText);
-
     return {
       id: match[1],
       referenceId: match[1],
       amount: parseFloat(match[2].replace(/,/g, "")),
       type: "RECEIVED",
-      transactionKind: isImBankReceipt ? "TRANSFER" : "INCOME",
+      transactionKind: "INCOME",
       recipientId: match[3].trim().toUpperCase(),
       recipientName: match[3].trim(),
       date: parseDate(match[4], match[5]),
@@ -149,31 +146,21 @@ export const parseFulizaLoan = (
   smsText: string,
   timestamp?: number,
 ): any | null => {
-  // Relaxed check: Handle both M-PESA and M-Pesa
-  const normalizedText = smsText.replace(/M-Pesa/g, "M-PESA");
-
-  if (
-    !normalizedText.includes("Fuliza M-PESA amount is Ksh") ||
-    !normalizedText.includes("Access Fee charged Ksh") ||
-    !normalizedText.includes("Total Fuliza M-PESA outstanding amount is")
-  ) {
-    return null;
-  }
-
-  // Pattern: "KFFVAAH1Z Confirmed. Fuliza M-PESA amount is Ksh 50.00. Access Fee charged Ksh 0.50. Total Fuliza M-PESA outstanding amount is Ksh244.15 due on..."
-  // Note: Safaricom inconsistently puts space after Ksh (e.g. "Ksh 50.00" but "Ksh244.15")
-  const pattern =
-    /([A-Z0-9]+)\s+Confirmed\.\s+Fuliza M-PESA amount is Ksh\s*([\d,]+\.\d{2})\.\s+Access Fee charged Ksh\s*([\d,]+\.\d{2})\.\s+Total Fuliza M-PESA outstanding amount is Ksh\s*([\d,]+\.\d{2})\s+due on\s+(\d{1,2}\/\d{1,2}\/\d{2})/;
-
+  const normalizedText = smsText.replace(/\s+/g, " ").trim();
+  const amount = "([\\d,]+(?:\\.\\d{1,2})?)";
+  const pattern = new RegExp(
+    `([A-Z0-9]+)\\s+Confirmed\\..*?Fuliza\\s+M-?PESA\\s+amount\\s+is\\s+Ksh\\s*${amount}(?:\\.\\s*Access\\s+Fee\\s+charged\\s+Ksh\\s*${amount})?.*?Total\\s+Fuliza\\s+M-?PESA\\s+outstanding\\s+amount\\s+is\\s+Ksh\\s*${amount}(?:\\s+due\\s+on\\s+(\\d{1,2}\\/\\d{1,2}\\/\\d{2}))?`,
+    "i",
+  );
   const match = normalizedText.match(pattern);
   if (match) {
     return {
       id: match[1],
       amount: parseFloat(match[2].replace(/,/g, "")),
       type: "LOAN",
-      accessFee: parseFloat(match[3].replace(/,/g, "")),
+      accessFee: match[3] ? parseFloat(match[3].replace(/,/g, "")) : 0,
       outstandingBalance: parseFloat(match[4].replace(/,/g, "")),
-      dueDate: parseDate(match[5], "12:00 AM"),
+      dueDate: match[5] ? parseDate(match[5], "12:00 AM") : undefined,
       date: timestamp ? new Date(timestamp) : new Date(),
       rawSms: smsText,
     };
@@ -185,26 +172,16 @@ export const parseFulizaRepayment = (
   smsText: string,
   timestamp?: number,
 ): any | null => {
-  // Relaxed check: Handle both M-PESA and M-Pesa
-  const normalizedText = smsText.replace(/M-Pesa/g, "M-PESA");
-
-  // ULTRA STRICT: Must contain exact phrase for repayment
-  if (
-    !normalizedText.includes(
-      "used to partially pay your outstanding Fuliza M-PESA",
-    ) &&
-    !normalizedText.includes("used to fully pay your outstanding Fuliza M-PESA")
-  ) {
-    return null;
-  }
-
-  // Pattern: "TKIFVAJ7HG Confirmed. Ksh 1000.00 from your M-PESA has been used to partially pay..."
-  const pattern =
-    /([A-Z0-9]+)\s+Confirmed\.\s+Ksh\s+([\d,]+\.\d{2})\s+from your M-PESA has been used to (partially|fully) pay your outstanding Fuliza M-PESA/;
+  const normalizedText = smsText.replace(/\s+/g, " ").trim();
+  const amount = "([\\d,]+(?:\\.\\d{1,2})?)";
+  const pattern = new RegExp(
+    `([A-Z0-9]+)\\s+Confirmed\\..*?Ksh\\s*${amount}\\s+from\\s+your\\s+M-?PESA\\s+has\\s+been\\s+used\\s+to\\s+(?:(partially|fully)\\s+)?pay.*?outstanding\\s+Fuliza\\s+M-?PESA`,
+    "i",
+  );
 
   // Check for M-PESA balance in the message
   // "M-PESA balance is Ksh611.40."
-  const balancePattern = /M-PESA balance is Ksh\s*([\d,]+\.\d{2})/;
+  const balancePattern = /M-?PESA\s+balance\s+is\s+Ksh\s*([\d,]+(?:\.\d{1,2})?)/i;
 
   const match = normalizedText.match(pattern);
   if (match) {
@@ -215,11 +192,11 @@ export const parseFulizaRepayment = (
 
     // 1. Try explicit "Your outstanding Fuliza M-PESA amount is Ksh" format (repayment detail)
     let balanceMatch = normalizedText.match(
-      /Your outstanding Fuliza M-PESA amount is Ksh\s*([\d,]+\.\d{2})/,
+      /Your\s+outstanding\s+Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh\s*([\d,]+(?:\.\d{1,2})?)/i,
     );
     if (!balanceMatch) {
       balanceMatch = normalizedText.match(
-        /Outstanding Fuliza M-PESA amount is Ksh\s*([\d,]+\.\d{2})/,
+        /Outstanding\s+Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh\s*([\d,]+(?:\.\d{1,2})?)/i,
       );
     }
 
