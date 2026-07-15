@@ -29,6 +29,7 @@ import { useAlert } from "../../context/AlertContext";
 import { useTransactions } from "../../hooks/useDatabase";
 import { useAuth } from "../../services/AuthContext";
 import {
+    confirmTransactionKesAmount,
     getUserSettings,
     initDatabase,
     saveRecipientCategory,
@@ -724,6 +725,33 @@ export default function HomeScreen() {
     }
   };
 
+  const handleConfirmKesAmount = async (tx: Transaction, amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAlert({
+        title: "Invalid amount",
+        message: "Enter the positive KES amount charged by the bank.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      await confirmTransactionKesAmount(tx.id, amount);
+      setSelectedTransaction((current) =>
+        current?.id === tx.id
+          ? { ...current, amount, isAmountConfirmed: true }
+          : current,
+      );
+    } catch (error) {
+      console.error("Failed to confirm foreign card charge:", error);
+      showAlert({
+        title: "Could not save amount",
+        message: "The KES amount was not saved. Please try again.",
+        type: "error",
+      });
+    }
+  };
+
   const handleLinkToGoalRequest = async (_tx: Transaction) => {
     setModalVisible(false);
     try {
@@ -1140,6 +1168,7 @@ export default function HomeScreen() {
         onDelete={handleDeleteTransaction}
         onLinkToGoal={handleLinkToGoalRequest}
         onLinkToIncome={handleLinkToIncomeRequest}
+        onConfirmKesAmount={handleConfirmKesAmount}
         onClose={handleCloseModal}
       />
 

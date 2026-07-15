@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCategories } from '../services/database';
 import { Category, Transaction } from '../types/transaction';
@@ -17,10 +17,11 @@ interface CategorizationModalProps {
     onDelete?: (transaction: Transaction) => void;
     onLinkToGoal?: (transaction: Transaction) => void;
     onLinkToIncome?: (transaction: Transaction) => void;
+    onConfirmKesAmount?: (transaction: Transaction, amount: number) => void;
     onClose: () => void;
 }
 
-export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onLinkToIncome, onClose }: CategorizationModalProps) {
+export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onLinkToIncome, onConfirmKesAmount, onClose }: CategorizationModalProps) {
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -28,6 +29,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
     const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
     const insets = useSafeAreaInsets();
     const [showAddCategory, setShowAddCategory] = useState(false);
+    const [kesAmount, setKesAmount] = useState('');
 
     useEffect(() => {
         if (visible) {
@@ -36,6 +38,7 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                 const txDate = new Date(transaction.date);
                 setCurrentDate(txDate);
                 setCalendarMonth(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
+                setKesAmount(transaction.isAmountConfirmed === false ? '' : String(transaction.amount || ''));
             }
         }
     }, [visible, transaction]);
@@ -154,7 +157,34 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView className="flex-1 p-6">
+                    <ScrollView className="flex-1 p-6" keyboardShouldPersistTaps="handled">
+                        {transaction.isAmountConfirmed === false && (
+                            <View className="mb-6 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-800">
+                                <Text className="text-amber-900 dark:text-amber-200 font-bold text-sm">Confirm the KES card charge</Text>
+                                <Text className="text-amber-800 dark:text-amber-300 text-xs leading-5 mt-1">
+                                    This purchase was {transaction.foreignCurrency} {transaction.foreignAmount?.toLocaleString()}. Enter the KES amount charged by I&amp;M to include it in your expenses and reports.
+                                </Text>
+                                <View className="flex-row mt-3 gap-2">
+                                    <View className="flex-1 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl px-3 justify-center">
+                                        <TextInput
+                                            value={kesAmount}
+                                            onChangeText={setKesAmount}
+                                            keyboardType="decimal-pad"
+                                            placeholder="KES amount charged"
+                                            placeholderTextColor="#94a3b8"
+                                            className="text-slate-900 dark:text-white font-bold py-3"
+                                        />
+                                    </View>
+                                    <TouchableOpacity
+                                        disabled={!kesAmount.trim()}
+                                        onPress={() => onConfirmKesAmount?.(transaction, Number(kesAmount.replace(/,/g, '')))}
+                                        className={`px-4 rounded-xl justify-center ${kesAmount.trim() ? 'bg-amber-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                    >
+                                        <Text className="text-white font-bold text-xs">Confirm</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
                         {/* Date Editor */}
                         <View className="mb-8 bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-700">
                             <View className="flex-row items-center justify-between">

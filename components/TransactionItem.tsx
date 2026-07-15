@@ -55,6 +55,11 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         : accountType === "DEBT"
           ? "text-rose-700 dark:text-rose-400"
           : "text-green-700 dark:text-green-400";
+  const isPendingForeignAmount =
+    tx.isAmountConfirmed === false && !!tx.foreignCurrency;
+  const amountLabel = isPendingForeignAmount
+    ? `${tx.foreignCurrency} ${tx.foreignAmount?.toLocaleString() ?? "0"}`
+    : `KES ${tx.amount.toLocaleString()}`;
 
   return (
     <TouchableOpacity
@@ -117,11 +122,17 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         <Text
           className={`font-bold text-[12px] ${tx.type === "RECEIVED" ? "text-green-600" : "text-slate-900 dark:text-white"}`}
         >
-          {tx.type === "RECEIVED" ? "+" : "-"} KES {tx.amount.toLocaleString()}
+          {tx.type === "RECEIVED" ? "+" : "-"} {amountLabel}
         </Text>
-        <Text className={`text-[9px] font-semibold mt-1 ${sourceTextClass}`}>
-          {sourceLabel}
-        </Text>
+        {isPendingForeignAmount ? (
+          <Text className="text-[9px] font-semibold mt-1 text-amber-700 dark:text-amber-400">
+            KES AMOUNT NEEDED
+          </Text>
+        ) : (
+          <Text className={`text-[9px] font-semibold mt-1 ${sourceTextClass}`}>
+            {sourceLabel}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
