@@ -193,6 +193,92 @@ export const debtService = {
         }
     },
 
+    /**
+     * Turns an existing incoming transaction into a loan without creating a
+     * second cash movement. The transaction remains the recorded disbursement
+     * but no longer counts as income.
+     */
+    async createDebtFromIncomingTransaction(payload: {
+        transactionId: string;
+        userId: string;
+        name: string;
+        amount: number;
+        interestRate?: number;
+        isReducingBalance?: boolean;
+        dueDate?: Date;
+    }): Promise<Debt> {
+        if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+            throw new Error("Loan amount must be greater than zero");
+        }
+        await initDatabase();
+        const db = getDb();
+        const debtId = generateUUID();
+        const now = new Date().toISOString();
+        const flatInterest = (!payload.isReducingBalance && payload.interestRate)
+            ? payload.amount * (payload.interestRate / 100)
+            : 0;
+        const initialBalance = payload.amount + flatInterest;
+        let transactionDate = now;
+        let accountId: string | undefined;
+
+        await db.withTransactionAsync(async () => {
+            const transaction = await db.getFirstAsync<{
+                account_id: string | null;
+                date: string;
+                type: string;
+                linked_debt_id: string | null;
+                is_deleted: number;
+            }>(
+                `SELECT account_id, date, type, linked_debt_id, is_deleted
+                 FROM transactions WHERE id = ?`,
+                [payload.transactionId],
+            );
+            if (!transaction || transaction.is_deleted) throw new Error("Incoming transaction not found");
+            if (transaction.type !== 'RECEIVED') throw new Error("Only incoming transactions can be converted to a loan");
+            if (transaction.linked_debt_id) throw new Error("This transaction is already linked to a debt");
+
+            transactionDate = transaction.date;
+            accountId = transaction.account_id || undefined;
+            await db.runAsync(`
+                INSERT INTO debts (
+                    id, user_id, account_id, name, type, principal_amount, current_balance,
+                    is_revolving, is_reducing_balance, interest_rate, status, start_date,
+                    due_date, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'LIABILITY', ?, ?, 0, ?, ?, 'ACTIVE', ?, ?, ?, ?)
+            `, [
+                debtId, payload.userId, accountId || null, payload.name, payload.amount,
+                initialBalance, payload.isReducingBalance ? 1 : 0,
+                payload.interestRate || null, transactionDate,
+                payload.dueDate?.toISOString() || null, now, now,
+            ]);
+            await db.runAsync(`
+                UPDATE transactions
+                SET transaction_kind = 'DEBT_PRINCIPAL', linked_debt_id = ?, category_id = NULL, updated_at = ?
+                WHERE id = ?
+            `, [debtId, now, payload.transactionId]);
+        });
+
+        notifyListeners('DEBTS');
+        notifyListeners('TRANSACTIONS');
+        return {
+            id: debtId,
+            userId: payload.userId,
+            accountId,
+            type: 'LIABILITY',
+            name: payload.name,
+            principalAmount: payload.amount,
+            currentBalance: initialBalance,
+            interestRate: payload.interestRate,
+            startDate: new Date(transactionDate),
+            dueDate: payload.dueDate,
+            status: 'ACTIVE',
+            isRevolving: false,
+            isReducingBalance: !!payload.isReducingBalance,
+            createdAt: new Date(now),
+            updatedAt: new Date(now),
+        };
+    },
+
     async linkTransactionToDebt(payload: {
         debtId: string;
         transactionId: string;

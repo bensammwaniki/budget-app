@@ -29,10 +29,21 @@ import { Account } from "../../types/account";
 
 function AddDebtScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ editId?: string }>();
+  const params = useLocalSearchParams<{
+    editId?: string;
+    sourceTransactionId?: string;
+    lenderName?: string;
+    amount?: string;
+    accountId?: string;
+    transactionDate?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const editId = typeof params.editId === "string" ? params.editId : undefined;
+  const sourceTransactionId =
+    typeof params.sourceTransactionId === "string"
+      ? params.sourceTransactionId
+      : undefined;
   const isEditMode = Boolean(editId);
 
   const [type, setType] = useState<"LIABILITY" | "RECEIVABLE">("LIABILITY");
@@ -137,6 +148,23 @@ function AddDebtScreen() {
       active = false;
     };
   }, [editId, router]);
+
+  useEffect(() => {
+    if (editId || !sourceTransactionId) return;
+
+    setType("LIABILITY");
+    setName(typeof params.lenderName === "string" ? params.lenderName : "");
+    setAmount(
+      typeof params.amount === "string" ? formatWithCommas(params.amount) : "",
+    );
+    setSelectedAccount(
+      typeof params.accountId === "string" ? params.accountId : undefined,
+    );
+    if (typeof params.transactionDate === "string") {
+      const date = new Date(params.transactionDate);
+      if (!Number.isNaN(date.getTime())) setStartDate(date);
+    }
+  }, [editId, params.accountId, params.amount, params.lenderName, params.transactionDate, sourceTransactionId]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -270,6 +298,16 @@ function AddDebtScreen() {
           startDate,
           dueDate: expectedPayDate,
         });
+      } else if (sourceTransactionId) {
+        await debtService.createDebtFromIncomingTransaction({
+          transactionId: sourceTransactionId,
+          userId: "local_user",
+          name,
+          amount: parseFloat(amount.replace(/,/g, "")),
+          interestRate: interestRate ? parseFloat(interestRate) : undefined,
+          isReducingBalance,
+          dueDate: expectedPayDate,
+        });
       } else {
         await debtService.createDebt({
           userId: "local_user",
@@ -354,6 +392,14 @@ function AddDebtScreen() {
           }}
         >
           <View className="p-6">
+            {sourceTransactionId && (
+              <View className="bg-violet-50 dark:bg-violet-900/20 p-4 rounded-[12px] mb-6 border border-violet-100 dark:border-violet-900/50">
+                <Text className="text-violet-700 dark:text-violet-300 font-bold text-sm">Borrowed-money transaction</Text>
+                <Text className="text-violet-600 dark:text-violet-400 text-xs mt-1">
+                  Saving will link this debt to the incoming transaction and remove it from income reports.
+                </Text>
+              </View>
+            )}
             {/* Type Selection */}
             <View
               style={{
@@ -365,7 +411,7 @@ function AddDebtScreen() {
               }}
             >
               <TouchableOpacity
-                onPress={() => !isEditMode && setType("LIABILITY")}
+                onPress={() => !isEditMode && !sourceTransactionId && setType("LIABILITY")}
                 style={{
                   flex: 1,
                   paddingVertical: 8,
@@ -379,7 +425,7 @@ function AddDebtScreen() {
                         : "#ffffff"
                       : "transparent",
                 }}
-                disabled={isEditMode}
+                disabled={isEditMode || Boolean(sourceTransactionId)}
               >
                 <Text
                   style={{
@@ -397,7 +443,7 @@ function AddDebtScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => !isEditMode && setType("RECEIVABLE")}
+                onPress={() => !isEditMode && !sourceTransactionId && setType("RECEIVABLE")}
                 style={{
                   flex: 1,
                   paddingVertical: 8,
@@ -411,7 +457,7 @@ function AddDebtScreen() {
                         : "#ffffff"
                       : "transparent",
                 }}
-                disabled={isEditMode}
+                disabled={isEditMode || Boolean(sourceTransactionId)}
               >
                 <Text
                   style={{

@@ -17,11 +17,12 @@ interface CategorizationModalProps {
     onDelete?: (transaction: Transaction) => void;
     onLinkToGoal?: (transaction: Transaction) => void;
     onLinkToIncome?: (transaction: Transaction) => void;
+    onMarkAsBorrowed?: (transaction: Transaction) => void;
     onConfirmKesAmount?: (transaction: Transaction, amount: number) => void;
     onClose: () => void;
 }
 
-export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onLinkToIncome, onConfirmKesAmount, onClose }: CategorizationModalProps) {
+export default function CategorizationModal({ visible, transaction, onCategorySelect, onDateChange, onDelete, onLinkToGoal, onLinkToIncome, onMarkAsBorrowed, onConfirmKesAmount, onClose }: CategorizationModalProps) {
     const { colorScheme } = useColorScheme();
     const [categories, setCategories] = useState<Category[]>([]);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -300,6 +301,22 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                         <Text className="text-slate-500 dark:text-slate-300 font-medium text-[14px] mb-4">
                             {transaction.type === 'RECEIVED' ? 'What type of income is this?' : 'What type of expense is this?'}
                         </Text>
+
+                        {transaction.type === 'RECEIVED' && (
+                            <TouchableOpacity
+                                onPress={() => onMarkAsBorrowed?.(transaction)}
+                                className="mb-4 bg-violet-50 dark:bg-violet-900/20 py-3 px-4 rounded-[12px] border border-violet-100 dark:border-violet-900/50 flex-row items-center"
+                            >
+                                <View className="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-900/40 items-center justify-center mr-3">
+                                    <FontAwesome name="bank" size={16} color="#7c3aed" />
+                                </View>
+                                <View className="flex-1">
+                                    <Text className="text-violet-700 dark:text-violet-300 font-bold text-sm">Borrowed money</Text>
+                                    <Text className="text-violet-600 dark:text-violet-400 text-[11px] mt-0.5">Create a debt instead of counting this as income</Text>
+                                </View>
+                                <FontAwesome name="chevron-right" size={12} color="#7c3aed" />
+                            </TouchableOpacity>
+                        )}
 
                         <View className="flex-row flex-wrap justify-between gap-y-3">
                             {categories

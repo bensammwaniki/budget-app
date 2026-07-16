@@ -791,6 +791,21 @@ export default function HomeScreen() {
     }
   };
 
+  const handleMarkAsBorrowed = (tx: Transaction) => {
+    setModalVisible(false);
+    setSelectedTransaction(null);
+    router.push({
+      pathname: "/debt/add",
+      params: {
+        sourceTransactionId: tx.id,
+        lenderName: tx.recipientName || "",
+        amount: String(tx.amount),
+        accountId: tx.accountId || "",
+        transactionDate: tx.date.toISOString(),
+      },
+    });
+  };
+
   const handleConfirmLinkToIncome = async (sourceId: string) => {
     if (!activeTransaction) return;
     setLinkingIncome(sourceId);
@@ -1188,6 +1203,7 @@ export default function HomeScreen() {
         onDelete={handleDeleteTransaction}
         onLinkToGoal={handleLinkToGoalRequest}
         onLinkToIncome={handleLinkToIncomeRequest}
+        onMarkAsBorrowed={handleMarkAsBorrowed}
         onConfirmKesAmount={handleConfirmKesAmount}
         onClose={handleCloseModal}
       />
