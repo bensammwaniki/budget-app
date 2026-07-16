@@ -147,6 +147,11 @@ export default function CategorizationModal({ visible, transaction, onCategorySe
                                 {(transaction.recipientName || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • KES {transaction.amount.toLocaleString()}
                             </Text>
                         </View>
+                        {transaction.isAmountConfirmed === false && transaction.foreignCurrency && (
+                            <Text className="absolute left-6 bottom-2 text-amber-700 dark:text-amber-300 font-bold text-[10px]">
+                                {transaction.foreignCurrency} {transaction.foreignAmount?.toLocaleString()} — KES confirmation needed
+                            </Text>
+                        )}
                         <TouchableOpacity onPress={onClose} className="p-2 -mr-2 mt-[-10px] bg-gray-100 dark:bg-slate-800 rounded-full">
                             <Image
                                 source={require('../assets/svg/close.svg')}

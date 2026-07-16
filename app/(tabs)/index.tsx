@@ -9,6 +9,7 @@ import {
     AppState,
     Platform,
     RefreshControl,
+    ScrollView,
     Text,
     TextInput,
     TouchableOpacity,
@@ -28,6 +29,7 @@ import TransactionItem from "../../components/TransactionItem";
 import { useAlert } from "../../context/AlertContext";
 import { useTransactions } from "../../hooks/useDatabase";
 import { useAuth } from "../../services/AuthContext";
+import { accountService } from "../../services/accountService";
 import {
     confirmTransactionKesAmount,
     getUserSettings,
@@ -40,12 +42,9 @@ import {
 } from "../../services/database";
 import { debtService } from "../../services/debtService";
 import {
-    FreshStartConfig,
     getFinancialMonthRange,
     getFinancialSettings,
-    getFreshStartEffectiveDate,
     getPreviousFinancialMonthRange,
-    isCashflowTransaction,
     isInternalTransfer,
 } from "../../services/financialSettingsService";
 import { IncomeSource, incomeService } from "../../services/incomeService";
@@ -87,12 +86,13 @@ export default function HomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
   const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
-  const [freshStartConfig, setFreshStartConfig] =
-    useState<FreshStartConfig | null>(null);
   const [imBankEnabled, setImBankEnabled] = useState(false);
+  const [availableBalance, setAvailableBalance] = useState(0);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
+  const [isTransactionSearchOpen, setIsTransactionSearchOpen] = useState(false);
+  const transactionSearchRef = useRef<TextInput>(null);
   const [cashModalVisible, setCashModalVisible] = useState(false);
   const openingCashModalRef = useRef(false);
   const [cashType, setCashType] = useState<"SENT" | "RECEIVED">("SENT");
@@ -141,6 +141,29 @@ export default function HomeScreen() {
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
 
+  // This is the user's money available now, not a report for a selected date range.
+  useEffect(() => {
+    if (!dbReady) return;
+
+    const loadAvailableBalance = async () => {
+      try {
+        const accounts = await accountService.getAccounts();
+        setAvailableBalance(
+          accounts.reduce((total, account) => total + Number(account.balance || 0), 0),
+        );
+      } catch (error) {
+        console.error("Error loading available balance:", error);
+      }
+    };
+
+    loadAvailableBalance();
+    return subscribeToDatabaseChanges((type) => {
+      if (type === "TRANSACTIONS" || type === "DEBTS") {
+        loadAvailableBalance();
+      }
+    });
+  }, [dbReady]);
+
   // Load settings and subscribe to changes
   useEffect(() => {
     if (!dbReady) return;
@@ -154,7 +177,6 @@ export default function HomeScreen() {
         setImBankEnabled(enabled === "true");
         setFinancialMonthStart(financialSettings.monthStartDay);
         setHideInternalTransfers(financialSettings.hideInternalTransfers);
-        setFreshStartConfig(financialSettings.freshStart);
       } catch (error) {
         console.error("Error loading home settings:", error);
       }
@@ -401,48 +423,6 @@ export default function HomeScreen() {
     };
   }, [financialMonthStart]);
 
-  // Calculate carried forward balance (from previous financial month)
-  const carriedForwardBalance = useMemo(() => {
-    const { startOfLastMonth, endOfLastMonth } = dateRange;
-    const freshStartDate = getFreshStartEffectiveDate(freshStartConfig);
-
-    if (
-      freshStartConfig?.resetBroughtForward &&
-      freshStartDate &&
-      startOfLastMonth < freshStartDate
-    ) {
-      return 0;
-    }
-
-    const lastMonthTransactions = allTransactions.filter((t) => {
-      const txDate = t.date instanceof Date ? t.date : new Date(t.date);
-      return (
-        txDate >= startOfLastMonth &&
-        txDate <= endOfLastMonth &&
-        !t.isDeleted &&
-        isCashflowTransaction(t, { userPhoneNumber: phoneNumber })
-      );
-    });
-
-    const income = lastMonthTransactions
-      .filter((t) => t.type === "RECEIVED")
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const expense = lastMonthTransactions
-      .filter((t) => t.type === "SENT")
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    return income - expense;
-  }, [allTransactions, dateRange, freshStartConfig, phoneNumber]);
-
-  const carriedForwardPeriodLabel = useMemo(() => {
-    const { endOfLastMonth } = dateRange;
-    return endOfLastMonth.toLocaleDateString(undefined, {
-      month: "long",
-      year: "numeric",
-    });
-  }, [dateRange]);
-
   // Filter transactions based on selected period AND bank settings
   const filteredTransactions = useMemo(() => {
     let filtered = allTransactions.filter((t: Transaction) => {
@@ -565,20 +545,29 @@ export default function HomeScreen() {
   // Calculate summary statistics for the selected period
   const periodSummary = useMemo(() => {
     let income = 0;
+    let borrowed = 0;
     let expense = 0;
     let cost = 0;
 
     summaryTransactions.forEach((t: Transaction) => {
-      const isCashflow = isCashflowTransaction(t, {
-        userPhoneNumber: phoneNumber,
-      });
-      if (!isCashflow || t.transactionKind === "SAVINGS_TRANSFER") return;
+      // Moving money between the user's accounts does not change available
+      // money. A loan disbursement does, so it is tracked separately from income.
+      if (
+        isInternalTransfer(t, { userPhoneNumber: phoneNumber }) ||
+        t.transactionKind === "SAVINGS_TRANSFER"
+      ) {
+        return;
+      }
 
       const amount = Math.abs(t.amount || 0);
       const fee = Math.abs(t.transactionCost || 0);
 
       if (t.type === "RECEIVED") {
-        income += amount;
+        if (t.transactionKind === "DEBT_PRINCIPAL") {
+          borrowed += amount;
+        } else {
+          income += amount;
+        }
       } else if (t.type === "SENT") {
         expense += amount;
       }
@@ -587,6 +576,7 @@ export default function HomeScreen() {
 
     return {
       income,
+      borrowed,
       expense,
       cost,
     };
@@ -611,11 +601,11 @@ export default function HomeScreen() {
     return period;
   };
 
-  const showTotalBalanceCard = selectedPeriod !== "ALL TIME";
-  const totalBalanceValue =
-    periodSummary.income -
-    periodSummary.expense +
-    (selectedPeriod === "THIS_MONTH" ? carriedForwardBalance : 0);
+  const periodNetCashFlow =
+    periodSummary.income +
+    periodSummary.borrowed -
+    periodSummary.expense -
+    periodSummary.cost;
 
   const handleTransactionPress = (tx: Transaction) => {
     if (modalVisible) return;
@@ -865,6 +855,17 @@ export default function HomeScreen() {
     }, 800);
   };
 
+  const toggleTransactionSearch = () => {
+    setIsTransactionSearchOpen((open) => {
+      if (open) {
+        setSearchQuery("");
+        return false;
+      }
+      setTimeout(() => transactionSearchRef.current?.focus(), 150);
+      return true;
+    });
+  };
+
   const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       const currentY = event.contentOffset.y;
@@ -922,16 +923,18 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {showTotalBalanceCard && (
-          <View className="bg-blue-600 rounded-[12px] p-6 overflow-hidden relative">
+        <View className="bg-blue-600 rounded-lg p-4 overflow-hidden relative">
             <View className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/30 rounded-full blur-2xl" />
             <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
 
             <View className="flex-row justify-between items-start mb-2">
-              <Text className="text-blue-100 font-medium">Total Balance</Text>
+              <View>
+                <Text className="text-blue-100 font-medium">Available Balance</Text>
+                <Text className="text-blue-200 text-[10px] mt-0.5">Money across your active accounts</Text>
+              </View>
               <View className="bg-red-500/20 px-2 py-1 rounded-lg">
                 <Text className="text-red-200 text-xs font-medium">
-                  Cost: KES{" "}
+                  Period fees: KES{" "}
                   {periodSummary.cost.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -939,35 +942,38 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
-            {selectedPeriod === "THIS_MONTH" && carriedForwardBalance !== 0 && (
-              <Text className="text-blue-200 text-xs mb-1">
-                Carried Forward ({carriedForwardPeriodLabel}): KES{" "}
-                {carriedForwardBalance.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </Text>
-            )}
-            <Text className="text-white text-4xl font-bold mb-2">
-              KES {formatCurrency(totalBalanceValue)}
+            <Text className="text-white text-[16px] font-bold mb-2">
+              KES {formatCurrency(availableBalance)}
             </Text>
 
-            <View className="flex-row justify-between gap-3 mt-4">
-              <View className="flex-1 bg-green-500/30 px-3 py-2 rounded-xl">
-                <Text className="text-green-100 text-xs mb-1">Income</Text>
-                <Text className="text-white font-bold">
+            <View className="bg-white/10 rounded-lg px-3 py-2 mt-2">
+              <Text className="text-blue-100 text-xs">{getPeriodLabel(selectedPeriod)} cash flow</Text>
+              <Text className={`font-bold text-base mt-0.5 ${periodNetCashFlow >= 0 ? "text-green-100" : "text-red-100"}`}>
+                {periodNetCashFlow >= 0 ? "+" : "-"} KES {formatCurrency(Math.abs(periodNetCashFlow))}
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between gap-1 mt-4">
+              <View className="flex-1 bg-green-500/30 px-2 py-2 rounded-lg">
+                <Text className="text-green-100 text-[10px] mb-1">Income</Text>
+                <Text className="text-white text-[12px] font-bold">
                   KES {periodSummary.income.toLocaleString()}
                 </Text>
               </View>
-              <View className="flex-1 bg-red-500/30 px-3 py-2 rounded-xl">
-                <Text className="text-red-100 text-xs mb-1">Expense</Text>
-                <Text className="text-white font-bold">
+              <View className="flex-1 bg-violet-500/30 px-2 py-2 rounded-lg">
+                <Text className="text-violet-100 text-[10px] mb-1">Borrowed</Text>
+                <Text className="text-white text-[12px] font-bold">
+                  KES {periodSummary.borrowed.toLocaleString()}
+                </Text>
+              </View>
+              <View className="flex-1 bg-red-500/30 px-2 py-2 rounded-lg">
+                <Text className="text-red-100 text-[10px] mb-1">Expense / Outflow</Text>
+                <Text className="text-white text-[12px] font-bold">
                   KES {periodSummary.expense.toLocaleString()}
                 </Text>
               </View>
             </View>
-          </View>
-        )}
+        </View>
       </View>
 
       {/* Debt Summary Widget */}
@@ -1067,42 +1073,26 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View className="bg-slate-50 dark:bg-[#0f172a] h-12 px-3 rounded-[10px] flex-row items-center border border-slate-100 dark:border-slate-800">
-            <View className="w-6 h-6 items-center justify-center mr-2">
+        </View>
+
+        <View className="px-[5px] pb-3">
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity
+              onPress={toggleTransactionSearch}
+              className={`h-12 w-12 rounded-lg items-center justify-center border ${isTransactionSearchOpen ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800" : "bg-slate-50 dark:bg-[#0f172a] border-slate-100 dark:border-slate-800"}`}
+              accessibilityRole="button"
+              accessibilityLabel={isTransactionSearchOpen ? "Close transaction search" : "Search transactions"}
+            >
               <Image
                 source={require("../../assets/svg/search.svg")}
-                style={{ width: 30, height: 30 }}
+                style={{ width: 25, height: 25 }}
                 tintColor={colorScheme === "dark" ? "#93c5fd" : "#2563eb"}
                 contentFit="contain"
               />
-            </View>
-            <TextInput
-              placeholder="Search for amount, category, or recipient..."
-              placeholderTextColor={isDark ? "#94a3b8" : "#64748b"}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              className="flex-1 h-full text-sm text-slate-900 dark:text-white"
-              autoCapitalize="none"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery("")}
-                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center ml-2"
-              >
-                <Image
-                  source={require("../../assets/svg/close.svg")}
-                  style={{ width: 8, height: 8 }}
-                  tintColor={colorScheme === "dark" ? "#cbd5e1" : "#475569"}
-                  contentFit="contain"
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+            </TouchableOpacity>
 
-        <View className="px-4 pb-3">
-          <View className="bg-slate-50 dark:bg-[#0f172a] p-1 rounded-[12px] border border-slate-100 dark:border-slate-800">
-            <View className="flex-row flex-wrap gap-1">
+            <View className="flex-1 bg-slate-50 dark:bg-[#0f172a] p-1 rounded-lg border border-slate-100 dark:border-slate-800">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
               {(
                 [
                   "THIS_MONTH",
@@ -1111,12 +1101,11 @@ export default function HomeScreen() {
                   "CURRENT YEAR",
                   "ALL TIME",
                 ] as Period[]
-              ).map((period, index) => {
-                const isBottomRow = index >= 3;
+              ).map((period) => {
                 return (
                   <TouchableOpacity
                     key={period}
-                    className={`py-2 rounded-[10px] items-center justify-center ${isBottomRow ? "w-[49%]" : "w-[32%]"} ${selectedPeriod === period ? "bg-blue-600" : "bg-white dark:bg-slate-800"}`}
+                    className={`px-4 py-2 rounded-lg items-center justify-center ${selectedPeriod === period ? "bg-blue-600" : "bg-white dark:bg-slate-800"}`}
                     onPress={() => {
                       setPeriodLoading(true);
                       setDisplayLimit(20);
@@ -1127,18 +1116,49 @@ export default function HomeScreen() {
                     }}
                   >
                     <Text
-                      className={`font-semibold text-[10px] text-center ${selectedPeriod === period ? "text-white" : "text-slate-500 dark:text-slate-400"}`}
+                      className={`font-semibold text-[11px] text-center ${selectedPeriod === period ? "text-white" : "text-slate-500 dark:text-slate-400"}`}
                     >
                       {getPeriodLabel(period)}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
+              </ScrollView>
             </View>
+          </View>
+
+          {isTransactionSearchOpen && (
+            <View className="bg-slate-50 dark:bg-[#0f172a] h-12 px-3 rounded-[10px] flex-row items-center border border-slate-100 dark:border-slate-800 mt-3">
+              <TextInput
+                ref={transactionSearchRef}
+                placeholder="Search for amount, category, or recipient..."
+                placeholderTextColor={isDark ? "#94a3b8" : "#64748b"}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                className="flex-1 h-full text-sm text-slate-900 dark:text-white"
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center ml-2"
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear transaction search"
+                >
+                  <Image
+                    source={require("../../assets/svg/close.svg")}
+                    style={{ width: 8, height: 8 }}
+                    tintColor={colorScheme === "dark" ? "#cbd5e1" : "#475569"}
+                    contentFit="contain"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           </View>
         </View>
       </View>
-    </View>
   );
 
   const renderFooter = () => {

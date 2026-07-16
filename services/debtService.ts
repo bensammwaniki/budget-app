@@ -6,8 +6,7 @@ import { getCategoryIdByName } from './database';
 
 export const debtService = {
     /**
-     * Creates a new Debt Record.
-     * Always creates a principal Ledger Transaction so debt inception impacts month-level spending math.
+     * Creates a new Debt Record and its associated account movement.
      */
     async createDebt(payload: {
         userId: string;
@@ -20,6 +19,8 @@ export const debtService = {
         dueDate?: Date;
         isReducingBalance?: boolean;
         referenceId?: string;
+        /** Cash actually received after the lender's upfront deductions. */
+        disbursedAmount?: number;
     }): Promise<Debt> {
         await initDatabase();
         const db = getDb();
@@ -33,6 +34,10 @@ export const debtService = {
             ? payload.amount * (payload.interestRate / 100)
             : 0;
         const initialBalance = payload.amount + flatInterest;
+        const disbursedAmount = payload.disbursedAmount ?? payload.amount;
+        if (!Number.isFinite(disbursedAmount) || disbursedAmount < 0) {
+            throw new Error("Debt disbursement amount must be a non-negative number");
+        }
 
         await db.withTransactionAsync(async () => {
             // Resolve account fallback so debt creation always creates principal transaction.
@@ -84,7 +89,7 @@ export const debtService = {
                 const account = await db.getFirstAsync<{ balance: number }>('SELECT balance FROM accounts WHERE id = ?', [resolvedAccountId]);
                 if (!account) throw new Error("Account not found");
 
-                const balanceChange = txType === 'SENT' ? -payload.amount : payload.amount;
+                const balanceChange = txType === 'SENT' ? -disbursedAmount : disbursedAmount;
                 newBalance = account.balance + balanceChange;
 
                 await db.runAsync('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [newBalance, now, resolvedAccountId]);
@@ -101,7 +106,7 @@ export const debtService = {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             `, [
                 txId, txId, payload.userId, resolvedAccountId, null,
-                payload.amount, txType, 'DEBT_PRINCIPAL',
+                disbursedAmount, txType, 'DEBT_PRINCIPAL',
                 payload.name,
                 `${payload.type === 'LIABILITY' ? 'Loan from' : 'Lent to'} ${payload.name}`,
                 startDate,
@@ -132,6 +137,60 @@ export const debtService = {
             updatedAt: new Date(now),
             dueDate: payload.dueDate
         };
+    },
+
+    /** Corrects older imports that recorded the gross instead of net loan disbursement. */
+    async reconcileShortTermLoanDisbursement(
+        referenceId: string,
+        disbursedAmount: number,
+        upfrontFees: number,
+    ): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+        let changed = false;
+
+        await db.withTransactionAsync(async () => {
+            const principalTransaction = await db.getFirstAsync<{
+                id: string;
+                account_id: string | null;
+                amount: number;
+                linked_debt_id: string | null;
+            }>(
+                `SELECT id, account_id, amount, linked_debt_id
+                 FROM transactions
+                 WHERE reference_id = ? AND transaction_kind = 'DEBT_PRINCIPAL'
+                 LIMIT 1`,
+                [referenceId],
+            );
+            if (!principalTransaction || principalTransaction.amount === disbursedAmount) return;
+
+            const difference = disbursedAmount - principalTransaction.amount;
+            await db.runAsync(
+                "UPDATE transactions SET amount = ?, updated_at = ? WHERE id = ?",
+                [disbursedAmount, now, principalTransaction.id],
+            );
+            if (principalTransaction.account_id) {
+                await db.runAsync(
+                    "UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE id = ?",
+                    [difference, now, principalTransaction.account_id],
+                );
+            }
+            if (principalTransaction.linked_debt_id && upfrontFees > 0) {
+                await db.runAsync(
+                    `UPDATE debts
+                     SET current_balance = MAX(0, current_balance - ?), updated_at = ?
+                     WHERE id = ?`,
+                    [upfrontFees, now, principalTransaction.linked_debt_id],
+                );
+            }
+            changed = true;
+        });
+
+        if (changed) {
+            notifyListeners('DEBTS');
+            notifyListeners('TRANSACTIONS');
+        }
     },
 
     async linkTransactionToDebt(payload: {

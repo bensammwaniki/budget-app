@@ -2,8 +2,12 @@ import { Transaction } from "../types/transaction";
 
 export interface ImBankShortTermLoan {
   id: string;
+  /** Contracted loan principal before the bank's upfront deductions. */
   amount: number;
+  /** Processing fee, credit-life cover, and excise duty deducted at disbursement. */
   fees: number;
+  /** Amount that actually reaches the customer's bank account. */
+  disbursedAmount: number;
   dueDate: Date;
   date: Date;
   rawSms: string;
@@ -29,7 +33,15 @@ export const parseImBankShortTermLoanSms = (
   const id = `IM_LOAN_${date.getTime()}_${match[5].replace(/-/g, "")}_${amount.toFixed(2).replace(".", "")}`;
 
   if (!Number.isFinite(amount) || !Number.isFinite(fees) || Number.isNaN(dueDate.getTime())) return null;
-  return { id, amount, fees, dueDate, date, rawSms: smsText };
+  return {
+    id,
+    amount,
+    fees,
+    disbursedAmount: Math.max(0, amount - fees),
+    dueDate,
+    date,
+    rawSms: smsText,
+  };
 };
 
 export const parseBankSms = (

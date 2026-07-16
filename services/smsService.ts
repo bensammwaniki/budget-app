@@ -294,7 +294,16 @@ export const syncMessages = async (
           normalizedBody.includes("IANDMBANK"));
 
       if (isMpesa) {
-        const parsed = parseMpesaSms(msg.body);
+        // Fuliza confirmations can also resemble ordinary M-PESA payment
+        // messages. Detect them first so the generic parser never consumes
+        // them as a normal expense/income transaction.
+        const detectedFulizaLoan = parseFulizaLoan(msg.body, msg.date);
+        const detectedFulizaRepayment = detectedFulizaLoan
+          ? null
+          : parseFulizaRepayment(msg.body, msg.date);
+        const parsed = detectedFulizaLoan || detectedFulizaRepayment
+          ? null
+          : parseMpesaSms(msg.body);
         if (parsed) {
           if (internalMpesaRefsInBatch.has(parsed.id)) {
             parsed.isInternalTransfer = true;
@@ -314,7 +323,7 @@ export const syncMessages = async (
             newTransactionsCount++;
           }
         } else {
-          const fulizaLoan = parseFulizaLoan(msg.body, msg.date);
+          const fulizaLoan = detectedFulizaLoan;
           if (fulizaLoan) {
             if (!existingFulizaIds.has(fulizaLoan.id)) {
               await saveFulizaTransaction(fulizaLoan, false);
@@ -345,7 +354,7 @@ export const syncMessages = async (
             continue;
           }
 
-          const fulizaRepayment = parseFulizaRepayment(msg.body, msg.date);
+          const fulizaRepayment = detectedFulizaRepayment;
           if (fulizaRepayment) {
             if (!existingFulizaIds.has(fulizaRepayment.id)) {
               await saveFulizaTransaction(fulizaRepayment, false);
@@ -410,22 +419,25 @@ export const syncMessages = async (
         const bankLoan = parseImBankShortTermLoanSms(msg.body, msg.date);
         if (bankLoan) {
           if (!existingTxIds.has(bankLoan.id)) {
-            const debt = await debtService.createDebt({
+            await debtService.createDebt({
               userId: "local_user",
               type: "LIABILITY",
               name: "I&M Short-term Loan",
               amount: bankLoan.amount,
+              disbursedAmount: bankLoan.disbursedAmount,
               accountId: "ACC-BANK-DEFAULT",
               startDate: bankLoan.date,
               dueDate: bankLoan.dueDate,
               referenceId: bankLoan.id,
             });
-            if (bankLoan.fees > 0) {
-              await debtService.increaseDebtAmount(debt.id, bankLoan.fees, false);
-            }
             existingTxIds.add(bankLoan.id);
             newTransactionsCount++;
           }
+          await debtService.reconcileShortTermLoanDisbursement(
+            bankLoan.id,
+            bankLoan.disbursedAmount,
+            bankLoan.fees,
+          );
           continue;
         }
 
