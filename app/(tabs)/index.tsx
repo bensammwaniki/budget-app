@@ -43,6 +43,7 @@ import {
 import { debtService } from "../../services/debtService";
 import {
     getFinancialMonthRange,
+    getFreshStartEffectiveDate,
     getFinancialSettings,
     getPreviousFinancialMonthRange,
     isInternalTransfer,
@@ -86,6 +87,8 @@ export default function HomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
   const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
+  const [freshStartEffectiveDate, setFreshStartEffectiveDate] = useState<Date | null>(null);
+  const [resetBroughtForward, setResetBroughtForward] = useState(false);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [availableBalance, setAvailableBalance] = useState(0);
 
@@ -119,6 +122,7 @@ export default function HomeScreen() {
   const [debtSummary, setDebtSummary] = useState<{
     totalLiabilities: number;
     totalReceivables: number;
+    shortTermLiabilities: number;
     netDebt: number;
     activeDebts: number;
   } | null>(null);
@@ -177,6 +181,12 @@ export default function HomeScreen() {
         setImBankEnabled(enabled === "true");
         setFinancialMonthStart(financialSettings.monthStartDay);
         setHideInternalTransfers(financialSettings.hideInternalTransfers);
+        setFreshStartEffectiveDate(
+          getFreshStartEffectiveDate(financialSettings.freshStart),
+        );
+        setResetBroughtForward(
+          financialSettings.freshStart?.resetBroughtForward ?? false,
+        );
       } catch (error) {
         console.error("Error loading home settings:", error);
       }
@@ -607,6 +617,30 @@ export default function HomeScreen() {
     periodSummary.expense -
     periodSummary.cost;
 
+  const selectedPeriodStart =
+    selectedPeriod === "THIS_MONTH"
+      ? dateRange.startOfThisMonth
+      : selectedPeriod === "LAST_MONTH"
+        ? dateRange.startOfLastMonth
+        : selectedPeriod === "LAST 3 MONTHS"
+          ? dateRange.startOfLast3Months
+          : selectedPeriod === "CURRENT YEAR"
+            ? dateRange.startOfCurrentYear
+            : null;
+
+  const freshStartApplies =
+    resetBroughtForward &&
+    freshStartEffectiveDate &&
+    selectedPeriodStart &&
+    selectedPeriodStart >= freshStartEffectiveDate;
+
+  const balanceBroughtForward = freshStartApplies
+    ? 0
+    : availableBalance - periodNetCashFlow;
+  const periodDebtOutflow = debtSummary?.shortTermLiabilities || 0;
+  const periodCashChange = periodNetCashFlow;
+  const periodSurplus = periodSummary.income - periodSummary.expense;
+
   const handleTransactionPress = (tx: Transaction) => {
     if (modalVisible) return;
 
@@ -944,8 +978,8 @@ export default function HomeScreen() {
 
             <View className="flex-row justify-between items-start mb-2">
               <View>
-                <Text className="text-blue-100 font-medium">Available Balance</Text>
-                <Text className="text-blue-200 text-[10px] mt-0.5">Money across your active accounts</Text>
+                <Text className="text-blue-100 font-medium">Liquid cash</Text>
+                <Text className="text-blue-200 text-[10px] mt-0.5">Bank + M-Pesa + cash</Text>
               </View>
               <View className="bg-red-500/20 px-2 py-1 rounded-lg">
                 <Text className="text-red-200 text-xs font-medium">
@@ -962,15 +996,25 @@ export default function HomeScreen() {
             </Text>
 
             <View className="bg-white/10 rounded-lg px-3 py-2 mt-2">
-              <Text className="text-blue-100 text-xs">{getPeriodLabel(selectedPeriod)} cash flow</Text>
-              <Text className={`font-bold text-base mt-0.5 ${periodNetCashFlow >= 0 ? "text-green-100" : "text-red-100"}`}>
-                {periodNetCashFlow >= 0 ? "+" : "-"} KES {formatCurrency(Math.abs(periodNetCashFlow))}
+              <Text className="text-blue-100 text-xs">
+                {getPeriodLabel(selectedPeriod)} net cash movement  | Balance forward: KES {formatCurrency(balanceBroughtForward)}
               </Text>
+              <Text className={`font-bold text-base mt-0.5 ${periodCashChange >= 0 ? "text-green-100" : "text-red-100"}`}>
+                {periodCashChange >= 0 ? "+" : "-"} KES {formatCurrency(Math.abs(periodCashChange))}
+              </Text>
+              <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-white/10">
+                <Text className="text-blue-100 text-[10px]">
+                  {periodSurplus >= 0 ? "Surplus" : "Deficit"}
+                </Text>
+                <Text className={`text-[11px] font-bold ${periodSurplus >= 0 ? "text-green-100" : "text-red-100"}`}>
+                  {periodSurplus >= 0 ? "+" : "-"} KES {formatCurrency(Math.abs(periodSurplus))}
+                </Text>
+              </View>
             </View>
 
             <View className="flex-row justify-between gap-1 mt-4">
               <View className="flex-1 bg-green-500/30 px-2 py-2 rounded-lg">
-                <Text className="text-green-100 text-[10px] mb-1">Income</Text>
+                <Text className="text-green-100 text-[10px] mb-1">Earned</Text>
                 <Text className="text-white text-[12px] font-bold">
                   KES {periodSummary.income.toLocaleString()}
                 </Text>
@@ -982,7 +1026,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <View className="flex-1 bg-red-500/30 px-2 py-2 rounded-lg">
-                <Text className="text-red-100 text-[10px] mb-1">Expense / Outflow</Text>
+                <Text className="text-red-100 text-[10px] mb-1">Spent</Text>
                 <Text className="text-white text-[12px] font-bold">
                   KES {periodSummary.expense.toLocaleString()}
                 </Text>
@@ -1003,9 +1047,8 @@ export default function HomeScreen() {
                 <Text className="text-slate-900 dark:text-white text-3xl font-bold">
                   KES {Math.abs(debtSummary.netDebt).toLocaleString()}
                 </Text>
-                <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-                  {debtSummary.activeDebts} active{" "}
-                  {debtSummary.activeDebts === 1 ? "debt" : "debts"}
+                <Text className="text-purple-800 text-[10px] mt-1">
+                    Short-term debt: KES {formatCurrency(periodDebtOutflow)}
                 </Text>
               </View>
               <View className="items-end gap-y-2">

@@ -613,6 +613,7 @@ export const debtService = {
     async getDebtSummary(userId: string): Promise<{
         totalLiabilities: number;
         totalReceivables: number;
+        shortTermLiabilities: number;
         netDebt: number;
         activeDebts: number;
     }> {
@@ -644,6 +645,19 @@ export const debtService = {
         let totalLiabilities = liabilities?.total || 0;
         const totalReceivables = receivables?.total || 0;
 
+        const shortTermLiabilities = await db.getFirstAsync<{ total: number }>(`
+            SELECT COALESCE(SUM(current_balance), 0) as total
+            FROM debts
+            WHERE user_id = ?
+              AND type = 'LIABILITY'
+              AND status = 'ACTIVE'
+              AND current_balance > 0
+              AND (
+                LOWER(name) LIKE '%short-term loan%'
+                OR LOWER(name) LIKE '%short term loan%'
+              )
+        `, [userId]);
+
         const overdrafts = await db.getAllAsync<any>(`
             SELECT current_balance, updated_at 
             FROM debts 
@@ -665,6 +679,7 @@ export const debtService = {
         return {
             totalLiabilities,
             totalReceivables,
+            shortTermLiabilities: shortTermLiabilities?.total || 0,
             netDebt: totalLiabilities - totalReceivables,
             activeDebts: (liabilities?.count || 0) + (receivables?.count || 0)
         };
