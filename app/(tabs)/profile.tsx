@@ -35,13 +35,8 @@ import {
 } from "../../services/exportService";
 import { resetFinancialDataThroughDate } from "../../services/financialDataResetService";
 import {
-    buildFreshStartConfig,
-    clearFreshStartConfig,
-    FreshStartConfig,
-    getFinancialMonthRange,
     getFinancialSettings,
     saveFinancialMonthStart,
-    saveFreshStartConfig,
 } from "../../services/financialSettingsService";
 import { useScrollVisibility } from "../../services/ScrollContext";
 import { syncMessages } from "../../services/smsService";
@@ -81,14 +76,6 @@ const LOCK_TIMEOUT_OPTIONS = [
 
 const periodLabel = (period: ExportPeriod): string =>
   EXPORT_PERIOD_OPTIONS.find((p) => p.key === period)?.label || "All Time";
-
-const DEFAULT_FRESH_START_OPTIONS = {
-  resetBroughtForward: false,
-  resetDebts: false,
-  resetSavings: false,
-  resetIncome: false,
-  resetBudgets: false,
-};
 
 export default function ProfileScreen() {
   const { signOut, user, phoneNumber, updateUserProfile } = useAuth();
@@ -139,11 +126,6 @@ export default function ProfileScreen() {
   // Settings State
   const [financialMonthStart, setFinancialMonthStart] = useState(1);
   const [financialMonthDraft, setFinancialMonthDraft] = useState(1);
-  const [freshStartConfig, setFreshStartConfig] =
-    useState<FreshStartConfig | null>(null);
-  const [freshStartOptions, setFreshStartOptions] = useState(
-    DEFAULT_FRESH_START_OPTIONS,
-  );
   const [dayPickerVisible, setDayPickerVisible] = useState(false);
   const [isFinancialSettingsSaving, setIsFinancialSettingsSaving] =
     useState(false);
@@ -183,7 +165,6 @@ export default function ProfileScreen() {
     const financialSettings = await getFinancialSettings();
     setFinancialMonthStart(financialSettings.monthStartDay);
     setFinancialMonthDraft(financialSettings.monthStartDay);
-    setFreshStartConfig(financialSettings.freshStart);
   };
 
   // Initialize edit form when opening modal
@@ -202,7 +183,6 @@ export default function ProfileScreen() {
     if (!dayPickerVisible) return;
 
     setFinancialMonthDraft(financialMonthStart);
-    setFreshStartOptions(DEFAULT_FRESH_START_OPTIONS);
   }, [dayPickerVisible, financialMonthStart]);
 
   const loadCategories = async () => {
@@ -448,89 +428,6 @@ export default function ProfileScreen() {
     setFinancialMonthStart(financialMonthDraft);
   };
 
-  const handleStartFreshFromCurrentMonth = async () => {
-    const enabledResets = Object.entries(freshStartOptions).filter(
-      ([, value]) => value,
-    );
-    if (enabledResets.length === 0) {
-      try {
-        setIsFinancialSettingsSaving(true);
-        await applyFinancialSettings();
-        await clearFreshStartConfig();
-        setFreshStartConfig(null);
-        setDayPickerVisible(false);
-        Alert.alert(
-          "Recalculated",
-          "The app has been recalculated using your current financial month settings, with no fresh-start reset applied.",
-        );
-      } catch (error) {
-        console.error("Failed to recalculate financial month settings:", error);
-        Alert.alert("Error", "Failed to recalculate financial month settings.");
-      } finally {
-        setIsFinancialSettingsSaving(false);
-      }
-      return;
-    }
-
-    const effectiveRange = getFinancialMonthRange(
-      new Date(),
-      financialMonthDraft,
-    );
-    const effectiveLabel = effectiveRange.start.toLocaleDateString(undefined, {
-      month: "long",
-      year: "numeric",
-    });
-    const resetLines = [
-      freshStartOptions.resetBroughtForward &&
-        "• Balance brought forward before this month becomes 0.",
-      freshStartOptions.resetDebts &&
-        "• Pre-existing debt carry state will be excluded from the new cycle.",
-      freshStartOptions.resetSavings &&
-        "• Savings progress before this month will be treated as pre-baseline.",
-      freshStartOptions.resetIncome &&
-        "• Income progress before this month will be treated as pre-baseline.",
-      freshStartOptions.resetBudgets &&
-        "• Monthly summaries and budget carry state will restart from this month.",
-      "• Raw transactions and transaction dates will stay unchanged.",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    Alert.alert(
-      "Start Fresh From This Month",
-      `This will create a new baseline from ${effectiveLabel}.\n\n${resetLines}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Start Fresh",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsFinancialSettingsSaving(true);
-              await applyFinancialSettings();
-              const config = buildFreshStartConfig(
-                financialMonthDraft,
-                freshStartOptions,
-              );
-              await saveFreshStartConfig(config);
-              setFreshStartConfig(config);
-              setDayPickerVisible(false);
-              Alert.alert(
-                "Fresh Start Applied",
-                `A new baseline now starts from ${effectiveLabel}.`,
-              );
-            } catch (error) {
-              console.error("Failed to apply fresh start:", error);
-              Alert.alert("Error", "Failed to apply fresh-start settings.");
-            } finally {
-              setIsFinancialSettingsSaving(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
   const handleResetFinancialData = () => {
     const label = resetFromDate.toLocaleDateString(undefined, {
       day: "numeric",
@@ -549,7 +446,8 @@ export default function ProfileScreen() {
             try {
               setIsFinancialSettingsSaving(true);
               const result = await resetFinancialDataThroughDate(resetFromDate);
-              await loadSettings();
+              
+  const handleResetFinancialData =              await loadSettings();
               Alert.alert(
                 "Financial history reset",
                 `${result.transactionsRemoved} transaction${result.transactionsRemoved === 1 ? "" : "s"} removed through ${label}.`,
@@ -699,10 +597,7 @@ export default function ProfileScreen() {
                   icon: require("../../assets/svg/privacy.svg"),
                   label: "Financial Settings",
                   color: "#f59e0b",
-                  action: () => setDayPickerVisible(true),
-                  value: freshStartConfig
-                    ? `Day ${financialMonthStart} • Fresh start active`
-                    : `Day ${financialMonthStart}`,
+                  action: () => setDayPickerVisible(true),                  value: `Day ${financialMonthStart}`,
                 },
                 {
                   icon: require("../../assets/svg/graph.svg"),
@@ -876,18 +771,9 @@ export default function ProfileScreen() {
         colorScheme={colorScheme}
         financialMonthDraft={financialMonthDraft}
         onSelectDay={setFinancialMonthDraft}
-        freshStartOptions={freshStartOptions}
-        onToggleFreshStartOption={(key, value) =>
-          setFreshStartOptions((current) => ({ ...current, [key]: value }))
-        }
-        freshStartConfig={freshStartConfig}
         isSaving={isFinancialSettingsSaving}
-        primaryLabel={
-          Object.values(freshStartOptions).some(Boolean)
-            ? "Start Fresh From This Month"
-            : "Recalculate"
-        }
-        onPrimaryAction={handleStartFreshFromCurrentMonth}
+        primaryLabel="Save Month Start"
+        onPrimaryAction={handleCloseFinancialMonthModal}
         resetFromDate={resetFromDate}
         onChangeResetFromDate={setResetFromDate}
         onResetFinancialData={handleResetFinancialData}
@@ -909,3 +795,5 @@ export default function ProfileScreen() {
     </Animated.ScrollView>
   );
 }
+
+

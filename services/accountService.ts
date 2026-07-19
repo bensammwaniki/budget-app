@@ -2,6 +2,43 @@ import { Account, AccountType } from '../types/account';
 import { generateUUID, getDb, initDatabase } from './core/db';
 
 export const accountService = {
+    async reconcileBalancesFromTransactions(
+        userId: string = 'local_user',
+        sinceDate?: Date | null
+    ): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const accounts = await db.getAllAsync<{ id: string }>(
+            'SELECT id FROM accounts WHERE user_id = ? AND is_active = 1',
+            [userId]
+        );
+
+        const now = new Date().toISOString();
+        for (const account of accounts) {
+            const params: any[] = [account.id];
+            let dateClause = "";
+            if (sinceDate) {
+                dateClause = " AND date >= ?";
+                params.push(sinceDate.toISOString());
+            }
+            const totals = await db.getFirstAsync<{ received: number; sent: number }>(
+                `SELECT
+                    COALESCE(SUM(CASE WHEN type = 'RECEIVED' THEN amount ELSE 0 END), 0) AS received,
+                    COALESCE(SUM(CASE WHEN type = 'SENT' THEN amount ELSE 0 END), 0) AS sent
+                 FROM transactions
+                 WHERE account_id = ?
+                   AND is_deleted = 0${dateClause}`,
+                params
+            );
+
+            const balance = Number(totals?.received || 0) - Number(totals?.sent || 0);
+            await db.runAsync(
+                'UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?',
+                [balance, now, account.id]
+            );
+        }
+    },
+
     async createAccount(name: string, type: AccountType, userId: string = 'local_user', balance: number = 0, currency: string = 'KES'): Promise<Account> {
         await initDatabase();
         const db = getDb();

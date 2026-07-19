@@ -224,8 +224,11 @@ export const updateTransactionCategoryByScope = async (
   if (!transactionId) return;
   await initDatabase();
   const database = getDb();
+  const debtRepaymentCategoryId = await getCategoryIdByName("Debt Repayment");
 
   await database.withTransactionAsync(async () => {
+    const affectedTransactionIds = new Set<string>([transactionId]);
+
     // 1. Always update THIS transaction
     await database.runAsync(
       "UPDATE transactions SET category_id = ? WHERE id = ?",
@@ -234,6 +237,11 @@ export const updateTransactionCategoryByScope = async (
 
     // 2. Handle PAST or ALL
     if ((scope === "PAST" || scope === "ALL") && recipientId) {
+      const pastTransactions = await database.getAllAsync<{ id: string }>(
+        "SELECT id FROM transactions WHERE recipient_id = ? AND type = ? AND date <= ?",
+        [recipientId, type, transactionDate.toISOString()],
+      );
+      pastTransactions.forEach((row) => affectedTransactionIds.add(row.id));
       await database.runAsync(
         "UPDATE transactions SET category_id = ? WHERE recipient_id = ? AND type = ? AND date <= ?",
         [
@@ -247,6 +255,12 @@ export const updateTransactionCategoryByScope = async (
 
     // 3. Handle FUTURE or ALL (Automation/Rules table)
     if ((scope === "FUTURE" || scope === "ALL") && recipientId) {
+      const futureTransactions = await database.getAllAsync<{ id: string }>(
+        "SELECT id FROM transactions WHERE recipient_id = ? AND type = ? AND date > ?",
+        [recipientId, type, transactionDate.toISOString()],
+      );
+      futureTransactions.forEach((row) => affectedTransactionIds.add(row.id));
+
       await database.runAsync(
         "INSERT OR REPLACE INTO recipients (id, type, category_id, last_seen) VALUES (?, ?, ?, ?)",
         [recipientId, type, newCategoryId ?? null, new Date().toISOString()],
@@ -268,6 +282,29 @@ export const updateTransactionCategoryByScope = async (
           recipientId,
           newCategoryId,
           type,
+        );
+      }
+    }
+
+    if (
+      debtRepaymentCategoryId !== null &&
+      newCategoryId !== debtRepaymentCategoryId
+    ) {
+      const idsToUnlink = Array.from(affectedTransactionIds);
+      if (idsToUnlink.length > 0) {
+        const placeholders = idsToUnlink.map(() => "?").join(",");
+        await database.runAsync(
+          `UPDATE transactions
+           SET linked_debt_id = NULL,
+               transaction_kind = CASE WHEN type = 'SENT' THEN 'EXPENSE' ELSE 'INCOME' END,
+               updated_at = ?
+           WHERE id IN (${placeholders})`,
+          [new Date().toISOString(), ...idsToUnlink],
+        );
+        await database.runAsync(
+          `DELETE FROM debt_payments
+           WHERE transaction_id IN (${placeholders})`,
+          idsToUnlink,
         );
       }
     }
@@ -417,12 +454,13 @@ export const saveTransaction = async (
   await initDatabase();
   const database = getDb();
   const isInternalTransfer = transaction.isInternalTransfer || /internal transfer:/i.test(transaction.rawSms || "");
+  let matchedRule: AutomationRule | null = null;
 
   if (!transaction.categoryId && !isInternalTransfer) {
     const enabledRules =
       preloadedEnabledRules ??
       (await getAutomationRules()).filter((r) => r.isEnabled);
-    const matchedRule = evaluateTransaction(transaction, enabledRules);
+    matchedRule = evaluateTransaction(transaction, enabledRules);
 
     if (matchedRule) {
       transaction.categoryId = matchedRule.action.categoryId;
@@ -475,6 +513,18 @@ export const saveTransaction = async (
       0,
     ],
   );
+
+  if (matchedRule?.action.debtId) {
+    try {
+      const { debtService } = await import("./debtService");
+      await debtService.linkTransactionToDebt({
+        debtId: matchedRule.action.debtId,
+        transactionId: transaction.id,
+      });
+    } catch (error) {
+      console.error("Failed to auto-link debt repayment:", error);
+    }
+  }
 
   if (transaction.recipientId) {
     await database.runAsync(
@@ -737,15 +787,31 @@ export const applyRuleToExistingTransactions = async (
   await initDatabase();
   const database = getDb();
   const allTransactions = await getTransactions();
+  const { debtService } = await import("./debtService");
   let updatedCount = 0;
 
   for (const tx of allTransactions) {
     if (evaluateTransaction(tx, [rule])) {
+      let changed = false;
       if (tx.categoryId !== rule.action.categoryId) {
         await database.runAsync(
           "UPDATE transactions SET category_id = ? WHERE id = ?",
           [rule.action.categoryId, tx.id],
         );
+        changed = true;
+      }
+      if (rule.action.debtId && tx.linkedDebtId !== rule.action.debtId) {
+        try {
+          await debtService.linkTransactionToDebt({
+            debtId: rule.action.debtId,
+            transactionId: tx.id,
+          });
+          changed = true;
+        } catch (error) {
+          console.error("Failed to apply debt rule to existing transaction:", error);
+        }
+      }
+      if (changed) {
         updatedCount++;
       }
     }

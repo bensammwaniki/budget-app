@@ -6,66 +6,19 @@ import {
     Modal,
     Platform,
     ScrollView,
-    Switch,
     Text,
     TouchableOpacity,
     View,
 } from "react-native";
 import {
-    FreshStartConfig,
     getFinancialMonthRange,
-    getFreshStartEffectiveDate,
 } from "../../services/financialSettingsService";
-
-const FRESH_START_OPTIONS = [
-  {
-    key: "resetBroughtForward" as const,
-    title: "Balance brought forward",
-    description:
-      "Start this month with no carried balance from earlier months.",
-  },
-  {
-    key: "resetDebts" as const,
-    title: "Debt carry state",
-    description: "Treat older debt progress as part of your previous cycle.",
-  },
-  {
-    key: "resetSavings" as const,
-    title: "Savings progress baseline",
-    description: "Start tracking your savings progress fresh from this month.",
-  },
-  {
-    key: "resetIncome" as const,
-    title: "Income progress baseline",
-    description: "Start income progress tracking fresh from this month.",
-  },
-  {
-    key: "resetBudgets" as const,
-    title: "Budget and month summaries",
-    description:
-      "Rebuild your monthly summaries and budget flow from this month.",
-  },
-];
-
-type FreshStartOptions = {
-  resetBroughtForward: boolean;
-  resetDebts: boolean;
-  resetSavings: boolean;
-  resetIncome: boolean;
-  resetBudgets: boolean;
-};
 
 interface FinancialSettingsModalProps {
   visible: boolean;
   colorScheme?: string | null;
   financialMonthDraft: number;
   onSelectDay: (day: number) => void;
-  freshStartOptions: FreshStartOptions;
-  onToggleFreshStartOption: (
-    key: keyof FreshStartOptions,
-    value: boolean,
-  ) => void;
-  freshStartConfig: FreshStartConfig | null;
   isSaving: boolean;
   primaryLabel: string;
   onPrimaryAction: () => void;
@@ -82,9 +35,6 @@ export default function FinancialSettingsModal({
   colorScheme,
   financialMonthDraft,
   onSelectDay,
-  freshStartOptions,
-  onToggleFreshStartOption,
-  freshStartConfig,
   isSaving,
   primaryLabel,
   onPrimaryAction,
@@ -176,62 +126,6 @@ export default function FinancialSettingsModal({
                   })}
                   .
                 </Text>
-              </View>
-
-              <View className="rounded-[12px] bg-gray-50 dark:bg-slate-800/70 p-4 mb-5">
-                <Text className="text-slate-900 dark:text-white font-bold text-sm">
-                  Start Fresh From This Month
-                </Text>
-                <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1 mb-4">
-                  Pick what you want the app to restart from this month. Your
-                  transactions and dates will stay the same.
-                </Text>
-
-                <View className="gap-3">
-                  {FRESH_START_OPTIONS.map((option) => (
-                    <View
-                      key={option.key}
-                      className="flex-row items-center justify-between"
-                    >
-                      <View className="flex-1 pr-4">
-                        <Text className="text-slate-900 dark:text-white font-semibold text-sm">
-                          {option.title}
-                        </Text>
-                        <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-                          {option.description}
-                        </Text>
-                      </View>
-                      <Switch
-                        value={freshStartOptions[option.key]}
-                        onValueChange={(value) =>
-                          onToggleFreshStartOption(option.key, value)
-                        }
-                        disabled={isSaving}
-                        trackColor={{ false: "#cbd5e1", true: "#2563eb" }}
-                        thumbColor="#ffffff"
-                      />
-                    </View>
-                  ))}
-                </View>
-
-                {freshStartConfig &&
-                  getFreshStartEffectiveDate(freshStartConfig) && (
-                    <View className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
-                      <Text className="text-slate-900 dark:text-white font-semibold text-sm">
-                        Active Fresh Start
-                      </Text>
-                      <Text className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-                        A fresh start is currently active from{" "}
-                        {getFreshStartEffectiveDate(
-                          freshStartConfig,
-                        )?.toLocaleDateString(undefined, {
-                          month: "long",
-                          year: "numeric",
-                        })}
-                        .
-                      </Text>
-                    </View>
-                  )}
               </View>
 
               <View className="rounded-[12px] border border-blue-200 dark:border-blue-900/70 bg-blue-50 dark:bg-blue-950/20 p-4 mb-5">

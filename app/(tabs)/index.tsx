@@ -44,6 +44,7 @@ import { debtService } from "../../services/debtService";
 import {
     getFinancialMonthRange,
     getFreshStartEffectiveDate,
+    getLiquidBalanceResetDate,
     getFinancialSettings,
     getPreviousFinancialMonthRange,
     isInternalTransfer,
@@ -89,6 +90,7 @@ export default function HomeScreen() {
   const [hideInternalTransfers, setHideInternalTransfers] = useState(false);
   const [freshStartEffectiveDate, setFreshStartEffectiveDate] = useState<Date | null>(null);
   const [resetBroughtForward, setResetBroughtForward] = useState(false);
+  const [liquidBalanceResetDate, setLiquidBalanceResetDate] = useState<Date | null>(null);
   const [imBankEnabled, setImBankEnabled] = useState(false);
   const [availableBalance, setAvailableBalance] = useState(0);
 
@@ -151,6 +153,10 @@ export default function HomeScreen() {
 
     const loadAvailableBalance = async () => {
       try {
+        await accountService.reconcileBalancesFromTransactions(
+          "local_user",
+          liquidBalanceResetDate,
+        );
         const accounts = await accountService.getAccounts();
         setAvailableBalance(
           accounts.reduce((total, account) => total + Number(account.balance || 0), 0),
@@ -162,11 +168,11 @@ export default function HomeScreen() {
 
     loadAvailableBalance();
     return subscribeToDatabaseChanges((type) => {
-      if (type === "TRANSACTIONS" || type === "DEBTS") {
+      if (type === "TRANSACTIONS" || type === "DEBTS" || type === "SETTINGS") {
         loadAvailableBalance();
       }
     });
-  }, [dbReady]);
+  }, [dbReady, liquidBalanceResetDate]);
 
   // Load settings and subscribe to changes
   useEffect(() => {
@@ -186,6 +192,9 @@ export default function HomeScreen() {
         );
         setResetBroughtForward(
           financialSettings.freshStart?.resetBroughtForward ?? false,
+        );
+        setLiquidBalanceResetDate(
+          getLiquidBalanceResetDate(financialSettings.liquidBalanceResetDate),
         );
       } catch (error) {
         console.error("Error loading home settings:", error);
@@ -673,6 +682,19 @@ export default function HomeScreen() {
 
   const handleCategorySelect = async (category: Category) => {
     if (activeTransaction) {
+      if (
+        category.name.toLowerCase() === "debt repayment" &&
+        activeTransaction.type === "SENT"
+      ) {
+        setModalVisible(false);
+        setSelectedTransaction(null);
+        router.push({
+          pathname: "/debt/select",
+          params: { transactionId: activeTransaction.id },
+        });
+        return;
+      }
+
       try {
         const isFirstTime =
           !activeTransaction.categoryId || activeTransaction.categoryId === 0;

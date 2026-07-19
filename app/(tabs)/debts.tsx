@@ -139,6 +139,8 @@ export default function DebtsScreen() {
     const principal = Number(item.principalAmount || 0);
     const balance =
       Number(item.currentBalance || 0) + Number(item.accruedFees || 0);
+    const linkedPaymentCount = Number(item.linkedPaymentCount || 0);
+    const linkedPaymentAmount = Number(item.linkedPaymentAmount || 0);
 
     const originalAmount = item.isReducingBalance ? principal : principal + (principal * (item.interestRate || 0) / 100);
 
@@ -190,7 +192,9 @@ export default function DebtsScreen() {
     }
 
     const outstandingAmount = Math.max(0, balance);
-    const paidAmount = Math.max(0, originalAmount - balance);
+    const paidAmount = linkedPaymentCount > 0
+      ? Math.max(0, linkedPaymentAmount)
+      : 0;
 
     return (
       <TouchableOpacity
@@ -223,9 +227,15 @@ export default function DebtsScreen() {
                 Due {dueDateFormatted}
               </Text>
             )}
-            <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
-              Paid {formatCurrency(paidAmount)}
-            </Text>
+            {linkedPaymentCount > 0 ? (
+              <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
+                Linked {formatCurrency(paidAmount)}
+              </Text>
+            ) : (
+              <Text className="text-slate-400 dark:text-slate-500 text-[10px] mt-1">
+                No payments yet
+              </Text>
+            )}
           </View>
 
           <View className="items-end">

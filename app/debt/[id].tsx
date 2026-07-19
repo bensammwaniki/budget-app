@@ -206,10 +206,19 @@ export default function DebtDetailScreen() {
         );
     }
 
-    const originalAmount = debt.isReducingBalance ? debt.principalAmount : debt.principalAmount + (debt.principalAmount * (debt.interestRate || 0) / 100);
+    const originalAmount = debt.isReducingBalance
+        ? debt.principalAmount
+        : debt.principalAmount + (debt.principalAmount * (debt.interestRate || 0) / 100);
     const balanceWithFees = debt.currentBalance + (debt.accruedFees || 0);
     const projectedTotal = balanceWithFees + (debt.projectedInterest || 0);
-    const progress = Math.max(0, Math.min(((originalAmount - balanceWithFees) / originalAmount) * 100, 100));
+    const linkedPaymentCount = Number(debt.linkedPaymentCount || 0);
+    const linkedPaymentAmount = Number(debt.linkedPaymentAmount || 0);
+    const paidFromLinks = linkedPaymentCount > 0 ? linkedPaymentAmount : 0;
+    const currentBalanceDisplay = linkedPaymentCount > 0 ? balanceWithFees : originalAmount;
+    const outstandingDisplay = linkedPaymentCount > 0 ? balanceWithFees : originalAmount;
+    const progress = linkedPaymentCount > 0
+        ? Math.max(0, Math.min((paidFromLinks / originalAmount) * 100, 100))
+        : 0;
 
     return (
         <View className="flex-1 app-screen">
@@ -250,9 +259,13 @@ export default function DebtDetailScreen() {
 
                         <View className="flex-row justify-between items-start">
                             <View>
-                                <Text className="text-slate-500 text-sm mb-1">{debt.type === 'RECEIVABLE' ? 'Owed to You' : 'You Owe'}</Text>
+                                <Text className="text-slate-500 text-sm mb-1">
+                                    {linkedPaymentCount > 0
+                                        ? (debt.type === 'RECEIVABLE' ? 'Owed to You' : 'You Owe')
+                                        : 'Current Balance'}
+                                </Text>
                                 <Text className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-                                    KES {balanceWithFees.toLocaleString()}
+                                    KES {currentBalanceDisplay.toLocaleString()}
                                 </Text>
                                 {(debt.projectedInterest || 0) > 0 && (
                                     <View className="mb-4">
@@ -290,16 +303,25 @@ export default function DebtDetailScreen() {
                         ) : (
                             <>
                                 <View className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
-                                    <View className={`h-full ${debt.type === 'LIABILITY' ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${progress}%` }} />
+                                    <View
+                                        className={`h-full ${debt.type === 'LIABILITY' ? 'bg-red-500' : 'bg-green-500'}`}
+                                        style={{ width: `${progress}%` }}
+                                    />
                                 </View>
                                 <View className="flex-row justify-between mb-4">
                                     <View>
-                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Total Paid</Text>
-                                        <Text className="text-slate-900 dark:text-white font-bold">KES {Math.max(0, originalAmount - balanceWithFees).toLocaleString()}</Text>
+                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">
+                                            {linkedPaymentCount > 0 ? 'Total Paid' : 'Linked Payments'}
+                                        </Text>
+                                        <Text className="text-slate-900 dark:text-white font-bold">
+                                            {linkedPaymentCount > 0 ? `KES ${paidFromLinks.toLocaleString()}` : 'KES 0'}
+                                        </Text>
                                     </View>
                                     <View className="items-end">
-                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Total {debt.type === 'LIABILITY' ? 'Debt' : 'Loan'}</Text>
-                                        <Text className="text-slate-900 dark:text-white font-bold">KES {originalAmount.toLocaleString()}</Text>
+                                        <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">
+                                            {linkedPaymentCount > 0 ? `Total ${debt.type === 'LIABILITY' ? 'Debt' : 'Loan'}` : 'Original Amount'}
+                                        </Text>
+                                        <Text className="text-slate-900 dark:text-white font-bold">KES {outstandingDisplay.toLocaleString()}</Text>
                                     </View>
                                 </View>
                             </>

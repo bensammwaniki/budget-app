@@ -6,6 +6,7 @@ export interface AutomationCondition {
 
 export interface AutomationAction {
     categoryId: number;
+    debtId?: string;
 }
 
 export interface AutomationRule {

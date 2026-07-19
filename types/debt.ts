@@ -21,6 +21,8 @@ export interface Debt {
     updatedAt: Date;
     accruedFees?: number; // Estimated unbilled fees since last update
     projectedInterest?: number; // Estimated interest by the due date
+    linkedPaymentCount?: number;
+    linkedPaymentAmount?: number;
 }
 
 export interface DebtPayment {

@@ -436,7 +436,34 @@ export const debtService = {
         query += ' ORDER BY created_at DESC';
 
         const results = await db.getAllAsync<any>(query, params);
-        return results.map(mapRowToDebt);
+        const debts = results.map(mapRowToDebt);
+        const debtIds = debts.map((d) => d.id);
+        if (debtIds.length === 0) return debts;
+
+        const placeholders = debtIds.map(() => '?').join(',');
+        const paymentRows = await db.getAllAsync<{
+            debt_id: string;
+            payment_count: number;
+            payment_total: number;
+        }>(
+            `SELECT debt_id,
+                    COUNT(*) AS payment_count,
+                    COALESCE(SUM(amount), 0) AS payment_total
+             FROM debt_payments
+             WHERE debt_id IN (${placeholders})
+             GROUP BY debt_id`,
+            debtIds,
+        );
+        const paymentMap = new Map(paymentRows.map((row) => [row.debt_id, row]));
+
+        return debts.map((debt) => {
+            const payment = paymentMap.get(debt.id);
+            return {
+                ...debt,
+                linkedPaymentCount: payment?.payment_count || 0,
+                linkedPaymentAmount: payment?.payment_total || 0,
+            };
+        });
     },
 
     async getDebtById(debtId: string): Promise<Debt | null> {
@@ -604,10 +631,16 @@ export const debtService = {
                 dp.date as payment_date
             FROM transactions t
             LEFT JOIN debt_payments dp ON dp.transaction_id = t.id
-            WHERE t.linked_debt_id = ?
+            WHERE (
+                t.linked_debt_id = ?
+                OR (t.transaction_kind = 'DEBT_REPAYMENT' AND EXISTS (
+                    SELECT 1 FROM debt_payments dp2
+                    WHERE dp2.transaction_id = t.id AND dp2.debt_id = ?
+                ))
+            )
               AND t.is_deleted = 0
             ORDER BY t.date DESC, t.created_at DESC
-        `, [debtId]);
+        `, [debtId, debtId]);
     },
 
     async getDebtSummary(userId: string): Promise<{

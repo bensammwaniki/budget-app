@@ -4,6 +4,7 @@ import { getUserSettings, saveUserSettings } from "./database";
 export const FINANCIAL_MONTH_START_KEY = "financial_month_start_day";
 export const HIDE_INTERNAL_TRANSFERS_KEY = "hide_internal_transfers";
 export const FINANCIAL_FRESH_START_KEY = "financial_fresh_start_v1";
+export const LIQUID_BALANCE_RESET_KEY = "liquid_balance_reset_date_v1";
 
 export interface FreshStartConfig {
   effectiveDate: string;
@@ -19,12 +20,14 @@ export interface FinancialSettings {
   monthStartDay: number;
   hideInternalTransfers: boolean;
   freshStart: FreshStartConfig | null;
+  liquidBalanceResetDate: string | null;
 }
 
 export const DEFAULT_FINANCIAL_SETTINGS: FinancialSettings = {
   monthStartDay: 1,
   hideInternalTransfers: false,
   freshStart: null,
+  liquidBalanceResetDate: null,
 };
 
 export const getFinancialMonthStart = (
@@ -91,11 +94,12 @@ export const getPreviousFinancialMonthRange = (
 };
 
 export const getFinancialSettings = async (): Promise<FinancialSettings> => {
-  const [startDayValue, hideTransfersValue, freshStartValue] =
+  const [startDayValue, hideTransfersValue, freshStartValue, liquidResetValue] =
     await Promise.all([
       getUserSettings(FINANCIAL_MONTH_START_KEY),
       getUserSettings(HIDE_INTERNAL_TRANSFERS_KEY),
       getUserSettings(FINANCIAL_FRESH_START_KEY),
+      getUserSettings(LIQUID_BALANCE_RESET_KEY),
     ]);
 
   let freshStart: FreshStartConfig | null = null;
@@ -116,6 +120,7 @@ export const getFinancialSettings = async (): Promise<FinancialSettings> => {
         : 1,
     hideInternalTransfers: hideTransfersValue === "1",
     freshStart,
+    liquidBalanceResetDate: liquidResetValue || null,
   };
 };
 
@@ -142,6 +147,12 @@ export const saveFreshStartConfig = async (
 
 export const clearFreshStartConfig = async (): Promise<void> => {
   await saveUserSettings(FINANCIAL_FRESH_START_KEY, "");
+};
+
+export const saveLiquidBalanceResetDate = async (
+  dateIso: string | null,
+): Promise<void> => {
+  await saveUserSettings(LIQUID_BALANCE_RESET_KEY, dateIso || "");
 };
 
 export const buildFreshStartConfig = (
@@ -216,5 +227,13 @@ export const getFreshStartEffectiveDate = (
 ): Date | null => {
   if (!freshStart?.effectiveDate) return null;
   const parsed = new Date(freshStart.effectiveDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+export const getLiquidBalanceResetDate = (
+  value: string | null,
+): Date | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
