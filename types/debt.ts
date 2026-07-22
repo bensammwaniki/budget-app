@@ -23,6 +23,7 @@ export interface Debt {
     projectedInterest?: number; // Estimated interest by the due date
     linkedPaymentCount?: number;
     linkedPaymentAmount?: number;
+    mergedFromCount?: number;
 }
 
 export interface DebtPayment {

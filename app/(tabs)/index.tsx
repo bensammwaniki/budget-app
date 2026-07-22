@@ -29,7 +29,6 @@ import TransactionItem from "../../components/TransactionItem";
 import { useAlert } from "../../context/AlertContext";
 import { useTransactions } from "../../hooks/useDatabase";
 import { useAuth } from "../../services/AuthContext";
-import { accountService } from "../../services/accountService";
 import {
     confirmTransactionKesAmount,
     getUserSettings,
@@ -91,8 +90,8 @@ export default function HomeScreen() {
   const [freshStartEffectiveDate, setFreshStartEffectiveDate] = useState<Date | null>(null);
   const [resetBroughtForward, setResetBroughtForward] = useState(false);
   const [liquidBalanceResetDate, setLiquidBalanceResetDate] = useState<Date | null>(null);
+  const [liquidBalanceOpeningAmount, setLiquidBalanceOpeningAmount] = useState(0);
   const [imBankEnabled, setImBankEnabled] = useState(false);
-  const [availableBalance, setAvailableBalance] = useState(0);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,33 +146,6 @@ export default function HomeScreen() {
   const { showAlert } = useAlert();
   const activeTransaction = selectedTransaction;
 
-  // This is the user's money available now, not a report for a selected date range.
-  useEffect(() => {
-    if (!dbReady) return;
-
-    const loadAvailableBalance = async () => {
-      try {
-        await accountService.reconcileBalancesFromTransactions(
-          "local_user",
-          liquidBalanceResetDate,
-        );
-        const accounts = await accountService.getAccounts();
-        setAvailableBalance(
-          accounts.reduce((total, account) => total + Number(account.balance || 0), 0),
-        );
-      } catch (error) {
-        console.error("Error loading available balance:", error);
-      }
-    };
-
-    loadAvailableBalance();
-    return subscribeToDatabaseChanges((type) => {
-      if (type === "TRANSACTIONS" || type === "DEBTS" || type === "SETTINGS") {
-        loadAvailableBalance();
-      }
-    });
-  }, [dbReady, liquidBalanceResetDate]);
-
   // Load settings and subscribe to changes
   useEffect(() => {
     if (!dbReady) return;
@@ -196,6 +168,7 @@ export default function HomeScreen() {
         setLiquidBalanceResetDate(
           getLiquidBalanceResetDate(financialSettings.liquidBalanceResetDate),
         );
+        setLiquidBalanceOpeningAmount(financialSettings.liquidBalanceOpeningAmount || 0);
       } catch (error) {
         console.error("Error loading home settings:", error);
       }
@@ -211,6 +184,27 @@ export default function HomeScreen() {
 
     return unsubscribe;
   }, [dbReady]);
+
+  const liquidCashBalance = useMemo(() => {
+    const baseline = liquidBalanceResetDate ? Number(liquidBalanceOpeningAmount || 0) : 0;
+    const resetTime = liquidBalanceResetDate ? liquidBalanceResetDate.getTime() : 0;
+
+    const delta = allTransactions.reduce((sum, tx) => {
+      if (tx.isDeleted) return sum;
+      const txDate = tx.date instanceof Date ? tx.date : new Date(tx.date);
+      if (Number.isNaN(txDate.getTime())) return sum;
+      if (liquidBalanceResetDate && txDate < liquidBalanceResetDate) return sum;
+      if (isInternalTransfer(tx, { userPhoneNumber: phoneNumber })) return sum;
+      if (tx.transactionKind === "DEBT_PRINCIPAL") return sum;
+
+      const amount = Math.abs(Number(tx.amount || 0));
+      if (tx.type === "RECEIVED") return sum + amount;
+      if (tx.type === "SENT") return sum - amount;
+      return sum;
+    }, 0);
+
+    return baseline + delta;
+  }, [allTransactions, liquidBalanceOpeningAmount, liquidBalanceResetDate, phoneNumber]);
 
   // Load debt summary
   useEffect(() => {
@@ -645,7 +639,7 @@ export default function HomeScreen() {
 
   const balanceBroughtForward = freshStartApplies
     ? 0
-    : availableBalance - periodNetCashFlow;
+    : liquidCashBalance - periodNetCashFlow;
   const periodDebtOutflow = debtSummary?.shortTermLiabilities || 0;
   const periodCashChange = periodNetCashFlow;
   const periodSurplus = periodSummary.income - periodSummary.expense;
@@ -1014,7 +1008,7 @@ export default function HomeScreen() {
               </View>
             </View>
             <Text className="text-white text-[16px] font-bold mb-2">
-              KES {formatCurrency(availableBalance)}
+              KES {formatCurrency(liquidCashBalance)}
             </Text>
 
             <View className="bg-white/10 rounded-lg px-3 py-2 mt-2">

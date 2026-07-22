@@ -7,6 +7,7 @@ import {
     Platform,
     ScrollView,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
@@ -19,9 +20,11 @@ interface FinancialSettingsModalProps {
   colorScheme?: string | null;
   financialMonthDraft: number;
   onSelectDay: (day: number) => void;
+  onSaveMonthStart: () => void;
+  liquidCashAmount: string;
+  onChangeLiquidCashAmount: (value: string) => void;
+  onSaveLiquidCashBaseline: () => void;
   isSaving: boolean;
-  primaryLabel: string;
-  onPrimaryAction: () => void;
   resetFromDate: Date;
   onChangeResetFromDate: (date: Date) => void;
   onResetFinancialData: () => void;
@@ -35,9 +38,11 @@ export default function FinancialSettingsModal({
   colorScheme,
   financialMonthDraft,
   onSelectDay,
+  onSaveMonthStart,
+  liquidCashAmount,
+  onChangeLiquidCashAmount,
+  onSaveLiquidCashBaseline,
   isSaving,
-  primaryLabel,
-  onPrimaryAction,
   resetFromDate,
   onChangeResetFromDate,
   onResetFinancialData,
@@ -88,26 +93,58 @@ export default function FinancialSettingsModal({
                 <Text className="text-slate-900 dark:text-white font-bold text-sm mb-3">
                   Month Start Day
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row gap-2 pr-4">
+                <View className="bg-gray-50 dark:bg-slate-800/60 rounded-[14px] p-3">
+                  <View className="flex-row justify-between mb-3">
+                    {[
+                      { key: "sun", label: "S" },
+                      { key: "mon", label: "M" },
+                      { key: "tue", label: "T" },
+                      { key: "wed", label: "W" },
+                      { key: "thu", label: "T" },
+                      { key: "fri", label: "F" },
+                      { key: "sat", label: "S" },
+                    ].map((day) => (
+                      <Text
+                        key={day.key}
+                        className="w-[14.2%] text-center text-[11px] font-bold text-slate-400 dark:text-slate-500"
+                      >
+                        {day.label}
+                      </Text>
+                    ))}
+                  </View>
+
+                  <View className="flex-row flex-wrap">
                     {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => {
                       const selected = financialMonthDraft === day;
                       return (
                         <TouchableOpacity
                           key={day}
                           onPress={() => onSelectDay(day)}
-                          className={`px-4 py-2 rounded-full ${selected ? "bg-blue-600" : "bg-gray-100 dark:bg-slate-800"}`}
+                          className="w-[14.2%] aspect-square items-center justify-center"
                         >
-                          <Text
-                            className={`font-semibold text-sm ${selected ? "text-white" : "text-slate-700 dark:text-slate-200"}`}
+                          <View
+                            className={`w-10 h-10 rounded-full items-center justify-center ${selected ? "bg-blue-600" : "bg-transparent"}`}
                           >
-                            Day {day}
-                          </Text>
+                            <Text
+                              className={`font-semibold text-sm ${selected ? "text-white" : "text-slate-700 dark:text-slate-200"}`}
+                            >
+                              {day}
+                            </Text>
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                </ScrollView>
+                </View>
+                <TouchableOpacity
+                  onPress={onSaveMonthStart}
+                  disabled={isSaving}
+                  className="mt-3 py-3 rounded-xl items-center bg-slate-900 dark:bg-slate-100"
+                >
+                  <Text className="text-white dark:text-slate-900 font-bold">
+                    Save month start
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View className="rounded-[12px] bg-gray-50 dark:bg-slate-800/70 p-4 mb-5">
@@ -130,11 +167,45 @@ export default function FinancialSettingsModal({
 
               <View className="rounded-[12px] border border-blue-200 dark:border-blue-900/70 bg-blue-50 dark:bg-blue-950/20 p-4 mb-5">
                 <Text className="text-blue-800 dark:text-blue-200 font-bold text-sm">
+                  Set liquid cash baseline
+                </Text>
+                <Text className="text-blue-700 dark:text-blue-300 text-xs mt-1">
+                  Enter the cash, bank, and M-Pesa total you actually have right now.
+                  From this date forward, the app will calculate changes automatically.
+                </Text>
+                <View className="mt-3 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900 px-3 py-3">
+                  <Text className="text-slate-500 dark:text-slate-400 text-[11px] uppercase font-bold mb-2">
+                    Opening liquid cash
+                  </Text>
+                  <TextInput
+                    value={liquidCashAmount}
+                    onChangeText={onChangeLiquidCashAmount}
+                    keyboardType="numeric"
+                    placeholder="e.g. 600"
+                    placeholderTextColor="#94a3b8"
+                    className="text-slate-900 dark:text-white font-semibold text-base"
+                  />
+                </View>
+                <Text className="text-blue-700 dark:text-blue-300 text-[11px] mt-2">
+                  If today you only have KES 600, put 600 here.
+                </Text>
+                <TouchableOpacity
+                  onPress={onSaveLiquidCashBaseline}
+                  disabled={isSaving}
+                  className="mt-3 py-3 rounded-xl items-center bg-blue-600"
+                >
+                  <Text className="text-white font-bold">
+                    Save liquid baseline
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View className="rounded-[12px] border border-blue-200 dark:border-blue-900/70 bg-blue-50 dark:bg-blue-950/20 p-4 mb-5">
+                <Text className="text-blue-800 dark:text-blue-200 font-bold text-sm">
                   Sync SMS history
                 </Text>
                 <Text className="text-blue-700 dark:text-blue-300 text-xs mt-1">
-                  Re-parse your M-PESA and bank SMS messages to refresh the
-                  transaction history.
+                  Re-parse your M-PESA and bank SMS messages to refresh the transaction history.
                 </Text>
                 <TouchableOpacity
                   onPress={() => onSyncSms()}
@@ -149,7 +220,7 @@ export default function FinancialSettingsModal({
                       </Text>
                     </View>
                   ) : (
-                    <Text className="text-white font-bold">Sync all SMS</Text>
+                    <Text className="text-white font-bold">Sync SMS history</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -203,17 +274,7 @@ export default function FinancialSettingsModal({
             </View>
           </ScrollView>
 
-          <View className="p-4 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <TouchableOpacity
-              onPress={onPrimaryAction}
-              disabled={isSaving}
-              className={`py-3 rounded-[12px] items-center ${isSaving ? "bg-slate-400" : "bg-slate-900 dark:bg-slate-100"}`}
-            >
-              <Text className="text-white dark:text-slate-900 font-semibold">
-                {primaryLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <View className="p-4 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900" />
         </View>
       </View>
     </Modal>

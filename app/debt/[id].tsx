@@ -213,9 +213,10 @@ export default function DebtDetailScreen() {
     const projectedTotal = balanceWithFees + (debt.projectedInterest || 0);
     const linkedPaymentCount = Number(debt.linkedPaymentCount || 0);
     const linkedPaymentAmount = Number(debt.linkedPaymentAmount || 0);
+    const mergedFromCount = Number(debt.mergedFromCount || 0);
     const paidFromLinks = linkedPaymentCount > 0 ? linkedPaymentAmount : 0;
-    const currentBalanceDisplay = linkedPaymentCount > 0 ? balanceWithFees : originalAmount;
-    const outstandingDisplay = linkedPaymentCount > 0 ? balanceWithFees : originalAmount;
+    const currentBalanceDisplay = balanceWithFees;
+    const outstandingDisplay = balanceWithFees;
     const progress = linkedPaymentCount > 0
         ? Math.max(0, Math.min((paidFromLinks / originalAmount) * 100, 100))
         : 0;
@@ -238,9 +239,18 @@ export default function DebtDetailScreen() {
                             contentFit="contain"
                         />
                     </TouchableOpacity>
-                    <Text className="text-xl font-bold text-slate-900 dark:text-white">{(debt.name || '').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</Text>
+                    <Text className="text-xl font-bold text-slate-900 dark:text-white">
+                        {(() => {
+                            const formattedName = (debt.name || '')
+                                .toLowerCase()
+                                .split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+                            return formattedName.length > 15 ? `${formattedName.slice(0, 27)}...` : formattedName;
+                        })()}
+                    </Text>
                     <TouchableOpacity onPress={handleDeleteDebt} className="p-2 -mr-2">
-                        <FontAwesome name="trash-o" size={22} color="#ef4444" />
+                        <FontAwesome name="trash-o" size={22} color="#ef4444"/>
                     </TouchableOpacity>
                 </View>
             </Animated.View>
@@ -260,7 +270,9 @@ export default function DebtDetailScreen() {
                         <View className="flex-row justify-between items-start">
                             <View>
                                 <Text className="text-slate-500 text-sm mb-1">
-                                    {linkedPaymentCount > 0
+                                    {mergedFromCount > 0
+                                        ? 'Merged Balance'
+                                        : linkedPaymentCount > 0
                                         ? (debt.type === 'RECEIVABLE' ? 'Owed to You' : 'You Owe')
                                         : 'Current Balance'}
                                 </Text>
@@ -269,10 +281,15 @@ export default function DebtDetailScreen() {
                                 </Text>
                                 {(debt.projectedInterest || 0) > 0 && (
                                     <View className="mb-4">
-                                        <Text className="text-blue-500 font-bold text-lg">
-                                            → KES {projectedTotal.toLocaleString()}
+                                        <Text className="text-slate-500 text-[10px] uppercase font-bold mb-1">
+                                            Estimated Total
                                         </Text>
-                                        <Text className="text-slate-400 text-[10px] uppercase font-bold">Projected by {debt.dueDate?.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</Text>
+                                        <Text className="text-blue-500 font-bold text-lg">
+                                            KES {projectedTotal.toLocaleString()}
+                                        </Text>
+                                        <Text className="text-slate-400 text-[10px] uppercase font-bold">
+                                            Projected by {debt.dueDate?.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                        </Text>
                                     </View>
                                 )}
                                 {(debt.accruedFees || 0) > 0 && (
@@ -311,21 +328,42 @@ export default function DebtDetailScreen() {
                                 <View className="flex-row justify-between mb-4">
                                     <View>
                                         <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">
-                                            {linkedPaymentCount > 0 ? 'Total Paid' : 'Linked Payments'}
+                                            {mergedFromCount > 0
+                                                ? 'Merged Debts'
+                                                : linkedPaymentCount > 0
+                                                    ? 'Total Paid'
+                                                    : 'Linked Payments'}
                                         </Text>
                                         <Text className="text-slate-900 dark:text-white font-bold">
-                                            {linkedPaymentCount > 0 ? `KES ${paidFromLinks.toLocaleString()}` : 'KES 0'}
+                                            {mergedFromCount > 0
+                                                ? `${mergedFromCount} debt${mergedFromCount > 1 ? 's' : ''}`
+                                                : linkedPaymentCount > 0
+                                                    ? `KES ${paidFromLinks.toLocaleString()}`
+                                                    : 'KES 0'}
                                         </Text>
                                     </View>
                                     <View className="items-end">
                                         <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">
-                                            {linkedPaymentCount > 0 ? `Total ${debt.type === 'LIABILITY' ? 'Debt' : 'Loan'}` : 'Original Amount'}
+                                            {mergedFromCount > 0
+                                                ? 'Merged Total'
+                                                : linkedPaymentCount > 0
+                                                    ? `Total ${debt.type === 'LIABILITY' ? 'Debt' : 'Loan'}`
+                                                    : 'Current Amount'}
                                         </Text>
                                         <Text className="text-slate-900 dark:text-white font-bold">KES {outstandingDisplay.toLocaleString()}</Text>
                                     </View>
                                 </View>
                             </>
                         )}
+
+                        <View className="flex-row gap-3 mt-2">
+                            <TouchableOpacity
+                                onPress={() => router.push({ pathname: '/debt/merge', params: { sourceId: debt.id } })}
+                                className="flex-1 bg-slate-100 dark:bg-slate-800 px-4 py-3 rounded-full items-center"
+                            >
+                                <Text className="text-slate-700 dark:text-slate-200 font-semibold">Merge with another debt</Text>
+                            </TouchableOpacity>
+                        </View>
 
                         <View className="mt-2 pt-4 border-t border-slate-50 dark:border-slate-800 flex-row justify-between items-center">
                             <View className="flex-row items-center gap-2">

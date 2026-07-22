@@ -125,6 +125,7 @@ async function performInitialization() {
                 current_balance REAL NOT NULL,
                 is_revolving INTEGER DEFAULT 0,
                 is_reducing_balance INTEGER DEFAULT 0,
+                merged_from_count INTEGER DEFAULT 0,
                 interest_rate REAL,
                 status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PAID', 'DEFAULTED')),
                 start_date TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -311,6 +312,14 @@ async function performInitialization() {
                 await database.execAsync(`ALTER TABLE debts ADD COLUMN is_reducing_balance INTEGER DEFAULT 0`);
             } catch (e) {
                 console.warn(`⚠️ Failed to add is_reducing_balance in debts:`, e);
+            }
+        }
+        if (!debtColumns.includes('merged_from_count')) {
+            console.log(`🛠️ Migrating debts: Adding merged_from_count`);
+            try {
+                await database.execAsync(`ALTER TABLE debts ADD COLUMN merged_from_count INTEGER DEFAULT 0`);
+            } catch (e) {
+                console.warn(`⚠️ Failed to add merged_from_count in debts:`, e);
             }
         }
 

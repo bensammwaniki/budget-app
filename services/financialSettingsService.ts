@@ -21,6 +21,7 @@ export interface FinancialSettings {
   hideInternalTransfers: boolean;
   freshStart: FreshStartConfig | null;
   liquidBalanceResetDate: string | null;
+  liquidBalanceOpeningAmount: number;
 }
 
 export const DEFAULT_FINANCIAL_SETTINGS: FinancialSettings = {
@@ -28,6 +29,7 @@ export const DEFAULT_FINANCIAL_SETTINGS: FinancialSettings = {
   hideInternalTransfers: false,
   freshStart: null,
   liquidBalanceResetDate: null,
+  liquidBalanceOpeningAmount: 0,
 };
 
 export const getFinancialMonthStart = (
@@ -111,6 +113,24 @@ export const getFinancialSettings = async (): Promise<FinancialSettings> => {
     }
   }
 
+  let liquidBalanceResetDate: string | null = null;
+  let liquidBalanceOpeningAmount = 0;
+  if (liquidResetValue) {
+    try {
+      const parsed = JSON.parse(liquidResetValue) as {
+        effectiveDate?: string;
+        openingAmount?: number;
+        date?: string;
+        amount?: number;
+      };
+      liquidBalanceResetDate = parsed.effectiveDate || parsed.date || null;
+      liquidBalanceOpeningAmount = Number(parsed.openingAmount ?? parsed.amount ?? 0);
+    } catch {
+      liquidBalanceResetDate = liquidResetValue;
+      liquidBalanceOpeningAmount = 0;
+    }
+  }
+
   const monthStartDay = Number.parseInt(startDayValue || "", 10);
 
   return {
@@ -120,7 +140,8 @@ export const getFinancialSettings = async (): Promise<FinancialSettings> => {
         : 1,
     hideInternalTransfers: hideTransfersValue === "1",
     freshStart,
-    liquidBalanceResetDate: liquidResetValue || null,
+    liquidBalanceResetDate,
+    liquidBalanceOpeningAmount,
   };
 };
 
@@ -151,8 +172,20 @@ export const clearFreshStartConfig = async (): Promise<void> => {
 
 export const saveLiquidBalanceResetDate = async (
   dateIso: string | null,
+  openingAmount: number = 0,
 ): Promise<void> => {
-  await saveUserSettings(LIQUID_BALANCE_RESET_KEY, dateIso || "");
+  if (!dateIso) {
+    await saveUserSettings(LIQUID_BALANCE_RESET_KEY, "");
+    return;
+  }
+
+  await saveUserSettings(
+    LIQUID_BALANCE_RESET_KEY,
+    JSON.stringify({
+      effectiveDate: dateIso,
+      openingAmount: Number.isFinite(openingAmount) ? openingAmount : 0,
+    }),
+  );
 };
 
 export const buildFreshStartConfig = (

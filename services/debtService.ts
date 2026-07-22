@@ -176,14 +176,9 @@ export const debtService = {
                     [difference, now, principalTransaction.account_id],
                 );
             }
-            if (principalTransaction.linked_debt_id && upfrontFees > 0) {
-                await db.runAsync(
-                    `UPDATE debts
-                     SET current_balance = MAX(0, current_balance - ?), updated_at = ?
-                     WHERE id = ?`,
-                    [upfrontFees, now, principalTransaction.linked_debt_id],
-                );
-            }
+            // The debt balance itself should remain the amount owed.
+            // Upfront fees are reflected in the received cash / account movement,
+            // not as a reduction to the debt principal.
             changed = true;
         });
 
@@ -462,6 +457,7 @@ export const debtService = {
                 ...debt,
                 linkedPaymentCount: payment?.payment_count || 0,
                 linkedPaymentAmount: payment?.payment_total || 0,
+                mergedFromCount: Number((debt as any).merged_from_count || 0),
             };
         });
     },
@@ -589,6 +585,65 @@ export const debtService = {
 
             // Finally, delete the debt record
             await db.runAsync("DELETE FROM debts WHERE id = ?", [debtId]);
+        });
+
+        notifyListeners('DEBTS');
+        notifyListeners('TRANSACTIONS');
+    },
+
+    async mergeDebts(payload: {
+        sourceDebtId: string;
+        targetDebtId: string;
+    }): Promise<void> {
+        await initDatabase();
+        const db = getDb();
+        const now = new Date().toISOString();
+
+        if (payload.sourceDebtId === payload.targetDebtId) {
+            throw new Error('Choose two different debts to merge');
+        }
+
+        await db.withTransactionAsync(async () => {
+            const source = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [payload.sourceDebtId]);
+            const target = await db.getFirstAsync<any>('SELECT * FROM debts WHERE id = ?', [payload.targetDebtId]);
+
+            if (!source) throw new Error('Source debt not found');
+            if (!target) throw new Error('Target debt not found');
+            if (source.user_id !== target.user_id) throw new Error('Debts must belong to the same profile');
+            if (source.status === 'PAID') throw new Error('Paid debts cannot be merged');
+            if (target.status === 'PAID') throw new Error('You cannot merge into a paid debt');
+            if (source.type !== target.type) throw new Error('Only debts of the same type can be merged');
+
+            const mergedPrincipal = Number(target.principal_amount || 0) + Number(source.principal_amount || 0);
+            const mergedBalance = Number(target.current_balance || 0) + Number(source.current_balance || 0);
+            const mergedStatus = mergedBalance <= 0 ? 'PAID' : 'ACTIVE';
+
+            await db.runAsync(
+                `UPDATE debt_payments
+                 SET debt_id = ?
+                 WHERE debt_id = ?`,
+                [payload.targetDebtId, payload.sourceDebtId],
+            );
+
+            await db.runAsync(
+                `UPDATE transactions
+                 SET linked_debt_id = ?
+                 WHERE linked_debt_id = ?`,
+                [payload.targetDebtId, payload.sourceDebtId],
+            );
+
+            await db.runAsync(
+                `UPDATE debts
+                 SET principal_amount = ?,
+                     current_balance = ?,
+                     merged_from_count = COALESCE(merged_from_count, 0) + 1,
+                     status = ?,
+                     updated_at = ?
+                 WHERE id = ?`,
+                [mergedPrincipal, mergedBalance, mergedStatus, now, payload.targetDebtId],
+            );
+
+            await db.runAsync('DELETE FROM debts WHERE id = ?', [payload.sourceDebtId]);
         });
 
         notifyListeners('DEBTS');
@@ -872,6 +927,7 @@ const mapRowToDebt = (row: any): Debt => {
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
         accruedFees,
-        projectedInterest
+        projectedInterest,
+        mergedFromCount: Number(row.merged_from_count || 0)
     };
 };

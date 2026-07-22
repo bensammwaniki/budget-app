@@ -141,6 +141,7 @@ export default function DebtsScreen() {
       Number(item.currentBalance || 0) + Number(item.accruedFees || 0);
     const linkedPaymentCount = Number(item.linkedPaymentCount || 0);
     const linkedPaymentAmount = Number(item.linkedPaymentAmount || 0);
+    const mergedFromCount = Number(item.mergedFromCount || 0);
 
     const originalAmount = item.isReducingBalance ? principal : principal + (principal * (item.interestRate || 0) / 100);
 
@@ -191,7 +192,7 @@ export default function DebtsScreen() {
       );
     }
 
-    const outstandingAmount = Math.max(0, balance);
+    const currentBalanceAmount = Math.max(0, balance);
     const paidAmount = linkedPaymentCount > 0
       ? Math.max(0, linkedPaymentAmount)
       : 0;
@@ -240,10 +241,14 @@ export default function DebtsScreen() {
 
           <View className="items-end">
             <Text style={{ color: mainColor }} className="text-[10px] font-bold uppercase tracking-[0.8px]">
-              Outstanding
+              {mergedFromCount > 0
+                ? 'Merged Amount'
+                : linkedPaymentCount > 0
+                  ? 'Current Balance'
+                  : 'Current Amount'}
             </Text>
             <Text style={{ color: mainColor }} className="font-black text-[14px] mt-1">
-              {formatCurrency(outstandingAmount)}
+              {formatCurrency(currentBalanceAmount)}
             </Text>
           </View>
         </View>

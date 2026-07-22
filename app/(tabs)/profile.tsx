@@ -35,8 +35,9 @@ import {
 } from "../../services/exportService";
 import { resetFinancialDataThroughDate } from "../../services/financialDataResetService";
 import {
-    getFinancialSettings,
-    saveFinancialMonthStart,
+  getFinancialSettings,
+  saveFinancialMonthStart,
+  saveLiquidBalanceResetDate,
 } from "../../services/financialSettingsService";
 import { useScrollVisibility } from "../../services/ScrollContext";
 import { syncMessages } from "../../services/smsService";
@@ -131,6 +132,7 @@ export default function ProfileScreen() {
     useState(false);
   const [isSyncingSms, setIsSyncingSms] = useState(false);
   const [resetFromDate, setResetFromDate] = useState(new Date());
+  const [liquidCashAmount, setLiquidCashAmount] = useState("0");
   const [isThemeSwitching, setIsThemeSwitching] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [exportPeriodModalVisible, setExportPeriodModalVisible] =
@@ -165,6 +167,15 @@ export default function ProfileScreen() {
     const financialSettings = await getFinancialSettings();
     setFinancialMonthStart(financialSettings.monthStartDay);
     setFinancialMonthDraft(financialSettings.monthStartDay);
+    setLiquidCashAmount(
+      String(Math.max(0, Math.round(financialSettings.liquidBalanceOpeningAmount || 0))),
+    );
+    if (financialSettings.liquidBalanceResetDate) {
+      const parsed = new Date(financialSettings.liquidBalanceResetDate);
+      if (!Number.isNaN(parsed.getTime())) {
+        setResetFromDate(parsed);
+      }
+    }
   };
 
   // Initialize edit form when opening modal
@@ -413,7 +424,6 @@ export default function ProfileScreen() {
   const handleCloseFinancialMonthModal = async () => {
     try {
       setIsFinancialSettingsSaving(true);
-      await applyFinancialSettings();
       setDayPickerVisible(false);
     } catch (error) {
       console.error("Failed to save financial month settings:", error);
@@ -426,6 +436,26 @@ export default function ProfileScreen() {
   const applyFinancialSettings = async () => {
     await saveFinancialMonthStart(financialMonthDraft);
     setFinancialMonthStart(financialMonthDraft);
+  };
+
+  const handleSaveLiquidCashBaseline = async () => {
+    await saveLiquidBalanceResetDate(
+      resetFromDate.toISOString(),
+      Number.parseFloat(liquidCashAmount) || 0,
+    );
+  };
+
+  const handleSaveMonthStart = async () => {
+    try {
+      setIsFinancialSettingsSaving(true);
+      await applyFinancialSettings();
+      Alert.alert("Saved", "Month start day updated.");
+    } catch (error) {
+      console.error("Failed to save month start:", error);
+      Alert.alert("Error", "Failed to save month start day.");
+    } finally {
+      setIsFinancialSettingsSaving(false);
+    }
   };
 
   const handleResetFinancialData = () => {
@@ -446,8 +476,7 @@ export default function ProfileScreen() {
             try {
               setIsFinancialSettingsSaving(true);
               const result = await resetFinancialDataThroughDate(resetFromDate);
-              
-  const handleResetFinancialData =              await loadSettings();
+              await loadSettings();
               Alert.alert(
                 "Financial history reset",
                 `${result.transactionsRemoved} transaction${result.transactionsRemoved === 1 ? "" : "s"} removed through ${label}.`,
@@ -771,9 +800,11 @@ export default function ProfileScreen() {
         colorScheme={colorScheme}
         financialMonthDraft={financialMonthDraft}
         onSelectDay={setFinancialMonthDraft}
+        onSaveMonthStart={handleSaveMonthStart}
+        liquidCashAmount={liquidCashAmount}
+        onChangeLiquidCashAmount={setLiquidCashAmount}
+        onSaveLiquidCashBaseline={handleSaveLiquidCashBaseline}
         isSaving={isFinancialSettingsSaving}
-        primaryLabel="Save Month Start"
-        onPrimaryAction={handleCloseFinancialMonthModal}
         resetFromDate={resetFromDate}
         onChangeResetFromDate={setResetFromDate}
         onResetFinancialData={handleResetFinancialData}

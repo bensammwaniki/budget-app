@@ -433,6 +433,33 @@ export const syncMessages = async (
             existingTxIds.add(bankLoan.id);
             newTransactionsCount++;
           }
+          if (bankLoan.fees > 0) {
+            const feeTxId = `${bankLoan.id}_FEES`;
+            if (!existingTxIds.has(feeTxId)) {
+              await saveTransaction({
+                id: feeTxId,
+                uuid: feeTxId,
+                userId: "local_user",
+                accountId: "ACC-BANK-DEFAULT",
+                amount: bankLoan.fees,
+                type: "SENT",
+                transactionKind: "EXPENSE",
+                recipientName: "I&M Loan Fees",
+                rawSms: `${bankLoan.rawSms} [Upfront loan fees recorded separately]`,
+                date: bankLoan.date,
+                balance: 0,
+                balanceAfter: 0,
+                transactionCost: 0,
+                referenceId: bankLoan.id,
+                isAmountConfirmed: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                isDeleted: false,
+              });
+              existingTxIds.add(feeTxId);
+              newTransactionsCount++;
+            }
+          }
           await debtService.reconcileShortTermLoanDisbursement(
             bankLoan.id,
             bankLoan.disbursedAmount,
