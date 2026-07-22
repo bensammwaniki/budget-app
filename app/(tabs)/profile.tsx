@@ -39,6 +39,7 @@ import {
   saveFinancialMonthStart,
   saveLiquidBalanceResetDate,
 } from "../../services/financialSettingsService";
+import { setAppGuideSeen } from "../../services/onboardingService";
 import { useScrollVisibility } from "../../services/ScrollContext";
 import { syncMessages } from "../../services/smsService";
 import { Category } from "../../types/transaction";
@@ -627,6 +628,15 @@ export default function ProfileScreen() {
                   label: "Financial Settings",
                   color: "#f59e0b",
                   action: () => setDayPickerVisible(true),                  value: `Day ${financialMonthStart}`,
+                },
+                {
+                  icon: require("../../assets/svg/automation.svg"),
+                  label: "Show App Guide",
+                  color: "#2563eb",
+                  action: async () => {
+                    await setAppGuideSeen(false);
+                    Alert.alert("Guide ready", "Open Home to see the walkthrough again.");
+                  },
                 },
                 {
                   icon: require("../../assets/svg/graph.svg"),

@@ -24,6 +24,7 @@ import CashTransactionModal from "../../components/modals/CashTransactionModal";
 import RecategorizeScopeModal from "../../components/modals/RecategorizeScopeModal";
 import SelectIncomeSourceSheet from "../../components/modals/SelectIncomeSourceSheet";
 import SelectSavingsGoalSheet from "../../components/modals/SelectSavingsGoalSheet";
+import FirstRunGuide from "../../components/FirstRunGuide";
 import { TransactionSkeleton } from "../../components/SkeletonLoader";
 import TransactionItem from "../../components/TransactionItem";
 import { useAlert } from "../../context/AlertContext";
@@ -54,6 +55,7 @@ import { manualRecurringTransactionService } from "../../services/manualRecurrin
 import { SavingsGoal, savingsService } from "../../services/savingsService";
 import { useScrollVisibility } from "../../services/ScrollContext";
 import { syncMessages } from "../../services/smsService";
+import { getAppGuideSeen, setAppGuideSeen } from "../../services/onboardingService";
 import { Category, Transaction } from "../../types/transaction";
 // calculateFulizaDailyCharge removed - now handled in debt detail if needed
 
@@ -92,6 +94,8 @@ export default function HomeScreen() {
   const [liquidBalanceResetDate, setLiquidBalanceResetDate] = useState<Date | null>(null);
   const [liquidBalanceOpeningAmount, setLiquidBalanceOpeningAmount] = useState(0);
   const [imBankEnabled, setImBankEnabled] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [guideStep, setGuideStep] = useState(0);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
@@ -184,6 +188,31 @@ export default function HomeScreen() {
 
     return unsubscribe;
   }, [dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    const runGuide = async () => {
+      const seen = await getAppGuideSeen();
+      if (!seen) {
+        setGuideStep(0);
+        setShowGuide(true);
+        await setAppGuideSeen(true);
+      }
+    };
+    runGuide();
+  }, [dbReady]);
+
+  const handleGuideNext = () => {
+    setGuideStep((prev) => {
+      if (prev >= 3) {
+        setShowGuide(false);
+        return 3;
+      }
+      return prev + 1;
+    });
+  };
+
+  const handleGuideSkip = () => setShowGuide(false);
 
   const liquidCashBalance = useMemo(() => {
     const baseline = liquidBalanceResetDate ? Number(liquidBalanceOpeningAmount || 0) : 0;
@@ -1414,6 +1443,13 @@ export default function HomeScreen() {
           }
           setSelectedTransaction(null);
         }}
+      />
+
+      <FirstRunGuide
+        visible={showGuide}
+        step={guideStep}
+        onNext={handleGuideNext}
+        onSkip={handleGuideSkip}
       />
     </View>
   );
