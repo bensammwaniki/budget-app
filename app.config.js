@@ -2,6 +2,7 @@ const IS_DEV = process.env.APP_VARIANT === 'development';
 
 export default {
     "expo": {
+        "owner": "bensammwaniki1",
         "name": IS_DEV ? "Fanga Dev" : "Fanga Budget",
         "slug": "budget-app",
         "version": "1.0.0",
@@ -9,7 +10,7 @@ export default {
         "icon": "./assets/images/icon.png",
         "scheme": "fangabudget",
         "userInterfaceStyle": "automatic",
-        "newArchEnabled": true,
+        "newArchEnabled": false,
         "ios": {
             "supportsTablet": true,
             "config": {
@@ -70,8 +71,8 @@ export default {
             "expo-web-browser"
         ],
         "experiments": {
-            "typedRoutes": true,
-            "reactCompiler": true
+            "typedRoutes": false,
+            "reactCompiler": false
         },
         "extra": {
             "router": {},

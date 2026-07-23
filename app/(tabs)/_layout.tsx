@@ -26,7 +26,7 @@ export default function TabLayout() {
             <Image
               source={require('../../assets/svg/home.svg')}
               style={{ width: 26, height: 26 }}
-              tintColor={color}
+              tintColor={color as string}
               contentFit="contain"
             />
           ),
@@ -48,7 +48,7 @@ export default function TabLayout() {
             <Image
               source={require('../../assets/svg/analytics.svg')}
               style={{ width: 22, height: 22 }}
-              tintColor={color}
+              tintColor={color as string}
               contentFit="contain"
             />
           ),
@@ -63,7 +63,7 @@ export default function TabLayout() {
             <Image
               source={require('../../assets/svg/debts.svg')}
               style={{ width: 28, height: 28 }}
-              tintColor={color}
+              tintColor={color as string}
               contentFit="contain"
             />
           ),
@@ -78,7 +78,7 @@ export default function TabLayout() {
             <Image
               source={require('../../assets/svg/goal.svg')}
               style={{ width: 24, height: 24 }}
-              tintColor={color}
+              tintColor={color as string}
               contentFit="contain"
             />
           ),
