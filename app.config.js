@@ -20,7 +20,6 @@ export default {
         },
         "android": {
             "package": IS_DEV ? "fanga_budget.android.dev" : "fanga_budget.android",
-            "versionCode": 1,
             "adaptiveIcon": {
                 "backgroundColor": "#E6F4FE",
                 "foregroundImage": "./assets/images/icon.png",
