@@ -1,4 +1,4 @@
-import { Slot, Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import "../global.css";
 
 import { useEffect, useState } from "react";
@@ -34,11 +34,13 @@ function RootLayoutContent() {
     } else if (user && inAuthGroup) {
       router.replace("/(tabs)");
     }
-  }, [user, authLoading, inAuthGroup, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading, inAuthGroup]);
 
   useEffect(() => {
     recordActivity();
-  }, [recordActivity, segments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments]);
 
   const shouldBlockAppTree =
     authLoading || (user && !inAuthGroup && !isSecurityReady);
@@ -62,7 +64,6 @@ function RootLayoutContent() {
     <PermissionGuard>
       <ScrollProvider>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="debt/add"
@@ -72,7 +73,6 @@ function RootLayoutContent() {
               gestureEnabled: true,
             }}
           />
-          <Slot />
         </Stack>
       </ScrollProvider>
     </PermissionGuard>
