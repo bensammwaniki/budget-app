@@ -1,274 +1,183 @@
-# Fanga Budget 💰
+# Fanga Budget
 
-A modern, feature-rich budget tracking application built with React Native and Expo. Take charge of your finances with a beautiful, intuitive interface featuring premium glassmorphism design.
+Fanga Budget is a local-first personal-finance app for tracking Kenyan financial activity in KES. It imports supported SMS transactions on Android, supports manual entries, and brings budgeting, debts, savings, income, automation, analytics, export, and app security into one ledger-based experience.
 
-## ✨ Features
+For the complete product and QA reference, see [APP_SPECIFICATION.md](./APP_SPECIFICATION.md).
 
-- **🔐 Authentication**
-  - Email/Password authentication via Firebase
-  - Protected routes with automatic redirection
-  - Persistent user sessions with AsyncStorage
-  - Optional AWS cloud backup restore on sign-in
+## What it does
 
-- **🎨 Premium UI/UX**
-  - Glassmorphism design with foggy glass effects
-  - Light/Dark mode support with smooth transitions
-  - Responsive layouts optimized for mobile devices
-  - Modern gradient backgrounds and blur effects
+- Imports and categorizes supported M-PESA SMS transactions on Android.
+- Tracks optional I&M Bank SMS activity, including transfers, card purchases, and short-term loan activity.
+- Records manual cash, M-PESA, and bank income/expense entries, including monthly recurring entries.
+- Maintains accounts and internal transfers without counting transfers as income or spending.
+- Organizes transactions with categories, learned recipient associations, and configurable automation rules.
+- Manages income sources, recurring-income detection, SMS matching, and manual income records.
+- Manages savings goals, deposits, progress, target dates, and linked transactions.
+- Manages liabilities, receivables, Fuliza/overdraft activity, linked repayments, debt clearing, and debt merging.
+- Supports monthly budgets, financial-period summaries, spending analysis, net worth, forecasts, and Excel export.
+- Protects financial data with a PIN, optional biometrics, lock timeout, and optional AWS backup.
 
-- **📊 Core Functionality**
-  - Budget tracking and analytics
-  - Tab-based navigation (Home, Analytics, Explore, Profile)
-  - User profile management
-  - Real-time data synchronization
+## Platforms and important limitations
 
-- **⚡ Performance**
-  - Built with React 19 and React Native 0.81
-  - NativeWind (TailwindCSS) for efficient styling
-  - Optimized Metro bundler configuration
-  - Expo Go compatible
+| Platform | Support |
+| --- | --- |
+| Android | Full feature set, including SMS import after `READ_SMS` permission is granted. Use a development/custom build for native SMS functionality. |
+| iOS | Finance, authentication, manual entry, and supported non-SMS features; device SMS import is not available. |
+| Web | Supported UI and non-native features; device SMS import and native security/photo flows have platform limitations. |
 
-## 🛠 Tech Stack
+The app currently requires Android SMS permission before it renders the protected app experience. I&M Bank is the only bank currently exposed in the bank settings UI.
 
-### Core
-- **React Native** 0.81.5
-- **Expo** ~54.0.25
-- **TypeScript** ~5.9.2
-- **Expo Router** ~6.0.15 (File-based routing)
+## Main areas
 
-### Styling
-- **NativeWind** ^4.2.1 (TailwindCSS for React Native)
-- **TailwindCSS** ^3.4.18
-- **expo-blur** ~15.0.7
-- **expo-linear-gradient** ^15.0.7
+| Area | Description |
+| --- | --- |
+| Home | Liquid-cash overview, period filters, transaction search, SMS sync, manual entries, categorization, and transaction linking. |
+| Analytics | Savings rate, debt-to-income ratio, spending velocity, category trends, net worth, and forecasts. |
+| Debts | Liabilities, receivables, Fuliza, repayments, payment linking, clearing, and merging. |
+| Savings | Savings-goal creation, progress, deposit history, and transaction linking. |
+| Profile | Profile/security settings, dark mode, budgets, banks, automation, financial settings, Excel export, and privacy policy. |
 
-### Backend & State
-- **Firebase** ^12.6.0 (Authentication)
-- **AsyncStorage** 2.2.0 (Persistent storage)
+Income management is available from Profile rather than the visible bottom tab bar. It includes manual sources, pattern detection, history, SMS matching, and manual records.
 
-### Navigation
-- **Expo Router** (File-based routing)
-- **React Navigation** ^7.1.8
+## Technology
 
-## 📦 Installation
+- Expo 57, React Native 0.86, React 19, TypeScript
+- Expo Router and React Navigation
+- NativeWind / Tailwind CSS styling
+- Expo SQLite for the local ledger and application data
+- Firebase Authentication and Firebase Storage
+- Android SMS access through `react-native-get-sms-android`
+- SecureStore and Local Authentication for app locking
+- Optional AWS Lambda/S3-compatible cloud backup API
 
-### Prerequisites
-- **Node.js** (v16 or higher)
-- **npm** or **yarn**
-- **Expo Go** app (for testing on physical devices)
+## Prerequisites
 
-### Setup
+- Node.js 18 or newer
+- npm
+- Android Studio/emulator or Android device for SMS features
+- A Firebase project with Email/Password authentication enabled
 
-1. **Clone the repository**
+For Android SMS support, use an Android development build or APK rather than Expo Go.
+
+## Setup
+
+1. Clone and install dependencies.
+
    ```bash
    git clone <repository-url>
    cd budget-app
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Configure Firebase**
-   - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-   - Enable Email/Password authentication
-   - Copy your Firebase configuration
-   
-   **Environment Variables Setup:**
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
-     ```
-   - Update `.env` with your Firebase credentials:
-     ```bash
-     EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key_here
-     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
-     EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id_here
-     EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
-     EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
-     EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id_here
-     EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
-     EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL=https://your-api.example.com/backup/{uid}
-     EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL=https://your-api.example.com/backup/{uid}
-     ```
-   
-   > **Note**: The `.env` file is gitignored and will not be committed. Never commit sensitive credentials to version control.
+2. Create your local environment file.
 
-4. **Start the development server**
-   ```bash
-   npm start
-   # or with cache clear
-   npx expo start -c
+   ```powershell
+   Copy-Item .env.example .env
    ```
 
-5. **Run on your device**
-   - Scan the QR code with Expo Go (Android) or Camera app (iOS)
-   - Or press `a` for Android emulator, `i` for iOS simulator
+   On macOS/Linux:
 
-## 📁 Project Structure
+   ```bash
+   cp .env.example .env
+   ```
 
-```
-budget-app/
-├── app/                      # Expo Router pages
-│   ├── (auth)/              # Authentication screens
-│   │   ├── login.tsx        # Login screen
-│   │   └── signup.tsx       # Signup screen
-│   ├── (tabs)/              # Main app tabs
-│   │   ├── index.tsx        # Home/Dashboard
-│   │   ├── analytics.tsx    # Analytics screen
-│   │   ├── explore.tsx      # Explore screen
-│   │   └── profile.tsx      # User profile
-│   └── _layout.tsx          # Root layout with auth provider
-├── components/              # Reusable components
-│   ├── GlassLayout.tsx      # Glassmorphism wrapper
-│   ├── themed-text.tsx      # Themed text component
-│   └── ui/                  # UI components
-├── services/                # Backend services
-│   ├── AuthContext.tsx      # Authentication context
-│   └── firebaseConfig.ts    # Firebase configuration
-├── hooks/                   # Custom React hooks
-├── constants/               # App constants
-├── assets/                  # Images, fonts, etc.
-├── .env                     # Environment variables (gitignored)
-├── .env.example             # Environment template
-├── global.css              # Global Tailwind styles
-├── tailwind.config.js      # Tailwind configuration
-├── metro.config.js         # Metro bundler config (NativeWind)
-├── babel.config.js         # Babel configuration
-└── package.json            # Dependencies
-```
+3. Configure Firebase values in `.env`.
 
-## ⚙️ Configuration Files
+   ```dotenv
+   EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
+   EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id_here
+   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
+   EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id_here
+   EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+   ```
 
-### Essential Configs
+4. Start the development server.
 
-- **`metro.config.js`** - Required for NativeWind v4 support
-- **`tailwind.config.js`** - TailwindCSS configuration with NativeWind preset
-- **`babel.config.js`** - NativeWind Babel plugin configuration
-- **`global.css`** - Tailwind directives (@tailwind base/components/utilities)
-- **`nativewind-env.d.ts`** - TypeScript definitions for NativeWind
+   ```bash
+   npm start
+   ```
 
-### Firebase Setup
+5. Run the app.
 
-Firebase credentials are managed through environment variables. See the **Configure Firebase** section in the Installation guide above for setup instructions.
+   ```bash
+   npm run android:dev
+   # or
+   npm run ios
+   # or
+   npm run web
+   ```
 
-The configuration in `services/firebaseConfig.ts` automatically reads from environment variables:
-```typescript
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
-};
+## Optional AWS cloud backup
+
+Set both endpoints to enable cloud backup. Endpoints may use `{uid}` in their URL and must accept Firebase Bearer-token authentication.
+
+```dotenv
+EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL=https://your-api.example.com/backup/{uid}
+EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL=https://your-api.example.com/backup/{uid}
 ```
 
-> **Security**: Never commit your `.env` file. Use `.env.example` as a template for team members.
+When configured, sign-in compares the local data with the remote backup. A newer valid backup is restored; newer local data is uploaded. Later eligible database changes are uploaded after a debounce, and sign-out attempts a final backup.
 
-### AWS Backup Endpoints
+The deployable API implementation is in [aws/backup-api](./aws/backup-api), with deployment instructions in [aws/backup-api/README.md](./aws/backup-api/README.md).
 
-If `EXPO_PUBLIC_AWS_BACKUP_UPLOAD_URL` and `EXPO_PUBLIC_AWS_BACKUP_DOWNLOAD_URL` are set:
-- Login triggers cloud sync automatically:
-  - If cloud backup is newer, local DB is restored from AWS.
-  - If local DB is newer, local snapshot is uploaded.
-- DB changes trigger debounced auto-backup uploads.
-- URLs can include `{uid}` placeholder for per-user key routing.
-
-### Deploy AWS Backup API
-
-A ready-to-deploy backend is included at:
-- `aws/backup-api`
-
-It includes:
-- Lambda handler with Firebase token verification
-- S3-backed backup storage
-- SAM template (`aws/backup-api/template.yaml`) for API Gateway + Lambda + S3
-
-Deployment steps are documented in:
-- `aws/backup-api/README.md`
-
-## 🚀 Available Scripts
+## Available scripts
 
 ```bash
-npm start          # Start Expo development server
-npm run android    # Run on Android device/emulator
-npm run ios        # Run on iOS simulator
-npm run web        # Run in web browser
-npm run lint       # Run ESLint
+npm start                # Start Expo
+npm run start:dev        # Start Expo with development app variant
+npm run start:prod       # Start Expo with production app variant
+npm run android          # Run Android
+npm run android:dev      # Run Android development variant
+npm run android:prod     # Run Android production variant
+npm run ios              # Run iOS
+npm run web              # Start web
+npm run lint             # Run Expo ESLint
+npm run build:internal   # Create internal Android EAS build
+npm run build:dev        # Create development Android EAS build
 ```
 
-## 🎨 Design System
+## Data and security model
 
-### Glassmorphism Effect
-The app features a custom `GlassLayout` component with:
-- Gradient backgrounds (light: blue-purple, dark: deep slate)
-- Dynamic blur intensity (light: 90, dark: 60)
-- Semi-transparent overlays for depth
-- Automatic light/dark mode switching
+- Financial records are stored locally in the Expo SQLite database.
+- The app has one local profile at a time. When another Firebase user signs in on the same device, the prior local finance profile is cleared to avoid exposing it to the new user.
+- PINs and PIN-attempt guards are stored in SecureStore and scoped to the signed-in user.
+- Biometrics are available only on devices with enrolled supported hardware.
+- SMS content is processed locally for supported transaction detection. Review the in-app Privacy Policy for the user-facing policy.
+- `.env` contains credentials and must not be committed. Use `.env.example` as the template.
 
-### Color Palette
-- **Light Mode**: Soft blue-purple gradients with frosted glass
-- **Dark Mode**: Deep slate gradients with subtle blur
-- **Accent**: Blue (#3b82f6) for primary actions
+## Project layout
 
-## 🔒 Authentication Flow
+```text
+app/                    Expo Router screens and route groups
+  (auth)/               Login and sign-up
+  (tabs)/               Home, analytics, debts, savings, profile, and income route
+  automation/           Categorization rules and recurring manual entries
+  banks/                Supported-bank preferences
+  budget/               Monthly budget editor
+  debt/                 Debt create/detail/select/merge workflows
+  income/               Income source workflows
+  savings/              Savings goal workflows
+components/             Shared UI, sheets, modals, transaction and security components
+context/                Alerts and app-lock state
+services/               Database, ledger, parsing, finance, backup, export, and auth logic
+types/                  Core TypeScript models
+utils/                  SMS parsers, Fuliza calculator, and utilities
+aws/backup-api/         Optional AWS backup API
+APP_SPECIFICATION.md    Detailed functional/UI/QA specification
+```
 
-1. App starts → Check auth state
-2. Not authenticated → Redirect to `/login`
-3. User signs up/logs in via Firebase
-4. Authenticated → Redirect to `/(tabs)`
-5. Session persists via AsyncStorage
+## Validation
 
-## 📱 Expo Go Compatibility
+Run linting before submitting changes:
 
-This app is fully compatible with Expo Go. The Metro config has been set up to support:
-- NativeWind styling in Expo Go
-- Hot reloading with Tailwind classes
-- Firebase authentication
-
-**Important**: After code changes, restart the server with:
 ```bash
-npx expo start -c
+npm run lint
 ```
 
-## 🐛 Troubleshooting
+For behavior verification, use the acceptance checklist in [APP_SPECIFICATION.md](./APP_SPECIFICATION.md#9-qa-acceptance-checklist). SMS parsing, permission, biometric, camera, and backup paths must be tested on relevant devices and configured services; they cannot be fully validated in a web-only run.
 
-### Tailwind not working in Expo Go
-- Ensure `metro.config.js` exists with NativeWind wrapper
-- Clear cache: `npx expo start -c`
-- Verify `global.css` is imported in `app/_layout.tsx`
+## License
 
-### Firebase authentication errors
-- Check Firebase credentials in `firebaseConfig.ts`
-- Verify Email/Password provider is enabled in Firebase Console
-- Ensure AsyncStorage is installed
-
-### Build errors
-- Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
-- Clear Metro cache: `npx expo start -c`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🙏 Acknowledgments
-
-- Built with [Expo](https://expo.dev)
-- Styled with [NativeWind](https://www.nativewind.dev/)
-- Authentication by [Firebase](https://firebase.google.com)
-- Icons from [@expo/vector-icons](https://icons.expo.fyi/)
-
----
-
-**Made with ❤️ for better financial management**
+This project is released under the [Fanga Budget Proprietary Use License](./LICENSE). Copyright © 2026 Bensam Mwaniki. The software may be used free of charge in its unmodified form; all modifications, feature additions, and official releases are reserved to the copyright holder unless authorized in writing.
